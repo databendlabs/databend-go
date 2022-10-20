@@ -7,6 +7,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"github.com/avast/retry-go"
+	"github.com/databendcloud/bendsql/api/apierrors"
 	"io"
 	"io/ioutil"
 	"log"
@@ -14,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -87,11 +90,33 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, args []driver.Va
 }
 
 func (dc *DatabendConn) query(ctx context.Context, query string, args []driver.Value) (driver.Rows, error) {
-	resp, err := dc.rest.DoQuery(ctx, query, args)
+	var r0 *QueryResponse
+	err := retry.Do(
+		func() error {
+			r, err := dc.rest.DoQuery(ctx, query, args)
+			if err != nil {
+				return fmt.Errorf("query failed: %w", err)
+			}
+			r0 = r
+			return nil
+		},
+		// other err no need to retry
+		retry.RetryIf(func(err error) bool {
+			if err != nil && !(apierrors.IsProxyErr(err) || strings.Contains(err.Error(), apierrors.ProvisionWarehouseTimeout)) {
+				return false
+			}
+			return true
+		}),
+		retry.Delay(2*time.Second),
+		retry.Attempts(5),
+	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query failed after 5 retries: %w", err)
 	}
-	return newNextRows(dc, resp)
+	if r0.Error != nil {
+		return nil, fmt.Errorf("query has error: %+v", r0.Error)
+	}
+	return newNextRows(dc, r0)
 }
 
 func (dc *DatabendConn) Begin() (driver.Tx, error) {
