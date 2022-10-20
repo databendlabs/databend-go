@@ -8,7 +8,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	dc "github.com/databendcloud/godatabend"
+	dc "github.com/databendcloud/databend-go"
 )
 
 // getDSN constructs a DSN based on the test connection parameters
@@ -50,6 +50,10 @@ func main() {
 	db, err := sql.Open("databend", dsn)
 	if err != nil {
 		log.Fatalf("failed to connect. %v, err: %v", dsn, err)
+	}
+	err = db.Ping()
+	if err != nil {
+		panic(err)
 	}
 	defer db.Close()
 	query := "SELECT * from books limit ?"
