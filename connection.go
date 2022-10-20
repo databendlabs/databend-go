@@ -18,8 +18,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/pkg/errors"
 )
 
 type APIClient struct {
@@ -102,18 +100,6 @@ func (dc *DatabendConn) Begin() (driver.Tx, error) {
 
 func (dc *DatabendConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	logger.WithContext(ctx).Info("BeginTx")
-	if opts.ReadOnly {
-		return nil, errors.New("raed only")
-	}
-	if int(opts.Isolation) != int(sql.LevelDefault) {
-		return nil, errors.New("isolate")
-	}
-	if dc.rest == nil {
-		return nil, driver.ErrBadConn
-	}
-	if _, err := dc.exec(ctx, "BEGIN", nil); err != nil {
-		return nil, err
-	}
 	return &databendTx{dc}, nil
 }
 
