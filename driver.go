@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"os"
 )
 
 // DatabendDriver is a context of Go Driver
@@ -34,16 +33,9 @@ func (d DatabendDriver) OpenWithConfig(
 	return dc, nil
 }
 
-func runningOnGithubAction() bool {
-	return os.Getenv("GITHUB_ACTIONS") != ""
-}
-
 var logger = CreateDefaultLogger()
 
 func init() {
 	sql.Register("databend", &DatabendDriver{})
 	logger.SetLogLevel("error")
-	if runningOnGithubAction() {
-		logger.SetLogLevel("fatal")
-	}
 }
