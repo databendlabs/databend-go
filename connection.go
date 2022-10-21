@@ -198,13 +198,8 @@ func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error
 		CurrentOrgSlug:   dc.cfg.Org,
 	}
 	dc.logger = logger
-	if dc.cfg.AccessToken != "" && dc.cfg.RefreshToken != "" {
-		err := dc.rest.RefreshTokens()
-		if err == nil {
-			dc.cfg.AccessToken = dc.rest.AccessToken
-			dc.cfg.RefreshToken = dc.rest.RefreshToken
-			return dc, nil
-		}
+	if dc.cfg.AccessToken != "" {
+		return dc, nil
 	}
 
 	err := dc.rest.Login()
