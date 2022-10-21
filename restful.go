@@ -254,3 +254,24 @@ func (c *APIClient) CheckQueryStatus(queryId string) (*QueryResponse, error) {
 	}
 	return &result, nil
 }
+
+func (c *APIClient) RefreshTokens() error {
+	req := struct {
+		RefreshToken string `json:"refreshToken"`
+	}{
+		RefreshToken: c.RefreshToken,
+	}
+	resp := struct {
+		Data struct {
+			AccessToken  string `json:"accessToken"`
+			RefreshToken string `json:"refreshToken"`
+		} `json:"data"`
+	}{}
+	path := "/api/v1/account/renew-token"
+	err := c.DoRequest("POST", path, nil, &req, &resp)
+	if err != nil {
+		return err
+	}
+	c.resetTokens(resp.Data.AccessToken, resp.Data.RefreshToken)
+	return nil
+}

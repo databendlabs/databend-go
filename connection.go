@@ -191,15 +191,26 @@ func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error
 		UserEmail:        dc.cfg.User,
 		Password:         dc.cfg.Password,
 		Host:             dc.cfg.Host,
+		AccessToken:      dc.cfg.AccessToken,
+		RefreshToken:     dc.cfg.RefreshToken,
 		ApiEndpoint:      fmt.Sprintf("%s://%s", dc.cfg.Scheme, dc.cfg.Host),
 		CurrentWarehouse: dc.cfg.Warehouse,
 		CurrentOrgSlug:   dc.cfg.Org,
 	}
+	dc.logger = logger
+	if dc.cfg.AccessToken != "" && dc.cfg.RefreshToken != "" {
+		err := dc.rest.RefreshTokens()
+		if err == nil {
+			dc.cfg.AccessToken = dc.rest.AccessToken
+			dc.cfg.RefreshToken = dc.rest.RefreshToken
+			return dc, nil
+		}
+	}
+
 	err := dc.rest.Login()
 	if err != nil {
 		return dc, err
 	}
-	dc.logger = logger
 	dc.cfg.AccessToken = dc.rest.AccessToken
 	dc.cfg.RefreshToken = dc.rest.RefreshToken
 	return dc, nil
