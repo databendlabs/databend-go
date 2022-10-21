@@ -29,7 +29,6 @@ func getDSN() (string, *dc.Config, error) {
 	warehouse := env("DATABEND_TEST_WAREHOUSE", true)
 	host := env("DATABEND_TEST_HOST", false)
 	accessToken := env("DATABEND_TEST_ACCESSTOKEN", false)
-	refreshToken := env("DATABEND_TEST_REFRESHTOKEN", false)
 	var err error
 	cfg := dc.NewConfig()
 	cfg.Org = org
@@ -39,7 +38,6 @@ func getDSN() (string, *dc.Config, error) {
 	cfg.Host = host
 	cfg.Database = "books"
 	cfg.AccessToken = accessToken
-	cfg.RefreshToken = refreshToken
 
 	dsn := cfg.FormatDSN()
 	return dsn, cfg, err
