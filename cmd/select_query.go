@@ -65,7 +65,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to run a query. %v, err: %v", query, err)
 	}
-	res, err := scanValues(rows, []interface{}{string(""), string(""), string("")})
+	res, err := scanValues(rows)
 	if err != nil {
 		fmt.Printf("scan err %v", err)
 	}
@@ -78,15 +78,35 @@ func main() {
 		fmt.Printf("exec failed, err:%v", err)
 	}
 }
+func selectExec(dsn string) error {
+	db, err := sql.Open("databend", dsn)
+	if err != nil {
+		return fmt.Errorf("failed to connect. %v, err: %v", dsn, err)
+	}
+	defer db.Close()
+	query := "SELECT ?"
 
-func scanValues(rows *sql.Rows, template []interface{}) (interface{}, error) {
+	rows, err := db.Exec(query, []interface{}{1}...) // no cancel is allowed
+	if err != nil {
+		return fmt.Errorf("failed to run a query. %v, err: %v", query, err)
+	}
+	fmt.Println(rows.RowsAffected())
+	fmt.Printf("Congrats! You have successfully run %v with databend DB!\n", query)
+	return nil
+}
+
+func scanValues(rows *sql.Rows) (interface{}, error) {
+	var err error
 	var result [][]interface{}
-	types := make([]reflect.Type, len(template))
-	for i, v := range template {
-		types[i] = reflect.TypeOf(v)
+	ct, err := rows.ColumnTypes()
+	if err != nil {
+		return nil, err
+	}
+	types := make([]reflect.Type, len(ct))
+	for i, v := range ct {
+		types[i] = v.ScanType()
 	}
 	ptrs := make([]interface{}, len(types))
-	var err error
 	for rows.Next() {
 		if err = rows.Err(); err != nil {
 			return nil, err
@@ -105,21 +125,4 @@ func scanValues(rows *sql.Rows, template []interface{}) (interface{}, error) {
 		result = append(result, values)
 	}
 	return result, nil
-}
-
-func selectExec(dsn string) error {
-	db, err := sql.Open("databend", dsn)
-	if err != nil {
-		return fmt.Errorf("failed to connect. %v, err: %v", dsn, err)
-	}
-	defer db.Close()
-	query := "SELECT ?"
-
-	rows, err := db.Exec(query, []interface{}{1}...) // no cancel is allowed
-	if err != nil {
-		return fmt.Errorf("failed to run a query. %v, err: %v", query, err)
-	}
-	fmt.Println(rows.RowsAffected())
-	fmt.Printf("Congrats! You have successfully run %v with databend DB!\n", query)
-	return nil
 }
