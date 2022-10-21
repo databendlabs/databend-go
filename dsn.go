@@ -67,6 +67,8 @@ func (cfg *Config) FormatDSN() string {
 	} else {
 		panic(" no org")
 	}
+	query.Set("accessToken", cfg.AccessToken)
+	query.Set("refreshToken", cfg.RefreshToken)
 	if cfg.Timeout != 0 {
 		query.Set("timeout", cfg.Timeout.String())
 	}
@@ -186,6 +188,10 @@ func parseDSNParams(cfg *Config, params map[string][]string) (err error) {
 			cfg.Org = v[0]
 		case "warehouse":
 			cfg.Warehouse = v[0]
+		case "accessToken":
+			cfg.AccessToken = v[0]
+		case "refreshToken":
+			cfg.RefreshToken = v[0]
 		default:
 			cfg.Params[k] = v[0]
 		}
