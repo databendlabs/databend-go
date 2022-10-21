@@ -198,13 +198,6 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 		nextUri = p.NextURI
 		respCh <- *p
 	}
-	rs, err := c.CheckQueryStatus(r0.Id)
-	if err != nil {
-		return err
-	}
-	if rs.Error != nil {
-		return fmt.Errorf("query has error: %+v", r0.Error)
-	}
 	return nil
 }
 
@@ -224,30 +217,6 @@ func (c *APIClient) QueryPage(queryId, path string) (*QueryResponse, error) {
 		},
 		retry.Delay(2*time.Second),
 		retry.Attempts(5),
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-func (c *APIClient) CheckQueryStatus(queryId string) (*QueryResponse, error) {
-	headers := make(http.Header)
-	headers.Set("queryID", queryId)
-	headers.Set("X-DATABENDCLOUD-WAREHOUSE", c.CurrentWarehouse)
-	headers.Set("X-DATABENDCLOUD-ORG", string(c.CurrentOrgSlug))
-	path := fmt.Sprintf("/v1/query/%s", queryId)
-	var result QueryResponse
-	err := retry.Do(
-		func() error {
-			err := c.DoRequest("GET", path, headers, nil, &result)
-			if err != nil {
-				return fmt.Errorf("query failed: %w", err)
-			}
-			return nil
-		},
-		retry.Delay(2*time.Second),
-		retry.Attempts(10),
 	)
 	if err != nil {
 		return nil, err
