@@ -7,7 +7,9 @@ import (
 )
 
 // DatabendDriver is a context of Go Driver
-type DatabendDriver struct{}
+type DatabendDriver struct {
+	commit func() error
+}
 
 // Open creates a new connection.
 func (d DatabendDriver) Open(dsn string) (driver.Conn, error) {

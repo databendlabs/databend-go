@@ -1,12 +1,10 @@
 package godatabend
 
 import (
-	"bytes"
 	"context"
 	"database/sql/driver"
 	"regexp"
 	"strings"
-	"sync/atomic"
 )
 
 var (
@@ -51,6 +49,14 @@ func (stmt *databendStmt) NumInput() int {
 
 func (stmt *databendStmt) Exec(args []driver.Value) (driver.Result, error) {
 	logger.WithContext(stmt.dc.ctx).Infoln("Stmt.Exec")
+	//1. trans args to parquet file
+
+	//2. /v1/upload_to_stage parquet file
+
+	// 3. copy into db.table from @~/parquet
+
+	// 4. delete the file ?
+
 	return stmt.dc.Exec(stmt.query, args)
 }
 
@@ -60,32 +66,7 @@ func (stmt *databendStmt) Query(args []driver.Value) (driver.Rows, error) {
 }
 
 func (stmt *databendStmt) commit(ctx context.Context) error {
-	if atomic.CompareAndSwapInt32(&stmt.closed, 0, 1) {
-		// statement is not usable after commit
-		// this code will not run if statement has been closed
-		args := stmt.args
-		con := stmt.dc
-		stmt.args = nil
-		stmt.dc = nil
-		if len(args) == 0 {
-			return nil
-		}
-		buf := bytes.NewBufferString(stmt.prefix)
-		var (
-			p   string
-			err error
-		)
-		for i, arg := range args {
-			if i > 0 {
-				buf.WriteString(", ")
-			}
-			if p, err = interpolateParams2(stmt.pattern, arg, stmt.index); err != nil {
-				return err
-			}
-			buf.WriteString(p)
-		}
-		_, err = con.exec(ctx, buf.String(), nil)
-		return err
-	}
+	logger.WithContext(stmt.dc.ctx).Infoln("Stmt Commit")
+
 	return nil
 }

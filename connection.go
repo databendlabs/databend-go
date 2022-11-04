@@ -62,7 +62,7 @@ type DatabendConn struct {
 	rest               *APIClient
 }
 
-func (dc *DatabendConn) exec(ctx context.Context, query string, args []driver.Value) (driver.Result, error) {
+func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.Value) (driver.Result, error) {
 	respCh := make(chan QueryResponse)
 	errCh := make(chan error)
 	go func() {
@@ -135,26 +135,10 @@ func (dc *DatabendConn) cleanup() {
 }
 
 func (dc *DatabendConn) Prepare(query string) (driver.Stmt, error) {
-	return dc.prepare(query)
+	return dc.PrepareContext(context.Background(), query)
 }
 
 func (dc *DatabendConn) prepare(query string) (*databendStmt, error) {
-	if atomic.LoadInt32(&dc.closed) != 0 {
-		return nil, driver.ErrBadConn
-	}
-	dc.log("new statement: ", query)
-	s := newStmt(query)
-	s.dc = dc
-	if dc.txCtx == nil {
-		s.batchMode = false
-	}
-	if s.batchMode {
-		dc.stmts = append(dc.stmts, s)
-	}
-	return s, nil
-}
-
-func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
 	logger.WithContext(dc.ctx).Infoln("Prepare")
 	if dc.rest == nil {
 		return nil, driver.ErrBadConn
@@ -164,6 +148,11 @@ func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (drive
 		query: query,
 	}
 	return stmt, nil
+}
+
+func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+
+	return dc.prepare(query)
 }
 
 func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error) {
