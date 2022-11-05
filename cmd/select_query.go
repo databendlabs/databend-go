@@ -59,24 +59,27 @@ func main() {
 		panic(err)
 	}
 	defer db.Close()
-	//query := "DESC books"
-	//rows, err := db.Query(query) // no cancel is allowed
-	//if err != nil {
-	//	log.Fatalf("failed to run a query. %v, err: %v", query, err)
-	//}
-	//res, err := scanValues(rows)
-	//if err != nil {
-	//	fmt.Printf("scan err %v", err)
-	//}
-	//fmt.Println(res)
-	//
-	//fmt.Printf("Congrats! You have successfully run %v with databend DB!\n", query)
+	query := "DESC books"
+	rows, err := db.Query(query) // no cancel is allowed
+	if err != nil {
+		log.Fatalf("failed to run a query. %v, err: %v", query, err)
+	}
+	res, err := scanValues(rows)
+	if err != nil {
+		fmt.Printf("scan err %v", err)
+	}
+	fmt.Println(res)
 
-	//err = selectExec(dsn)
-	//if err != nil {
-	//	fmt.Printf("exec failed, err:%v", err)
-	//}
-	batchInsert(dsn)
+	fmt.Printf("Congrats! You have successfully run %v with databend DB!\n", query)
+
+	err = selectExec(dsn)
+	if err != nil {
+		fmt.Printf("exec failed, err:%v", err)
+	}
+	err = batchInsert(dsn)
+	if err != nil {
+		fmt.Printf("batch insert failed, err %v", err)
+	}
 }
 func selectExec(dsn string) error {
 	db, err := sql.Open("databend", dsn)
