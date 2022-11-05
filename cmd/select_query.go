@@ -140,8 +140,8 @@ func batchInsert(dsn string) error {
 	batch, err := scope.Prepare("INSERT INTO books")
 	for i := 0; i < 10; i++ {
 		_, err = batch.Exec(
-			"this",
-			"sjh",
+			"book",
+			"author",
 			"2022",
 		)
 		if err != nil {
