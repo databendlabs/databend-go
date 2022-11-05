@@ -2,9 +2,12 @@ package godatabend
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
 	"github.com/databendcloud/databend-go/lib/driver"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -42,12 +45,27 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (driver.
 		}
 	}
 
+	csvFileName := fmt.Sprintf("%s.csv", uuid.NewString())
+
+	csvFile, err := os.OpenFile(csvFileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
+	if err != nil {
+		return nil, err
+	}
+	defer csvFile.Close()
+	writer := csv.NewWriter(csvFile)
+	err = writer.Write(columnNames)
+	if err != nil {
+		return nil, err
+	}
+	writer.Flush()
+
 	return &httpBatch{
 		query:       query,
 		ctx:         ctx,
 		conn:        dc,
 		columnNames: columnNames,
 		columnTypes: columnTypes,
+		batchFile:   csvFileName,
 	}, nil
 }
 
@@ -58,16 +76,38 @@ type httpBatch struct {
 	conn        *DatabendConn
 	columnNames []string
 	columnTypes []string
-}
-
-func (b *httpBatch) UpToStage(v ...interface{}) error {
-	// generate parquet file and upload to stage ~
-	return nil
+	batchFile   string
 }
 
 func (b *httpBatch) CopyInto() error {
 	// copy into db.table from @~/xx.parquet
 	return nil
+}
+
+func (b *httpBatch) AppendToFile(v ...interface{}) error {
+	csvFile, err := os.OpenFile(b.batchFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	defer csvFile.Close()
+
+	var lineData []string
+	for _, d := range v {
+		lineData = append(lineData, fmt.Sprintf("%s", d))
+	}
+	writer := csv.NewWriter(csvFile)
+	err = writer.Write(lineData)
+	if err != nil {
+		return err
+	}
+	writer.Flush()
+
+	return nil
+}
+
+func (b *httpBatch) UploadToStage() error {
+
+	return b.conn.rest.uploadToStage(b.batchFile)
 }
 
 var _ driver.Batch = (*httpBatch)(nil)

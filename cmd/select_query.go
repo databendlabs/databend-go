@@ -38,6 +38,7 @@ func getDSN() (string, *dc.Config, error) {
 	cfg.Host = host
 	cfg.Database = "books"
 	cfg.AccessToken = accessToken
+	cfg.Debug = true
 
 	dsn := cfg.FormatDSN()
 	return dsn, cfg, err
@@ -58,8 +59,8 @@ func main() {
 		panic(err)
 	}
 	defer db.Close()
-	query := "SELECT * from books limit ?"
-	rows, err := db.Query(query, []interface{}{int64(10)}...) // no cancel is allowed
+	query := "DESC books"
+	rows, err := db.Query(query) // no cancel is allowed
 	if err != nil {
 		log.Fatalf("failed to run a query. %v, err: %v", query, err)
 	}

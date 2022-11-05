@@ -3,8 +3,9 @@ package godatabend
 import (
 	"context"
 	"database/sql/driver"
+	ldriver "github.com/databendcloud/databend-go/lib/driver"
+	"github.com/pkg/errors"
 	"regexp"
-	"strings"
 )
 
 var (
@@ -20,21 +21,7 @@ type databendStmt struct {
 	batchMode bool
 	args      [][]driver.Value
 	query     string
-}
-
-func newStmt(query string) *databendStmt {
-	s := &databendStmt{pattern: query}
-	index := splitInsertRe.FindStringSubmatchIndex(strings.ToUpper(query))
-	if len(index) == 6 {
-		s.prefix = query[index[2]:index[3]]
-		s.pattern = query[index[4]:index[5]]
-		s.batchMode = true
-	}
-	s.index = placeholders(s.pattern)
-	if len(s.index) == 0 {
-		s.batchMode = false
-	}
-	return s
+	batch     ldriver.Batch
 }
 
 func (stmt *databendStmt) Close() error {
@@ -49,20 +36,32 @@ func (stmt *databendStmt) NumInput() int {
 
 func (stmt *databendStmt) Exec(args []driver.Value) (driver.Result, error) {
 	logger.WithContext(stmt.dc.ctx).Infoln("Stmt.Exec")
-	//1. trans args to parquet file
+	//1. trans args to csv file
+	err := stmt.batch.AppendToFile(args)
+	if err != nil {
+		return nil, err
+	}
 
-	//2. /v1/upload_to_stage parquet file
+	//2. /v1/upload_to_stage csv file
 
-	// 3. copy into db.table from @~/parquet
+	// 3. copy into db.table from @~/csv
 
 	// 4. delete the file ?
 
-	return stmt.dc.Exec(stmt.query, args)
+	return driver.RowsAffected(0), nil
+}
+
+func (stmt *databendStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+	values := make([]driver.Value, 0, len(args))
+	for _, v := range args {
+		values = append(values, v.Value)
+	}
+	return stmt.Exec(values)
 }
 
 func (stmt *databendStmt) Query(args []driver.Value) (driver.Rows, error) {
 	logger.WithContext(stmt.dc.ctx).Infoln("Stmt.Query")
-	return stmt.dc.Query(stmt.query, args)
+	return nil, errors.New("only Exec method supported in batch mode")
 }
 
 func (stmt *databendStmt) commit(ctx context.Context) error {

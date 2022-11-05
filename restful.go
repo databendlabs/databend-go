@@ -9,6 +9,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -243,4 +246,60 @@ func (c *APIClient) RefreshTokens() error {
 	}
 	c.resetTokens(resp.Data.AccessToken, resp.Data.RefreshToken)
 	return nil
+}
+
+func (c *APIClient) UploadToStageByPresignURL(presignURL, fileName string, header map[string]interface{}) error {
+	fileContent, err := os.ReadFile(fileName)
+	if err != nil {
+		return err
+	}
+	file, err := os.Open(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	body := bytes.NewBuffer(fileContent)
+
+	httpReq, err := http.NewRequest("PUT", presignURL, body)
+	if err != nil {
+		return err
+	}
+	for k, v := range header {
+		httpReq.Header.Set(k, fmt.Sprintf("%v", v))
+	}
+	httpReq.Header.Set("Content-Length", strconv.FormatInt(int64(len(body.Bytes())), 10))
+	httpClient := &http.Client{
+		Timeout: time.Second * 60,
+	}
+	httpResp, err := httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed http do request: %w", err)
+	}
+	defer httpResp.Body.Close()
+	httpRespBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return err
+	}
+	if httpResp.StatusCode >= 400 {
+		return fmt.Errorf("request got bad status: %d req=%s resp=%s", httpResp.StatusCode, body, httpRespBody)
+	}
+	return nil
+}
+
+func (c *APIClient) uploadToStage(fileName string) error {
+	rootStage := "~"
+	fmt.Printf("uploading %s to stage %s... \n", fileName, rootStage)
+	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD @%s/%s", rootStage, filepath.Base(fileName))
+	resp, err := c.DoQuery(context.Background(), presignUploadSQL, nil)
+	if err != nil {
+		return err
+	}
+	if len(resp.Data) < 1 || len(resp.Data[0]) < 2 {
+		return fmt.Errorf("generate presign url failed")
+	}
+	headers, ok := resp.Data[0][1].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("no host for presign url")
+	}
+	return c.UploadToStageByPresignURL(fmt.Sprintf("%v", resp.Data[0][2]), fileName, headers)
 }

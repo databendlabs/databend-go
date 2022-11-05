@@ -1,6 +1,7 @@
 package driver
 
 type Batch interface {
-	UpToStage(v ...interface{}) error
+	AppendToFile(v ...interface{}) error
+	UploadToStage() error
 	CopyInto() error
 }
