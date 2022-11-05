@@ -3,7 +3,6 @@ package godatabend
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -60,9 +59,10 @@ type DatabendConn struct {
 	killQueryTimeout   time.Duration
 	logger             *log.Logger
 	rest               *APIClient
+	commit             func() error
 }
 
-func (dc *DatabendConn) exec(ctx context.Context, query string, args []driver.Value) (driver.Result, error) {
+func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.Value) (driver.Result, error) {
 	respCh := make(chan QueryResponse)
 	errCh := make(chan error)
 	go func() {
@@ -119,14 +119,11 @@ func (dc *DatabendConn) query(ctx context.Context, query string, args []driver.V
 	return newNextRows(dc, r0)
 }
 
-func (dc *DatabendConn) Begin() (driver.Tx, error) {
-	return dc.BeginTx(dc.ctx, driver.TxOptions{})
-}
+//func (dc *DatabendConn) Begin() (driver.Tx, error) {
+//	return dc.BeginTx(dc.ctx, driver.TxOptions{})
+//}
 
-func (dc *DatabendConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
-	logger.WithContext(ctx).Info("BeginTx")
-	return &databendTx{dc}, nil
-}
+func (dc *DatabendConn) Begin() (driver.Tx, error) { return dc, nil }
 
 func (dc *DatabendConn) cleanup() {
 	// must flush log buffer while the process is running.
@@ -135,35 +132,31 @@ func (dc *DatabendConn) cleanup() {
 }
 
 func (dc *DatabendConn) Prepare(query string) (driver.Stmt, error) {
-	return dc.prepare(query)
+	return dc.PrepareContext(context.Background(), query)
 }
 
 func (dc *DatabendConn) prepare(query string) (*databendStmt, error) {
-	if atomic.LoadInt32(&dc.closed) != 0 {
-		return nil, driver.ErrBadConn
-	}
-	dc.log("new statement: ", query)
-	s := newStmt(query)
-	s.dc = dc
-	if dc.txCtx == nil {
-		s.batchMode = false
-	}
-	if s.batchMode {
-		dc.stmts = append(dc.stmts, s)
-	}
-	return s, nil
-}
-
-func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
 	logger.WithContext(dc.ctx).Infoln("Prepare")
 	if dc.rest == nil {
 		return nil, driver.ErrBadConn
 	}
+	batch, err := dc.prepareBatch(dc.ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	dc.commit = batch.CopyInto
+
 	stmt := &databendStmt{
 		dc:    dc,
 		query: query,
+		batch: batch,
 	}
 	return stmt, nil
+}
+
+func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+
+	return dc.prepare(query)
 }
 
 func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error) {
@@ -249,45 +242,18 @@ func (dc *DatabendConn) Query(query string, args []driver.Value) (driver.Rows, e
 
 // Commit applies prepared statement if it exists
 func (dc *DatabendConn) Commit() (err error) {
-	if atomic.LoadInt32(&dc.closed) != 0 {
-		return driver.ErrBadConn
-	}
-	if dc.txCtx == nil {
-		return sql.ErrTxDone
-	}
-	ctx := dc.txCtx
-	stmts := dc.stmts
-	dc.txCtx = nil
-	dc.stmts = stmts[:0]
-
-	if len(stmts) == 0 {
+	if dc.commit == nil {
 		return nil
 	}
-	for _, stmt := range stmts {
-		dc.log("commit statement: ", stmt.prefix, stmt.pattern)
-		if err = stmt.commit(ctx); err != nil {
-			break
-		}
-	}
-	return
+	defer func() {
+		dc.commit = nil
+	}()
+	return dc.commit()
 }
 
 // Rollback cleans prepared statement
 func (dc *DatabendConn) Rollback() error {
-	if atomic.LoadInt32(&dc.closed) != 0 {
-		return driver.ErrBadConn
-	}
-	if dc.txCtx == nil {
-		return sql.ErrTxDone
-	}
-	dc.txCtx = nil
-	stmts := dc.stmts
-	dc.stmts = stmts[:0]
-
-	if len(stmts) == 0 {
-		// there is no statements, so nothing to rollback
-		return sql.ErrTxDone
-	}
-	// the statements will be closed by sql.Tx
+	dc.commit = nil
+	dc.Close()
 	return nil
 }

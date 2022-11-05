@@ -1,12 +1,12 @@
 package godatabend
 
 import (
-	"bytes"
 	"context"
 	"database/sql/driver"
+	"fmt"
+	ldriver "github.com/databendcloud/databend-go/lib/driver"
+	"github.com/pkg/errors"
 	"regexp"
-	"strings"
-	"sync/atomic"
 )
 
 var (
@@ -22,21 +22,7 @@ type databendStmt struct {
 	batchMode bool
 	args      [][]driver.Value
 	query     string
-}
-
-func newStmt(query string) *databendStmt {
-	s := &databendStmt{pattern: query}
-	index := splitInsertRe.FindStringSubmatchIndex(strings.ToUpper(query))
-	if len(index) == 6 {
-		s.prefix = query[index[2]:index[3]]
-		s.pattern = query[index[4]:index[5]]
-		s.batchMode = true
-	}
-	s.index = placeholders(s.pattern)
-	if len(s.index) == 0 {
-		s.batchMode = false
-	}
-	return s
+	batch     ldriver.Batch
 }
 
 func (stmt *databendStmt) Close() error {
@@ -50,42 +36,40 @@ func (stmt *databendStmt) NumInput() int {
 }
 
 func (stmt *databendStmt) Exec(args []driver.Value) (driver.Result, error) {
-	logger.WithContext(stmt.dc.ctx).Infoln("Stmt.Exec")
-	return stmt.dc.Exec(stmt.query, args)
+	//1. trans args to csv file
+	err := stmt.batch.AppendToFile(args)
+	if err != nil {
+		return nil, err
+	}
+
+	//2. /v1/upload_to_stage csv file
+
+	// 3. copy into db.table from @~/csv
+
+	// 4. delete the file ?
+
+	return driver.RowsAffected(0), nil
 }
+
+//func (stmt *databendStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+//	values := make([]driver.Value, 0, len(args))
+//	for _, v := range args {
+//		values = append(values, v.Value)
+//	}
+//	return stmt.Exec(values)
+//}
 
 func (stmt *databendStmt) Query(args []driver.Value) (driver.Rows, error) {
 	logger.WithContext(stmt.dc.ctx).Infoln("Stmt.Query")
-	return stmt.dc.Query(stmt.query, args)
+	return nil, errors.New("only Exec method supported in batch mode")
 }
 
 func (stmt *databendStmt) commit(ctx context.Context) error {
-	if atomic.CompareAndSwapInt32(&stmt.closed, 0, 1) {
-		// statement is not usable after commit
-		// this code will not run if statement has been closed
-		args := stmt.args
-		con := stmt.dc
-		stmt.args = nil
-		stmt.dc = nil
-		if len(args) == 0 {
-			return nil
-		}
-		buf := bytes.NewBufferString(stmt.prefix)
-		var (
-			p   string
-			err error
-		)
-		for i, arg := range args {
-			if i > 0 {
-				buf.WriteString(", ")
-			}
-			if p, err = interpolateParams2(stmt.pattern, arg, stmt.index); err != nil {
-				return err
-			}
-			buf.WriteString(p)
-		}
-		_, err = con.exec(ctx, buf.String(), nil)
-		return err
+	logger.WithContext(stmt.dc.ctx).Infoln("Stmt Commit")
+	err := stmt.batch.UploadToStage()
+	if err != nil {
+		fmt.Printf("upload stage failed %v", err)
 	}
-	return nil
+
+	return stmt.batch.CopyInto()
 }

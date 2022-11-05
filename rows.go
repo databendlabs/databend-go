@@ -61,7 +61,7 @@ func (r *nextRows) Close() error {
 }
 
 func (r *nextRows) Next(dest []driver.Value) error {
-	if len(r.respData.Data) == 0 {
+	if r.respData.State == "Succeeded" && len(r.respData.Data) == 0 {
 		return fmt.Errorf("end")
 	}
 	lineData := r.respData.Data[0]
@@ -79,8 +79,7 @@ func (r *nextRows) Next(dest []driver.Value) error {
 		return nil
 	}
 	if r.respData.State == "Succeeded" && len(r.respData.Data) == 0 {
-		r.respData = QueryResponse{}
-		return nil
+		return fmt.Errorf("end")
 	}
 	res, err := r.dc.rest.QueryPage(r.respData.Id, r.respData.NextURI)
 	if err != nil {

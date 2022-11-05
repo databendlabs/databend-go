@@ -2,6 +2,8 @@ package godatabend
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/pkg/errors"
 	"net/http"
 	"strings"
 	"time"
@@ -39,4 +41,51 @@ func readResponse(response *http.Response) (result []byte, err error) {
 	_, err = buf.ReadFrom(response.Body)
 	result = buf.Bytes()
 	return
+}
+
+func getTableFromInsertQuery(query string) (string, error) {
+	if !strings.Contains(query, "insert") && !strings.Contains(query, "INSERT") {
+		return "", errors.New("wrong insert statement")
+	}
+	splitQuery := strings.Split(query, " ")
+	if len(splitQuery) > 2 {
+		return strings.TrimSpace(splitQuery[2]), nil
+	}
+	return "", errors.New("wrong insert")
+}
+
+func generateDescTable(query string) (string, error) {
+	table, err := getTableFromInsertQuery(query)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("DESC %s", table), nil
+}
+
+func databendParquetReflect(databendType string) string {
+
+	var parquetTyep string
+	switch databendType {
+	case "VARCHAR":
+		parquetTyep = "type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"
+
+	case "BOOLEAN":
+		parquetTyep = "type=BOOLEAN"
+	case "TINYINT", "SMALLINT", "INT":
+		parquetTyep = "type=INT32"
+	case "BIGINT":
+		parquetTyep = "type=INT64"
+	case "FLOAT":
+		parquetTyep = "type=FLOAT"
+	case "DOUBLE":
+		parquetTyep = "type=DOUBLE"
+	case "DATE":
+		parquetTyep = "type=INT32, convertedtype=DATE"
+	case "TIMESTAMP":
+		parquetTyep = "type=INT64"
+	case "ARRAY":
+		parquetTyep = "type=LIST, convertedtype=LIST"
+
+	}
+	return parquetTyep
 }

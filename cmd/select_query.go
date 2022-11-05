@@ -38,6 +38,7 @@ func getDSN() (string, *dc.Config, error) {
 	cfg.Host = host
 	cfg.Database = "books"
 	cfg.AccessToken = accessToken
+	cfg.Debug = true
 
 	dsn := cfg.FormatDSN()
 	return dsn, cfg, err
@@ -58,8 +59,8 @@ func main() {
 		panic(err)
 	}
 	defer db.Close()
-	query := "SELECT * from books limit ?"
-	rows, err := db.Query(query, []interface{}{int64(10)}...) // no cancel is allowed
+	query := "DESC books"
+	rows, err := db.Query(query) // no cancel is allowed
 	if err != nil {
 		log.Fatalf("failed to run a query. %v, err: %v", query, err)
 	}
@@ -74,6 +75,10 @@ func main() {
 	err = selectExec(dsn)
 	if err != nil {
 		fmt.Printf("exec failed, err:%v", err)
+	}
+	err = batchInsert(dsn)
+	if err != nil {
+		fmt.Printf("batch insert failed, err %v", err)
 	}
 }
 func selectExec(dsn string) error {
@@ -123,4 +128,33 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 		result = append(result, values)
 	}
 	return result, nil
+}
+
+func batchInsert(dsn string) error {
+	db, err := sql.Open("databend", dsn)
+	if err != nil {
+		return fmt.Errorf("failed to connect. %v, err: %v", dsn, err)
+	}
+	defer db.Close()
+	scope, err := db.Begin()
+	batch, err := scope.Prepare("INSERT INTO books")
+	for i := 0; i < 10; i++ {
+		_, err = batch.Exec(
+			"book",
+			"author",
+			"2022",
+		)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+
+	err = scope.Commit()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	return nil
 }
