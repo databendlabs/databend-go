@@ -3,6 +3,7 @@ package godatabend
 import (
 	"context"
 	"database/sql/driver"
+	"fmt"
 	ldriver "github.com/databendcloud/databend-go/lib/driver"
 	"github.com/pkg/errors"
 	"regexp"
@@ -35,7 +36,6 @@ func (stmt *databendStmt) NumInput() int {
 }
 
 func (stmt *databendStmt) Exec(args []driver.Value) (driver.Result, error) {
-	logger.WithContext(stmt.dc.ctx).Infoln("Stmt.Exec")
 	//1. trans args to csv file
 	err := stmt.batch.AppendToFile(args)
 	if err != nil {
@@ -51,13 +51,13 @@ func (stmt *databendStmt) Exec(args []driver.Value) (driver.Result, error) {
 	return driver.RowsAffected(0), nil
 }
 
-func (stmt *databendStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
-	values := make([]driver.Value, 0, len(args))
-	for _, v := range args {
-		values = append(values, v.Value)
-	}
-	return stmt.Exec(values)
-}
+//func (stmt *databendStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+//	values := make([]driver.Value, 0, len(args))
+//	for _, v := range args {
+//		values = append(values, v.Value)
+//	}
+//	return stmt.Exec(values)
+//}
 
 func (stmt *databendStmt) Query(args []driver.Value) (driver.Rows, error) {
 	logger.WithContext(stmt.dc.ctx).Infoln("Stmt.Query")
@@ -66,6 +66,10 @@ func (stmt *databendStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 func (stmt *databendStmt) commit(ctx context.Context) error {
 	logger.WithContext(stmt.dc.ctx).Infoln("Stmt Commit")
+	err := stmt.batch.UploadToStage()
+	if err != nil {
+		fmt.Printf("upload stage failed %v", err)
+	}
 
-	return nil
+	return stmt.batch.CopyInto()
 }

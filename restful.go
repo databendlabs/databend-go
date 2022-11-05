@@ -148,7 +148,8 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 }
 
 func buildQuery(query string, params []driver.Value) (string, error) {
-	if len(params) > 0 {
+	fmt.Printf("the query is %s,the args is %v", query, params)
+	if len(params) > 0 && params[0] != nil {
 		result, err := interpolateParams(query, params)
 		if err != nil {
 			return result, fmt.Errorf("buildRequest: failed to interpolate params: %w", err)
@@ -159,6 +160,7 @@ func buildQuery(query string, params []driver.Value) (string, error) {
 }
 
 func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.Value, respCh chan QueryResponse) error {
+	fmt.Printf("query sync %s", query)
 	var r0 *QueryResponse
 	err := retry.Do(
 		func() error {
@@ -287,7 +289,7 @@ func (c *APIClient) UploadToStageByPresignURL(presignURL, fileName string, heade
 }
 
 func (c *APIClient) uploadToStage(fileName string) error {
-	rootStage := "~"
+	rootStage := "sjh"
 	fmt.Printf("uploading %s to stage %s... \n", fileName, rootStage)
 	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD @%s/%s", rootStage, filepath.Base(fileName))
 	resp, err := c.DoQuery(context.Background(), presignUploadSQL, nil)

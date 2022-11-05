@@ -125,11 +125,6 @@ func (dc *DatabendConn) query(ctx context.Context, query string, args []driver.V
 
 func (dc *DatabendConn) Begin() (driver.Tx, error) { return dc, nil }
 
-func (dc *DatabendConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
-	logger.WithContext(ctx).Info("BeginTx")
-	return &databendTx{dc}, nil
-}
-
 func (dc *DatabendConn) cleanup() {
 	// must flush log buffer while the process is running.
 	dc.rest = nil
@@ -154,6 +149,7 @@ func (dc *DatabendConn) prepare(query string) (*databendStmt, error) {
 	stmt := &databendStmt{
 		dc:    dc,
 		query: query,
+		batch: batch,
 	}
 	return stmt, nil
 }

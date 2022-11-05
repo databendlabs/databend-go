@@ -1,12 +1,17 @@
 package godatabend
 
 import (
+	"bytes"
 	"context"
+	"database/sql/driver"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
-	"github.com/databendcloud/databend-go/lib/driver"
+	ldriver "github.com/databendcloud/databend-go/lib/driver"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"io"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
@@ -15,7 +20,7 @@ import (
 // \x60 represents a backtick
 var httpInsertRe = regexp.MustCompile(`(?i)^INSERT INTO\s+\x60?([\w.^\(]+)\x60?\s*(\([^\)]*\))?`)
 
-func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (driver.Batch, error) {
+func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver.Batch, error) {
 	matches := httpInsertRe.FindStringSubmatch(query)
 	if len(matches) < 3 {
 		return nil, errors.New("cannot get table name from query")
@@ -30,7 +35,7 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (driver.
 		}
 	}
 	query = "INSERT INTO " + tableName
-	queryTableSchema := "DESCRIBE TABLE " + tableName
+	queryTableSchema := "DESCRIBE " + tableName
 
 	r, err := dc.rest.DoQuery(ctx, queryTableSchema, nil)
 	if err != nil {
@@ -65,6 +70,7 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (driver.
 		conn:        dc,
 		columnNames: columnNames,
 		columnTypes: columnTypes,
+		tableSchema: tableName,
 		batchFile:   csvFileName,
 	}, nil
 }
@@ -77,24 +83,59 @@ type httpBatch struct {
 	columnNames []string
 	columnTypes []string
 	batchFile   string
+	tableSchema string
 }
 
 func (b *httpBatch) CopyInto() error {
-	// copy into db.table from @~/xx.parquet
-	return nil
+	b.conn.logger.Println("upload to stage")
+	err := b.UploadToStage()
+	if err != nil {
+		fmt.Printf("upload stage failed %v", err)
+	}
+	// copy into db.table from @~/xx.csv
+	respCh := make(chan QueryResponse)
+	errCh := make(chan error)
+	go func() {
+		err := b.conn.rest.QuerySync(context.Background(), newCopyInto(b.tableSchema, b.batchFile), nil, respCh)
+		errCh <- err
+	}()
+
+	for {
+		select {
+		case err := <-errCh:
+			if err != nil {
+				b.conn.logger.Printf("error on query: %s", err)
+				return err
+			} else {
+				return nil
+			}
+		case resp := <-respCh:
+			bt, err := json.Marshal(resp.Data)
+			if err != nil {
+				b.conn.logger.Printf("error on query: %s", err)
+				return err
+			}
+			_, _ = io.Copy(ioutil.Discard, bytes.NewReader(bt))
+		}
+	}
 }
 
-func (b *httpBatch) AppendToFile(v ...interface{}) error {
+func newCopyInto(tableSchema, fileName string) string {
+	return fmt.Sprintf("COPY INTO %s FROM @%s files=('%s') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\\n' skip_header = 0);", tableSchema, "sjh", fileName)
+}
+
+func (b *httpBatch) AppendToFile(v []driver.Value) error {
 	csvFile, err := os.OpenFile(b.batchFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
 	defer csvFile.Close()
 
-	var lineData []string
-	for _, d := range v {
-		lineData = append(lineData, fmt.Sprintf("%s", d))
+	lineData := make([]string, 0, len(v))
+	for i := range v {
+		lineData = append(lineData, fmt.Sprintf("%s", v[i]))
 	}
+	fmt.Printf("%v", lineData)
 	writer := csv.NewWriter(csvFile)
 	err = writer.Write(lineData)
 	if err != nil {
@@ -110,4 +151,4 @@ func (b *httpBatch) UploadToStage() error {
 	return b.conn.rest.uploadToStage(b.batchFile)
 }
 
-var _ driver.Batch = (*httpBatch)(nil)
+var _ ldriver.Batch = (*httpBatch)(nil)

@@ -59,23 +59,24 @@ func main() {
 		panic(err)
 	}
 	defer db.Close()
-	query := "DESC books"
-	rows, err := db.Query(query) // no cancel is allowed
-	if err != nil {
-		log.Fatalf("failed to run a query. %v, err: %v", query, err)
-	}
-	res, err := scanValues(rows)
-	if err != nil {
-		fmt.Printf("scan err %v", err)
-	}
-	fmt.Println(res)
+	//query := "DESC books"
+	//rows, err := db.Query(query) // no cancel is allowed
+	//if err != nil {
+	//	log.Fatalf("failed to run a query. %v, err: %v", query, err)
+	//}
+	//res, err := scanValues(rows)
+	//if err != nil {
+	//	fmt.Printf("scan err %v", err)
+	//}
+	//fmt.Println(res)
+	//
+	//fmt.Printf("Congrats! You have successfully run %v with databend DB!\n", query)
 
-	fmt.Printf("Congrats! You have successfully run %v with databend DB!\n", query)
-
-	err = selectExec(dsn)
-	if err != nil {
-		fmt.Printf("exec failed, err:%v", err)
-	}
+	//err = selectExec(dsn)
+	//if err != nil {
+	//	fmt.Printf("exec failed, err:%v", err)
+	//}
+	batchInsert(dsn)
 }
 func selectExec(dsn string) error {
 	db, err := sql.Open("databend", dsn)
@@ -124,4 +125,33 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 		result = append(result, values)
 	}
 	return result, nil
+}
+
+func batchInsert(dsn string) error {
+	db, err := sql.Open("databend", dsn)
+	if err != nil {
+		return fmt.Errorf("failed to connect. %v, err: %v", dsn, err)
+	}
+	defer db.Close()
+	scope, err := db.Begin()
+	batch, err := scope.Prepare("INSERT INTO books")
+	for i := 0; i < 10; i++ {
+		_, err = batch.Exec(
+			"this",
+			"sjh",
+			"2022",
+		)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+
+	err = scope.Commit()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	return nil
 }
