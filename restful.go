@@ -289,7 +289,7 @@ func (c *APIClient) UploadToStageByPresignURL(presignURL, fileName string, heade
 }
 
 func (c *APIClient) uploadToStage(fileName string) error {
-	rootStage := "sjh"
+	rootStage := "~"
 	fmt.Printf("uploading %s to stage %s... \n", fileName, rootStage)
 	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD @%s/%s", rootStage, filepath.Base(fileName))
 	resp, err := c.DoQuery(context.Background(), presignUploadSQL, nil)

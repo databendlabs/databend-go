@@ -121,7 +121,7 @@ func (b *httpBatch) CopyInto() error {
 }
 
 func newCopyInto(tableSchema, fileName string) string {
-	return fmt.Sprintf("COPY INTO %s FROM @%s files=('%s') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\\n' skip_header = 0);", tableSchema, "sjh", fileName)
+	return fmt.Sprintf("COPY INTO %s FROM @%s files=('%s') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\\n' skip_header = 0);", tableSchema, "~", fileName)
 }
 
 func (b *httpBatch) AppendToFile(v []driver.Value) error {
