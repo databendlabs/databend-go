@@ -148,7 +148,6 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 }
 
 func buildQuery(query string, params []driver.Value) (string, error) {
-	fmt.Printf("the query is %s,the args is %v", query, params)
 	if len(params) > 0 && params[0] != nil {
 		result, err := interpolateParams(query, params)
 		if err != nil {
