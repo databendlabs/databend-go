@@ -646,6 +646,14 @@ func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParse
 		}
 
 		return newDateTimeParser(dateTime64Format, loc, precision, unquote)
+	case "Timestamp":
+		loc := time.UTC
+		if opt != nil && opt.Location != nil {
+			loc = opt.Location
+		}
+
+		return newDateTimeParser(dateTime64Format, loc, 1, unquote)
+
 	case "UInt8":
 		return &intParser{false, 8}, nil
 	case "UInt16":

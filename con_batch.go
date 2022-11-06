@@ -90,7 +90,7 @@ func (b *httpBatch) CopyInto() error {
 	defer func() {
 		err := os.RemoveAll(b.batchFile)
 		if err != nil {
-			b.conn.logger.Fatal("delete batch insert file failed: %v", err)
+			b.conn.logger.Fatal("delete batch insert file failed: ", err)
 		}
 	}()
 	b.conn.logger.Println("upload to stage")
