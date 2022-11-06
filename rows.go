@@ -73,6 +73,7 @@ func (r *nextRows) Next(dest []driver.Value) error {
 			reader := strings.NewReader(fmt.Sprintf("%v", lineData[j]))
 			v, err := r.parsers[j].Parse(reader)
 			if err != nil {
+				r.dc.log("parse error ", err)
 				return err
 			}
 			dest[j] = v

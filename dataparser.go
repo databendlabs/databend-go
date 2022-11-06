@@ -476,30 +476,32 @@ func (p *intParser) Parse(s io.RuneScanner) (driver.Value, error) {
 	}
 
 	if p.signed {
-		v, err := strconv.ParseInt(repr, 10, p.bitSize)
+		f, err := strconv.ParseFloat(repr, 10)
+		//v, err := strconv.ParseInt(repr, 10, p.bitSize)
 		switch p.bitSize {
 		case 8:
-			return int8(v), err
+			return int8(f), err
 		case 16:
-			return int16(v), err
+			return int16(f), err
 		case 32:
-			return int32(v), err
+			return int32(f), err
 		case 64:
-			return int64(v), err
+			return int64(f), err
 		default:
 			panic("unsupported bit size")
 		}
 	} else {
-		v, err := strconv.ParseUint(repr, 10, p.bitSize)
+		f, err := strconv.ParseFloat(repr, 10)
+		//v, err := strconv.ParseUint(repr, 10, p.bitSize)
 		switch p.bitSize {
 		case 8:
-			return uint8(v), err
+			return uint8(f), err
 		case 16:
-			return uint16(v), err
+			return uint16(f), err
 		case 32:
-			return uint32(v), err
+			return uint32(f), err
 		case 64:
-			return uint64(v), err
+			return uint64(f), err
 		default:
 			panic("unsupported bit size")
 		}
