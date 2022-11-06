@@ -64,27 +64,29 @@ func (r *nextRows) Next(dest []driver.Value) error {
 	if r.respData.State == "Succeeded" && len(r.respData.Data) == 0 {
 		return fmt.Errorf("end")
 	}
-	lineData := r.respData.Data[0]
-	r.respData.Data = r.respData.Data[1:]
+	r.dc.logger.Printf("the state is %s", r.respData.State)
+	if len(r.respData.Data) > 0 {
+		lineData := r.respData.Data[0]
+		r.respData.Data = r.respData.Data[1:]
 
-	for j := range lineData {
-		reader := strings.NewReader(fmt.Sprintf("%v", lineData[j]))
-		v, err := r.parsers[j].Parse(reader)
-		if err != nil {
-			return err
+		for j := range lineData {
+			reader := strings.NewReader(fmt.Sprintf("%v", lineData[j]))
+			v, err := r.parsers[j].Parse(reader)
+			if err != nil {
+				return err
+			}
+			dest[j] = v
 		}
-		dest[j] = v
+		if len(dest) != 0 {
+			return nil
+		}
 	}
-	if len(dest) != 0 {
-		return nil
-	}
-	if r.respData.State == "Succeeded" && len(r.respData.Data) == 0 {
-		return fmt.Errorf("end")
-	}
+
 	res, err := r.dc.rest.QueryPage(r.respData.Id, r.respData.NextURI)
 	if err != nil {
 		return err
 	}
+	r.dc.log(res.NextURI)
 
 	r.respData = *res
 	if res.Error != nil {
