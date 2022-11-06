@@ -64,7 +64,7 @@ func (r *nextRows) Next(dest []driver.Value) error {
 	if r.respData.State == "Succeeded" && len(r.respData.Data) == 0 {
 		return fmt.Errorf("end")
 	}
-	r.dc.logger.Printf("the state is %s", r.respData.State)
+	r.dc.log("the state is %s", r.respData.State)
 	if len(r.respData.Data) > 0 {
 		lineData := r.respData.Data[0]
 		r.respData.Data = r.respData.Data[1:]
