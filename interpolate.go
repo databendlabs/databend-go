@@ -2,6 +2,7 @@ package godatabend
 
 import (
 	"database/sql/driver"
+	"reflect"
 )
 
 func placeholders(query string) []int {
@@ -50,6 +51,11 @@ func interpolateParams(query string, params []driver.Value) (string, error) {
 func interpolateParams2(query string, params []driver.Value, index []int) (string, error) {
 	if len(params) == 0 {
 		return query, nil
+	}
+	if reflect.TypeOf(params[0]).Kind() == reflect.Slice {
+		if reflect.ValueOf(params[0]).Len() == 0 {
+			return query, nil
+		}
 	}
 	if len(index) != len(params) {
 		return "", ErrPlaceholderCount
