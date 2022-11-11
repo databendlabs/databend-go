@@ -1,4 +1,4 @@
-# godatabend
+# databend-go
 Golang driver for [databend cloud](https://www.databend.com/)
 
 ## Key features
