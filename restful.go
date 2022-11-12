@@ -19,7 +19,6 @@ import (
 	"github.com/avast/retry-go"
 
 	"github.com/databendcloud/bendsql/api/apierrors"
-	"github.com/pkg/errors"
 )
 
 func (c *APIClient) DoRequest(method, path string, headers http.Header, req interface{}, resp interface{}) error {
@@ -82,15 +81,15 @@ func (c *APIClient) makeURL(path string, args ...interface{}) string {
 func (c *APIClient) makeHeaders() http.Header {
 
 	headers := http.Header{}
-	headers.Set("Authorization", fmt.Sprintf("Basic %s", encode(c.UserEmail, c.Password)))
+	headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.User, c.Password)))
 	var splitHost []string
 	if len(strings.Split(c.Host, ".")) > 0 {
 		splitHost = strings.Split(strings.Split(c.Host, ".")[0], "--")
 	}
 
 	if len(splitHost) == 2 {
-		headers.Set("X-DATABENDCLOUD-TENANT", splitHost[0])
-		headers.Set("X-DATABENDCLOUD-WAREHOUSE", splitHost[1])
+		headers.Set(DatabendCloudTenantHeader, splitHost[0])
+		headers.Set(DatabendCloudWarehouseHeader, splitHost[1])
 	}
 	return headers
 }
@@ -110,42 +109,8 @@ var databendInsecureTransport = &http.Transport{
 	}).DialContext,
 }
 
-func (c *APIClient) Login() error {
-	req := struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}{
-		Email:    c.UserEmail,
-		Password: c.Password,
-	}
-	path := "/api/v1/account/sign-in"
-	reply := struct {
-		Data struct {
-			AccessToken  string `json:"accessToken"`
-			RefreshToken string `json:"refreshToken"`
-		} `json:"data,omitempty"`
-	}{}
-	err := c.DoRequest("POST", path, nil, &req, &reply)
-	var apiErr apierrors.APIError
-	if errors.As(err, &apiErr) && apierrors.IsAuthFailed(err) {
-		apiErr.Hint = "" // shows the server replied message if auth Err
-		return apiErr
-	} else if err != nil {
-		return err
-	}
-	c.resetTokens(reply.Data.AccessToken, reply.Data.RefreshToken)
-	return nil
-}
-
-func (c *APIClient) resetTokens(accessToken string, refreshToken string) {
-	c.AccessToken = accessToken
-	c.RefreshToken = refreshToken
-}
-
 func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
 	headers := c.makeHeaders()
-	//headers.Set("X-DATABENDCLOUD-WAREHOUSE", c.CurrentWarehouse)
-	//headers.Set("X-DATABENDCLOUD-ORG", c.CurrentOrgSlug)
 	q, err := buildQuery(query, args)
 	if err != nil {
 		return nil, err
@@ -160,7 +125,7 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 		return nil, err
 	}
 	if result.Error != nil {
-		return nil, fmt.Errorf("query %s in org %s has error: %v", c.CurrentWarehouse, c.CurrentOrgSlug, result.Error)
+		return nil, fmt.Errorf("query in warehouse %s in tenant %s has error: %v", headers.Get("X-Databendcloud-Warehouse"), headers.Get("X-Databendcloud-Tenant"), result.Error)
 	}
 	return &result, nil
 }

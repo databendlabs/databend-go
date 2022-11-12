@@ -7,9 +7,9 @@ import (
 
 func TestMakeHeaders(t *testing.T) {
 	c := APIClient{
-		UserEmail: "root",
-		Password:  "root",
-		Host:      "tn3ftqihs--bl.ch.aws-us-east-2.default.databend.com",
+		User:     "root",
+		Password: "root",
+		Host:     "tn3ftqihs--bl.ch.aws-us-east-2.default.databend.com",
 	}
 	headers := c.makeHeaders()
 	assert.Equal(t, headers["Authorization"], []string{"Basic cm9vdDpyb290"})

@@ -23,15 +23,10 @@ import (
 )
 
 type APIClient struct {
-	UserEmail        string
-	Password         string
-	AccessToken      string
-	RefreshToken     string
-	ApiEndpoint      string
-	Host             string
-	CurrentOrgSlug   string
-	CurrentWarehouse string
-	AccountID        uint64
+	User        string
+	Password    string
+	ApiEndpoint string
+	Host        string
 }
 
 const (
@@ -181,14 +176,10 @@ func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error
 		},
 	}
 	dc.rest = &APIClient{
-		UserEmail:        dc.cfg.User,
-		Password:         dc.cfg.Password,
-		Host:             dc.cfg.Host,
-		AccessToken:      dc.cfg.AccessToken,
-		RefreshToken:     dc.cfg.RefreshToken,
-		ApiEndpoint:      fmt.Sprintf("%s://%s", dc.cfg.Scheme, dc.cfg.Host),
-		CurrentWarehouse: dc.cfg.Warehouse,
-		CurrentOrgSlug:   dc.cfg.Org,
+		User:        dc.cfg.User,
+		Password:    dc.cfg.Password,
+		Host:        dc.cfg.Host,
+		ApiEndpoint: fmt.Sprintf("%s://%s", dc.cfg.Scheme, dc.cfg.Host),
 	}
 	dc.logger = logger
 	return dc, nil
