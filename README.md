@@ -9,7 +9,7 @@ Golang driver for [databend cloud](https://www.databend.com/)
 # Examples
 
 ## Connecting
-Connection can be achieved either via a DSN string with the format http://user:password@<host>/database?<query_option>=<value> and sql/Open method such as `https://username:password@app.databend.com:443/test?&org=databend&warehouse=bl`.
+Connection can be achieved either via a DSN string with the format http://user:password@<host>/database?<query_option>=<value> and sql/Open method such as `https://username:password@tnc7yee14--reload.ch.datafusecloud.com/test`.
 
 ```go
 func ConnectDSN() error {
@@ -26,11 +26,12 @@ func ConnectDSN() error {
 ```
 
 ## Connection Settings
-- host - the server host
-- username/password - auth credentials
+- host - the connect host that you can get from databend cloud as follows:
+	<img width="1084" alt="image" src="https://user-images.githubusercontent.com/7600925/201461064-d503cfb3-43e0-4c7c-b270-2898452ebc8e.png">
+
+- username/password - auth credentials that you can get from databend cloud
 - database - select the current default database
-- org - the org of your databend cloud account
-- warehouse - the warehouse you want to use
+
 
 ## Execution
 Once a connection has been obtained, users can issue sql statements for execution via the Exec method.
