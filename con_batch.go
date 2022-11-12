@@ -139,7 +139,7 @@ func (b *httpBatch) AppendToFile(v []driver.Value) error {
 
 	lineData := make([]string, 0, len(v))
 	for i := range v {
-		lineData = append(lineData, fmt.Sprintf("%s", v[i]))
+		lineData = append(lineData, fmt.Sprintf("%v", v[i]))
 	}
 	fmt.Printf("%v", lineData)
 	writer := csv.NewWriter(csvFile)
