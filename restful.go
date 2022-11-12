@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql/driver"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,9 +43,6 @@ func (c *APIClient) DoRequest(method, path string, headers http.Header, req inte
 	}
 	httpReq.Header.Set(contentType, jsonContentType)
 	httpReq.Header.Set(accept, jsonContentType)
-	if len(c.AccessToken) > 0 {
-		httpReq.Header.Set(authorization, "Bearer "+c.AccessToken)
-	}
 	if len(c.Host) > 0 {
 		httpReq.Host = c.Host
 	}
@@ -79,6 +77,26 @@ func (c *APIClient) DoRequest(method, path string, headers http.Header, req inte
 func (c *APIClient) makeURL(path string, args ...interface{}) string {
 	format := c.ApiEndpoint + path
 	return fmt.Sprintf(format, args...)
+}
+
+func (c *APIClient) makeHeaders() http.Header {
+
+	headers := http.Header{}
+	headers.Set("Authorization", fmt.Sprintf("Basic %s", encode(c.UserEmail, c.Password)))
+	var splitHost []string
+	if len(strings.Split(c.Host, ".")) > 0 {
+		splitHost = strings.Split(strings.Split(c.Host, ".")[0], "--")
+	}
+
+	if len(splitHost) == 2 {
+		headers.Set("X-DATABENDCLOUD-TENANT", splitHost[0])
+		headers.Set("X-DATABENDCLOUD-WAREHOUSE", splitHost[1])
+	}
+	return headers
+}
+
+func encode(name string, key string) string {
+	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", name, key)))
 }
 
 // databendInsecureTransport is the transport object that doesn't do certificate revocation check.
@@ -125,9 +143,9 @@ func (c *APIClient) resetTokens(accessToken string, refreshToken string) {
 }
 
 func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
-	headers := make(http.Header)
-	headers.Set("X-DATABENDCLOUD-WAREHOUSE", c.CurrentWarehouse)
-	headers.Set("X-DATABENDCLOUD-ORG", c.CurrentOrgSlug)
+	headers := c.makeHeaders()
+	//headers.Set("X-DATABENDCLOUD-WAREHOUSE", c.CurrentWarehouse)
+	//headers.Set("X-DATABENDCLOUD-ORG", c.CurrentOrgSlug)
 	q, err := buildQuery(query, args)
 	if err != nil {
 		return nil, err
@@ -206,10 +224,8 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 }
 
 func (c *APIClient) QueryPage(queryId, path string) (*QueryResponse, error) {
-	headers := make(http.Header)
+	headers := c.makeHeaders()
 	headers.Set("queryID", queryId)
-	headers.Set("X-DATABENDCLOUD-WAREHOUSE", c.CurrentWarehouse)
-	headers.Set("X-DATABENDCLOUD-ORG", string(c.CurrentOrgSlug))
 	var result QueryResponse
 	err := retry.Do(
 		func() error {
@@ -226,27 +242,6 @@ func (c *APIClient) QueryPage(queryId, path string) (*QueryResponse, error) {
 		return nil, err
 	}
 	return &result, nil
-}
-
-func (c *APIClient) RefreshTokens() error {
-	req := struct {
-		RefreshToken string `json:"refreshToken"`
-	}{
-		RefreshToken: c.RefreshToken,
-	}
-	resp := struct {
-		Data struct {
-			AccessToken  string `json:"accessToken"`
-			RefreshToken string `json:"refreshToken"`
-		} `json:"data"`
-	}{}
-	path := "/api/v1/account/renew-token"
-	err := c.DoRequest("POST", path, nil, &req, &resp)
-	if err != nil {
-		return err
-	}
-	c.resetTokens(resp.Data.AccessToken, resp.Data.RefreshToken)
-	return nil
 }
 
 func (c *APIClient) UploadToStageByPresignURL(presignURL, fileName string, header map[string]interface{}) error {

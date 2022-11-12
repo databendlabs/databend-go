@@ -59,16 +59,10 @@ func (cfg *Config) FormatDSN() string {
 	query := u.Query()
 	if cfg.Warehouse != "" {
 		query.Set("warehouse", cfg.Warehouse)
-	} else {
-		panic("no warehouse")
 	}
 	if cfg.Org != "" {
 		query.Set("org", cfg.Org)
-	} else {
-		panic(" no org")
 	}
-	query.Set("accessToken", cfg.AccessToken)
-	query.Set("refreshToken", cfg.RefreshToken)
 	if cfg.Timeout != 0 {
 		query.Set("timeout", cfg.Timeout.String())
 	}

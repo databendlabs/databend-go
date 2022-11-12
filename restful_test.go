@@ -1,0 +1,19 @@
+package godatabend
+
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
+
+func TestMakeHeaders(t *testing.T) {
+	c := APIClient{
+		UserEmail: "root",
+		Password:  "root",
+		Host:      "tn3ftqihs--bl.ch.aws-us-east-2.default.databend.com",
+	}
+	headers := c.makeHeaders()
+	assert.Equal(t, headers["Authorization"], []string{"Basic cm9vdDpyb290"})
+	assert.Equal(t, headers["X-Databendcloud-Tenant"], []string{"tn3ftqihs"})
+	assert.Equal(t, headers["X-Databendcloud-Warehouse"], []string{"bl"})
+
+}
