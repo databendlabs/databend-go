@@ -9,7 +9,7 @@ Golang driver for [databend cloud](https://www.databend.com/)
 # Examples
 
 ## Connecting
-Connection can be achieved either via a DSN string with the format https://user:password@host/database?<query_option>=<value> and sql/Open method such as `https://username:password@tenant--warehousename.ch.datafusecloud.com/test`.
+Connection can be achieved either via a DSN string with the format `https://user:password@host/database?<query_option>=<value>` and sql/Open method such as `https://username:password@tenant--warehousename.ch.datafusecloud.com/test`.
 
 ```go
 import (
