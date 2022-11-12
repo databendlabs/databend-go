@@ -8,14 +8,13 @@ import (
 )
 
 func TestFormatDSN(t *testing.T) {
-	dsn := "https://username:password@app.databend.com:443/test?warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings"
+	dsn := "https://username:password@tn3ftqihs--bl.ch.aws-us-east-2.default.databend.com/test?warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings"
 	cfg, err := ParseDSN(dsn)
 	if assert.NoError(t, err) {
 		dsn2 := cfg.FormatDSN()
-		assert.Equal(t, len(dsn), len(dsn2))
 		assert.Contains(t, dsn2, "warehouse=wh")
 		assert.Contains(t, dsn2, "org=databend")
-		assert.Contains(t, dsn2, "https://username:password@app.databend.com:443/test?")
+		assert.Contains(t, dsn2, "https://username:password@tn3ftqihs--bl.ch.aws-us-east-2.default.databend.com:443/test?")
 		assert.Contains(t, dsn2, "timeout=1s")
 		assert.Contains(t, dsn2, "idle_timeout=2s")
 		assert.Contains(t, dsn2, "tls_config=tls-settings")
