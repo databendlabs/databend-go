@@ -9,9 +9,14 @@ Golang driver for [databend cloud](https://www.databend.com/)
 # Examples
 
 ## Connecting
-Connection can be achieved either via a DSN string with the format http://user:password@host/database?<query_option>=<value> and sql/Open method such as `https://username:password@tenant--warehousename.ch.datafusecloud.com/test`.
+Connection can be achieved either via a DSN string with the format https://user:password@host/database?<query_option>=<value> and sql/Open method such as `https://username:password@tenant--warehousename.ch.datafusecloud.com/test`.
 
 ```go
+import (
+  "database/sql"
+  _ "github.com/databendcloud/databend-go"
+)
+
 func ConnectDSN() error {
     dsn, cfg, err := getDSN()
     if err != nil {
@@ -39,12 +44,12 @@ Once a connection has been obtained, users can issue sql statements for executio
 ```go
     dsn, cfg, err := getDSN()
     if err != nil {
-    log.Fatalf("failed to create DSN from Config: %v, err: %v", cfg, err)
-        }
-		conn, err := sql.Open("databend", dsn)
+        log.Fatalf("failed to create DSN from Config: %v, err: %v", cfg, err)
+    }
+    conn, err := sql.Open("databend", dsn)
     if err != nil {
         return err
-	    }
+    }
     conn.Exec(`DROP TABLE IF EXISTS data`)
     _, err = conn.Exec(`
     CREATE TABLE IF NOT EXISTS  data(
