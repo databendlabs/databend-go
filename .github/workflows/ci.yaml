@@ -16,6 +16,8 @@ jobs:
         image: datafuselabs/databend-query
         env:
           EMBEDDED_DIR: "/.databend/meta"
+          HTTP_HANDLER_HOST: "0.0.0.0"
+          HTTP_HANDLER_PORT: "8000"
         # options: >-
         #   --health-cmd "curl -fs http://localhost:8000/v1/health || exit 1"
         #   --health-interval 10s
