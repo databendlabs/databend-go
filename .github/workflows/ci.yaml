@@ -11,6 +11,7 @@ jobs:
   test:
     name: ci-build
     runs-on: ubuntu-latest
+    container: ubuntu
     services:
       databend:
         image: datafuselabs/databend-query
