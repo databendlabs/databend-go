@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -94,7 +95,7 @@ func (cfg *Config) FormatDSN() string {
 
 func (cfg *Config) url(extra map[string]string, dsn bool) *url.URL {
 	u := &url.URL{
-		Host:   ensureHavePort(cfg.Host),
+		Host:   cfg.Host,
 		Scheme: cfg.Scheme,
 		Path:   "/",
 	}
@@ -132,7 +133,28 @@ func ParseDSN(dsn string) (*Config, error) {
 	}
 	cfg := NewConfig()
 
-	cfg.Scheme, cfg.Host = u.Scheme, u.Host
+	switch u.Scheme {
+	case "http", "https":
+		cfg.Scheme = u.Scheme
+	case "databend+http", "databend+https":
+		cfg.Scheme = u.Scheme[len("databend+"):]
+	default:
+		return nil, fmt.Errorf("invalid scheme: %s", cfg.Scheme)
+	}
+
+	if strings.Contains(u.Host, ":") {
+		cfg.Host = u.Host
+	} else {
+		switch cfg.Scheme {
+		case "http":
+			cfg.Host = net.JoinHostPort(u.Host, "80")
+		case "https":
+			cfg.Host = net.JoinHostPort(u.Host, "443")
+		default:
+			return nil, fmt.Errorf("invalid scheme: %s", cfg.Scheme)
+		}
+	}
+
 	if len(u.Path) > 1 {
 		// skip '/'
 		cfg.Database = u.Path[1:]
@@ -195,16 +217,4 @@ func parseDSNParams(cfg *Config, params map[string][]string) (err error) {
 	}
 
 	return
-}
-
-func ensureHavePort(addr string) string {
-	if _, _, err := net.SplitHostPort(addr); err != nil {
-		// we get the missing port error here
-		if addr[0] == '[' && addr[len(addr)-1] == ']' {
-			// ipv6 brackets
-			addr = addr[1 : len(addr)-1]
-		}
-		return net.JoinHostPort(addr, "443")
-	}
-	return addr
 }
