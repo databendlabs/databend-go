@@ -14,6 +14,13 @@ jobs:
     services:
       databend:
         image: datafuselabs/databend-query
+        env:
+          EMBEDDED_DIR: "/.databend/meta"
+        # options: >-
+        #   --health-cmd "curl -fs http://localhost:8000/v1/health || exit 1"
+        #   --health-interval 10s
+        #   --health-timeout 5s
+        #   --health-retries 5
         ports:
           - 8000:8000
     steps:
