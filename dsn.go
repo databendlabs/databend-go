@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -142,7 +141,7 @@ func ParseDSN(dsn string) (*Config, error) {
 		return nil, fmt.Errorf("invalid scheme: %s", cfg.Scheme)
 	}
 
-	if strings.Contains(u.Host, ":") {
+	if _, _, err := net.SplitHostPort(u.Host); err == nil {
 		cfg.Host = u.Host
 	} else {
 		switch cfg.Scheme {
