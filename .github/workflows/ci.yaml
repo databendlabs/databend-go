@@ -30,6 +30,9 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: "1.18"
+      - name: Verify Service Running
+        run: |
+          curl -v http://localhost:8000/v1/health
       - name: Test
         env:
           TEST_DATABEND_DSN: "http://databend:databend@localhost:8000/books?idle_timeout=1h"
