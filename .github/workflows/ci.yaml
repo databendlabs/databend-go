@@ -34,6 +34,7 @@ jobs:
           go-version: "1.18"
       - name: Verify Service Running
         run: |
+          docker ps -a
           curl -v http://localhost:8000/v1/health
       - name: Test
         env:
