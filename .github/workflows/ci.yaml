@@ -35,7 +35,7 @@ jobs:
           go-version: "1.18"
       - name: Verify Service Running
         run: |
-          cid=$(docker ps -a | grep databend-query | cut -d' ' -f1)
+          cid=$(docker ps -a | grep databend | cut -d' ' -f1)
           docker logs ${cid}
           curl -v http://localhost:8000/v1/health
       - name: Test
