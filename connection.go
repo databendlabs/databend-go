@@ -6,10 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"github.com/avast/retry-go"
-	"github.com/databendcloud/bendsql/api/apierrors"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -19,7 +16,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/avast/retry-go"
 	"github.com/sirupsen/logrus"
+
+	"github.com/databendcloud/bendsql/api/apierrors"
 )
 
 type APIClient struct {
@@ -79,7 +79,7 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.V
 			if err != nil {
 				return emptyResult, err
 			}
-			_, _ = io.Copy(ioutil.Discard, bytes.NewReader(b))
+			_, _ = io.Copy(io.Discard, bytes.NewReader(b))
 		}
 	}
 }
@@ -185,9 +185,9 @@ func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error
 	return dc, nil
 }
 
-func (c *DatabendConn) log(msg ...interface{}) {
-	if c.logger != nil {
-		c.logger.Println(msg...)
+func (dc *DatabendConn) log(msg ...interface{}) {
+	if dc.logger != nil {
+		dc.logger.Println(msg...)
 	}
 }
 

@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql/driver"
 	"fmt"
+	"regexp"
+
 	ldriver "github.com/databendcloud/databend-go/lib/driver"
 	"github.com/pkg/errors"
-	"regexp"
 )
 
 var (
