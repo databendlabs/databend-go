@@ -3,36 +3,28 @@ name: CI
 on:
   push:
     branches: [main]
-    paths:
-      - "./**"
-      - ".github/workflows/ci.yaml"
   pull_request:
     branches: [main]
-    paths:
-      - "./**"
-      - ".github/workflows/ci.yaml"
 
-env:
-  # Common versions
-  GO_VERSION: '1.18'
-  GOLANGCI_VERSION: 'v1.42'
 
 jobs:
-  build-and-test:
+  test:
     name: ci-build
     runs-on: ubuntu-latest
+    services:
+      databend:
+        image: datafuselabs/databend-query
+        ports:
+          - 8000:8000
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-        with:
-          submodules: true
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Build
-        run: |
-          make build
+          go-version: "1.18"
       - name: Test
+        env:
+          TEST_DATABEND_DSN: "http://databend:databend@databend:8000/books?idle_timeout=1h"
         run: |
           make test

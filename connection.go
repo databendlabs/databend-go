@@ -84,7 +84,7 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.V
 	}
 }
 
-func (dc *DatabendConn) query(ctx context.Context, query string, args []driver.Value) (driver.Rows, error) {
+func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.Value) (driver.Rows, error) {
 	var r0 *QueryResponse
 	err := retry.Do(
 		func() error {
@@ -214,11 +214,27 @@ func (dc *DatabendConn) Close() error {
 }
 
 func (dc *DatabendConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	return dc.exec(context.Background(), query, args)
+	return dc.exec(context.Background(), query, args...)
+}
+
+func (dc *DatabendConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	values := make([]driver.Value, len(args))
+	for i, arg := range args {
+		values[i] = arg.Value
+	}
+	return dc.exec(ctx, query, values...)
 }
 
 func (dc *DatabendConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-	return dc.query(context.Background(), query, args)
+	return dc.query(context.Background(), query, args...)
+}
+
+func (dc *DatabendConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	values := make([]driver.Value, len(args))
+	for i, arg := range args {
+		values[i] = arg.Value
+	}
+	return dc.query(ctx, query, values...)
 }
 
 // Commit applies prepared statement if it exists
