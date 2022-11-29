@@ -11,16 +11,16 @@ import (
 	rlog "github.com/sirupsen/logrus"
 )
 
-//DBSessionIDKey is context key of session id
+// DBSessionIDKey is context key of session id
 const DBSessionIDKey contextKey = "LOG_SESSION_ID"
 
-//SFSessionUserKey is context key of  user id of a session
+// SFSessionUserKey is context key of  user id of a session
 const SFSessionUserKey contextKey = "LOG_USER"
 
-//LogKeys these keys in context should be included in logging messages when using logger.WithContext
+// LogKeys these keys in context should be included in logging messages when using logger.WithContext
 var LogKeys = [...]contextKey{DBSessionIDKey, SFSessionUserKey}
 
-//DBLogger Databend logger interface to expose FieldLogger defined in logrus
+// DBLogger Databend logger interface to expose FieldLogger defined in logrus
 type DBLogger interface {
 	rlog.Ext1FieldLogger
 	SetLogLevel(level string) error
@@ -28,7 +28,7 @@ type DBLogger interface {
 	SetOutput(output io.Writer)
 }
 
-//DBCallerPrettyfier to provide base file name and function name from calling frame used in SFLogger
+// DBCallerPrettyfier to provide base file name and function name from calling frame used in SFLogger
 func DBCallerPrettyfier(frame *runtime.Frame) (string, string) {
 	return path.Base(frame.Function), fmt.Sprintf("%s:%d", path.Base(frame.File), frame.Line)
 }
@@ -37,7 +37,7 @@ type defaultLogger struct {
 	inner *rlog.Logger
 }
 
-//SetLogLevel set logging level for calling defaultLogger
+// SetLogLevel set logging level for calling defaultLogger
 func (log *defaultLogger) SetLogLevel(level string) error {
 	actualLevel, err := rlog.ParseLevel(level)
 	if err != nil {
@@ -47,13 +47,13 @@ func (log *defaultLogger) SetLogLevel(level string) error {
 	return nil
 }
 
-//WithContext return Entry to include fields in context
+// WithContext return Entry to include fields in context
 func (log *defaultLogger) WithContext(ctx context.Context) *rlog.Entry {
 	fields := context2Fields(ctx)
 	return log.inner.WithFields(*fields)
 }
 
-//CreateDefaultLogger return a new instance of SFLogger with default config
+// CreateDefaultLogger return a new instance of SFLogger with default config
 func CreateDefaultLogger() DBLogger {
 	var rLogger = rlog.New()
 	var formatter = rlog.TextFormatter{CallerPrettyfier: DBCallerPrettyfier}

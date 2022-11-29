@@ -3,10 +3,11 @@ package godatabend
 import (
 	"bytes"
 	"fmt"
-	"github.com/pkg/errors"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 var (

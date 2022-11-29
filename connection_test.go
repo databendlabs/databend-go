@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"log"
 	"os"
 	"reflect"
 	"sync"
@@ -14,10 +15,10 @@ import (
 )
 
 var (
-	_ driver.Conn    = new(DatabendConn)
-	_ driver.Execer  = new(DatabendConn) // nolint:staticcheck
-	_ driver.Queryer = new(DatabendConn) // nolint:staticcheck
-	_ driver.Tx      = new(DatabendConn)
+	_ driver.Conn           = new(DatabendConn)
+	_ driver.ExecerContext  = new(DatabendConn)
+	_ driver.QueryerContext = new(DatabendConn)
+	_ driver.Tx             = new(DatabendConn)
 )
 
 var (
@@ -174,6 +175,7 @@ func (s *connSuite) TestExec() {
 	}
 	for _, tc := range testCases {
 		result, err := s.conn.Exec(tc.query, tc.args...)
+		log.Printf("query: %s, args: %v\n", tc.query, tc.args)
 		if !s.NoError(err) {
 			continue
 		}

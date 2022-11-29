@@ -3,36 +3,42 @@ name: CI
 on:
   push:
     branches: [main]
-    paths:
-      - "./**"
-      - ".github/workflows/ci.yaml"
   pull_request:
     branches: [main]
-    paths:
-      - "./**"
-      - ".github/workflows/ci.yaml"
 
-env:
-  # Common versions
-  GO_VERSION: '1.18'
-  GOLANGCI_VERSION: 'v1.42'
 
 jobs:
-  build-and-test:
+  test:
     name: ci-build
     runs-on: ubuntu-latest
+    services:
+      databend:
+        # image: datafuselabs/databend-query
+        image: datafuselabs/databend
+        env:
+          DATABEND_DEFAULT_USER: databend
+          DATABEND_DEFAULT_PASSWORD: databend
+        # options: >-
+        #   --health-cmd "curl -fs http://localhost:8000/v1/health || exit 1"
+        #   --health-interval 10s
+        #   --health-timeout 5s
+        #   --health-retries 5
+        ports:
+          - 8000:8000
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-        with:
-          submodules: true
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Build
+          go-version: "1.18"
+      - name: Verify Service Running
         run: |
-          make build
+          cid=$(docker ps -a | grep databend | cut -d' ' -f1)
+          docker logs ${cid}
+          curl -v http://localhost:8000/v1/health
       - name: Test
+        env:
+          TEST_DATABEND_DSN: "http://databend:databend@localhost:8000/books?idle_timeout=1h"
         run: |
           make test

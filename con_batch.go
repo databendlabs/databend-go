@@ -7,14 +7,15 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	ldriver "github.com/databendcloud/databend-go/lib/driver"
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+
+	ldriver "github.com/databendcloud/databend-go/lib/driver"
 )
 
 // \x60 represents a backtick
@@ -121,7 +122,7 @@ func (b *httpBatch) CopyInto() error {
 				b.conn.logger.Printf("error on query: %s", err)
 				return err
 			}
-			_, _ = io.Copy(ioutil.Discard, bytes.NewReader(bt))
+			_, _ = io.Copy(io.Discard, bytes.NewReader(bt))
 		}
 	}
 }

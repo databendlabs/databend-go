@@ -23,6 +23,9 @@ func newNextRows(dc *DatabendConn, respData *QueryResponse) (*nextRows, error) {
 		columns = append(columns, field.Name)
 		x := &TypeDetail{}
 		res, err := json.Marshal(field.DataType)
+		if err != nil {
+			return nil, err
+		}
 		err = json.Unmarshal(res, &x)
 		if err != nil {
 			return nil, err

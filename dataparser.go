@@ -476,7 +476,7 @@ func (p *intParser) Parse(s io.RuneScanner) (driver.Value, error) {
 	}
 
 	if p.signed {
-		f, err := strconv.ParseFloat(repr, 10)
+		f, err := strconv.ParseFloat(repr, 64)
 		//v, err := strconv.ParseInt(repr, 10, p.bitSize)
 		switch p.bitSize {
 		case 8:
@@ -491,7 +491,7 @@ func (p *intParser) Parse(s io.RuneScanner) (driver.Value, error) {
 			panic("unsupported bit size")
 		}
 	} else {
-		f, err := strconv.ParseFloat(repr, 10)
+		f, err := strconv.ParseFloat(repr, 64)
 		//v, err := strconv.ParseUint(repr, 10, p.bitSize)
 		switch p.bitSize {
 		case 8:
@@ -597,7 +597,7 @@ func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParse
 		return &nothingParser{}, nil
 	case "Nullable":
 		if len(t.Args) == 0 {
-			return nil, fmt.Errorf("Nullable should pass original type")
+			return nil, fmt.Errorf("nullable should pass original type")
 		}
 		p, err := newDataParser(t.Args[0], unquote, opt)
 		if err != nil {
