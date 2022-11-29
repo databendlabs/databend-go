@@ -91,14 +91,15 @@ func (b *httpBatch) CopyInto() error {
 	defer func() {
 		err := os.RemoveAll(b.batchFile)
 		if err != nil {
-			b.conn.logger.Fatal("delete batch insert file failed: ", err)
+			b.conn.log("delete batch insert file failed: ", err)
 		}
 	}()
-	b.conn.logger.Println("upload to stage")
+	b.conn.log("upload to stage")
 	err := b.UploadToStage()
 	if err != nil {
-		fmt.Printf("upload stage failed %v", err)
+		return errors.Wrap(err, "upload to stage failed")
 	}
+
 	// copy into db.table from @~/xx.csv
 	respCh := make(chan QueryResponse)
 	errCh := make(chan error)
@@ -111,7 +112,6 @@ func (b *httpBatch) CopyInto() error {
 		select {
 		case err := <-errCh:
 			if err != nil {
-				b.conn.logger.Printf("error on query: %s", err)
 				return err
 			} else {
 				return nil
@@ -119,7 +119,6 @@ func (b *httpBatch) CopyInto() error {
 		case resp := <-respCh:
 			bt, err := json.Marshal(resp.Data)
 			if err != nil {
-				b.conn.logger.Printf("error on query: %s", err)
 				return err
 			}
 			_, _ = io.Copy(io.Discard, bytes.NewReader(bt))
@@ -142,7 +141,7 @@ func (b *httpBatch) AppendToFile(v []driver.Value) error {
 	for i := range v {
 		lineData = append(lineData, fmt.Sprintf("%v", v[i]))
 	}
-	fmt.Printf("%v", lineData)
+	// fmt.Printf("%v", lineData)
 	writer := csv.NewWriter(csvFile)
 	err = writer.Write(lineData)
 	if err != nil {
@@ -154,7 +153,6 @@ func (b *httpBatch) AppendToFile(v []driver.Value) error {
 }
 
 func (b *httpBatch) UploadToStage() error {
-
 	return b.conn.rest.uploadToStage(b.batchFile)
 }
 

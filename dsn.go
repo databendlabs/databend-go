@@ -39,6 +39,8 @@ type Config struct {
 	GzipCompression bool
 	Params          map[string]string
 	TLSConfig       string
+
+	PresignedURLDisabled bool
 }
 
 // NewConfig creates a new config with default values
@@ -86,6 +88,9 @@ func (cfg *Config) FormatDSN() string {
 	}
 	if cfg.TLSConfig != "" {
 		query.Set("tls_config", cfg.TLSConfig)
+	}
+	if cfg.PresignedURLDisabled {
+		query.Set("presigned_url_disabled", "1")
 	}
 
 	u.RawQuery = query.Encode()
@@ -196,6 +201,9 @@ func parseDSNParams(cfg *Config, params map[string][]string) (err error) {
 			err = fmt.Errorf("unknown option '%s'", k)
 		case "enable_http_compression":
 			cfg.GzipCompression, err = strconv.ParseBool(v[0])
+			cfg.Params[k] = v[0]
+		case "presigned_url_disabled":
+			cfg.PresignedURLDisabled, err = strconv.ParseBool(v[0])
 			cfg.Params[k] = v[0]
 		case "tls_config":
 			cfg.TLSConfig = v[0]

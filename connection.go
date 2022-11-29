@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/avast/retry-go"
-	"github.com/sirupsen/logrus"
 
 	"github.com/databendcloud/bendsql/api/apierrors"
 )
@@ -27,6 +26,8 @@ type APIClient struct {
 	Password    string
 	ApiEndpoint string
 	Host        string
+
+	PresignedURLDisabled bool
 }
 
 const (
@@ -69,7 +70,6 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.V
 		select {
 		case err := <-errCh:
 			if err != nil {
-				logrus.Errorf("error on query: %s", err)
 				return emptyResult, err
 			} else {
 				return emptyResult, nil
@@ -150,15 +150,10 @@ func (dc *DatabendConn) prepare(query string) (*databendStmt, error) {
 }
 
 func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
-
 	return dc.prepare(query)
 }
 
 func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error) {
-	var logger *log.Logger
-	if config.Debug {
-		logger = log.New(os.Stderr, "databend: ", log.LstdFlags)
-	}
 	dc := &DatabendConn{
 		url: config.url(map[string]string{"default_format": "TabSeparatedWithNamesAndTypes"}, false),
 		ctx: ctx,
@@ -175,13 +170,17 @@ func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error
 			TLSClientConfig:       getTLSConfigClone(config.TLSConfig),
 		},
 	}
+	if config.Debug {
+		dc.logger = log.New(os.Stderr, "databend: ", log.LstdFlags)
+	}
 	dc.rest = &APIClient{
 		User:        dc.cfg.User,
 		Password:    dc.cfg.Password,
 		Host:        dc.cfg.Host,
 		ApiEndpoint: fmt.Sprintf("%s://%s", dc.cfg.Scheme, dc.cfg.Host),
+
+		PresignedURLDisabled: dc.cfg.PresignedURLDisabled,
 	}
-	dc.logger = logger
 	return dc, nil
 }
 

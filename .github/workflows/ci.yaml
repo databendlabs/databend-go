@@ -9,7 +9,6 @@ on:
 
 jobs:
   test:
-    name: ci-build
     runs-on: ubuntu-latest
     services:
       databend:
@@ -39,6 +38,7 @@ jobs:
           curl -v http://localhost:8000/v1/health
       - name: Test
         env:
-          TEST_DATABEND_DSN: "http://databend:databend@localhost:8000/books?idle_timeout=1h"
+          TEST_DATABEND_DSN: "http://databend:databend@localhost:8000/default?idle_timeout=1h&presigned_url_disabled=1"
         run: |
           make test
+          make ci
