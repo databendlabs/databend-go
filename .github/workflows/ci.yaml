@@ -15,10 +15,9 @@ jobs:
       databend:
         # image: datafuselabs/databend-query
         image: datafuselabs/databend
-        # env:
-        #   META_EMBEDDED_DIR: "/.databend/meta"
-        #   QUERY_HTTP_HANDLER_HOST: "0.0.0.0"
-        #   QUERY_HTTP_HANDLER_PORT: "8000"
+        env:
+          DATABEND_DEFAULT_USER: databend
+          DATABEND_DEFAULT_PASSWORD: databend
         # options: >-
         #   --health-cmd "curl -fs http://localhost:8000/v1/health || exit 1"
         #   --health-interval 10s
@@ -40,6 +39,6 @@ jobs:
           curl -v http://localhost:8000/v1/health
       - name: Test
         env:
-          TEST_DATABEND_DSN: "http://root:@localhost:8000/books?idle_timeout=1h"
+          TEST_DATABEND_DSN: "http://databend:databend@localhost:8000/books?idle_timeout=1h"
         run: |
           make test
