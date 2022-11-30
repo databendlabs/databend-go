@@ -91,8 +91,8 @@ func (c *APIClient) makeHeaders() http.Header {
 	// }
 
 	// if len(splitHost) == 2 {
-	// 	headers.Set(DatabendCloudTenantHeader, splitHost[0])
-	// 	headers.Set(DatabendCloudWarehouseHeader, splitHost[1])
+	// 	headers.Set(DatabendTenantHeader, splitHost[0])
+	// 	headers.Set(DatabendWarehouseHeader, splitHost[1])
 	// }
 
 	return headers
@@ -129,7 +129,7 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 		return nil, err
 	}
 	if result.Error != nil {
-		return nil, fmt.Errorf("query in warehouse %s in tenant %s has error: %v", headers.Get("X-Databendcloud-Warehouse"), headers.Get("X-Databendcloud-Tenant"), result.Error)
+		return nil, fmt.Errorf("query in warehouse %s in tenant %s has error: %v", headers.Get("X-Databend-Warehouse"), headers.Get("X-Databend-Tenant"), result.Error)
 	}
 	return &result, nil
 }
