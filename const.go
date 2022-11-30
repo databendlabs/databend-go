@@ -1,7 +1,7 @@
 package godatabend
 
 const (
-	DatabendCloudTenantHeader    = "X-DATABENDCLOUD-TENANT"
-	DatabendCloudWarehouseHeader = "X-DATABENDCLOUD-WAREHOUSE"
-	Authorization                = "Authorization"
+	DatabendTenantHeader    = "X-DATABEND-TENANT"
+	DatabendWarehouseHeader = "X-DATABEND-WAREHOUSE"
+	Authorization           = "Authorization"
 )

@@ -15,7 +15,16 @@ import (
 )
 
 const (
-	createTable = `CREATE TABLE %s (title VARCHAR, author VARCHAR, date VARCHAR)`
+	createTable = `CREATE TABLE %s (
+		i64 Int64,
+		u64 UInt64,
+		f64 Float64,
+		s   String,
+		s2  String,
+		a16 Array(Int16),
+		a8  Array(UInt8),
+		d   Date,
+		t   DateTime)`
 )
 
 func TestDatabendSuite(t *testing.T) {
@@ -78,9 +87,15 @@ func (s *DatabendTestSuite) TestDesc() {
 	result, err := scanValues(rows)
 	s.r.Nil(err)
 	s.r.Equal([][]interface{}{
-		{"title", "VARCHAR", "NO", "", ""},
-		{"author", "VARCHAR", "NO", "", ""},
-		{"date", "VARCHAR", "NO", "", ""},
+		{"i64", "BIGINT", "NO", "0", ""},
+		{"u64", "BIGINT UNSIGNED", "NO", "0", ""},
+		{"f64", "DOUBLE", "NO", "0", ""},
+		{"s", "VARCHAR", "NO", "", ""},
+		{"s2", "VARCHAR", "NO", "", ""},
+		{"a16", "ARRAY(INT16)", "NO", "[]", ""},
+		{"a8", "ARRAY(UINT8)", "NO", "[]", ""},
+		{"d", "DATE", "NO", "0", ""},
+		{"t", "TIMESTAMP", "NO", "0", ""},
 	}, result)
 	rows.Close()
 }
@@ -106,15 +121,106 @@ func (s *DatabendTestSuite) TestBatchInsert() {
 
 	for i := 0; i < 10; i++ {
 		_, err = batch.Exec(
-			"book",
-			"author",
-			"2022",
+			"1234",
+			"2345",
+			"3.1415",
+			"test",
+			"test2",
+			"[4, 5, 6]",
+			"[1, 2, 3]",
+			"2021-01-01",
+			"2021-01-01 00:00:00",
 		)
 		r.Nil(err)
 	}
 
 	err = scope.Commit()
 	r.Nil(err)
+}
+
+func (s *DatabendTestSuite) TestDDL() {
+	ddls := []string{
+		`DROP TABLE IF EXISTS data`,
+		`CREATE TABLE data (
+			i64 Int64,
+			u64 UInt64,
+			f64 Float64,
+			s   String,
+			s2  String,
+			a16 Array(Int16),
+			a8  Array(UInt8),
+			d   Date,
+			t   DateTime)
+	`,
+		`INSERT INTO data VALUES
+		(-1, 1, 1.0, '1', '1', [1], [10], '2011-03-06', '2011-03-06 06:20:00'),
+		(-2, 2, 2.0, '2', '2', [2], [20], '2012-05-31', '2012-05-31 11:20:00'),
+		(-3, 3, 3.0, '3', '2', [3], [30], '2016-04-04', '2016-04-04 11:30:00')
+	`,
+	}
+	for _, ddl := range ddls {
+		_, err := s.db.Exec(ddl)
+		s.Nil(err)
+	}
+}
+
+func (s *DatabendTestSuite) TestExec() {
+	testCases := []struct {
+		query  string
+		query2 string
+		args   []interface{}
+	}{
+		{
+			fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table),
+			fmt.Sprintf("SELECT i64 FROM %s WHERE i64=?", s.table),
+			[]interface{}{int64(1)},
+		},
+		{
+			fmt.Sprintf("INSERT INTO %s (i64, u64) VALUES (?, ?)", s.table),
+			fmt.Sprintf("SELECT i64, u64 FROM %s WHERE i64=? AND u64=?", s.table),
+			[]interface{}{int64(2), uint64(12)},
+		},
+		{
+			fmt.Sprintf("INSERT INTO %s (i64, a16, a8) VALUES (?, ?, ?)", s.table),
+			"",
+			[]interface{}{int64(3), dc.Array([]int16{1, 2}), dc.Array([]uint8{10, 20})},
+		},
+		{
+			fmt.Sprintf("INSERT INTO %s (d, t) VALUES (?, ?)", s.table),
+			"",
+			[]interface{}{
+				dc.Date(time.Date(2016, 4, 4, 0, 0, 0, 0, time.Local)),
+				time.Date(2016, 4, 4, 0, 0, 0, 0, time.Local),
+			},
+		},
+	}
+	for _, tc := range testCases {
+		result, err := s.db.Exec(tc.query, tc.args...)
+		s.T().Logf("query: %s, args: %v\n", tc.query, tc.args)
+		s.r.Nil(err)
+		s.r.NotNil(result)
+
+		_, err = result.LastInsertId()
+		s.Equal(dc.ErrNoLastInsertID, err)
+		_, err = result.RowsAffected()
+		s.Equal(dc.ErrNoRowsAffected, err)
+		if len(tc.query2) == 0 {
+			continue
+		}
+		rows, err := s.db.Query(tc.query2, tc.args...)
+		s.r.Nil(err)
+
+		v, err := scanValues(rows)
+		s.r.Nil(err)
+		s.r.Equal([][]interface{}{tc.args}, v)
+
+		s.r.NoError(rows.Close())
+	}
+}
+
+func (s *DatabendTestSuite) TestServerError() {
+	_, err := s.db.Query("SELECT 1 FROM '???'")
+	s.Contains(err.Error(), "error")
 }
 
 func scanValues(rows *sql.Rows) (interface{}, error) {

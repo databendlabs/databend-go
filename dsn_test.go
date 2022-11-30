@@ -25,7 +25,6 @@ func TestFormatDSN(t *testing.T) {
 	assert.Equal(t, "https://username:password@tn3ftqihs.ch.aws-us-east-2.default.databend.com:443/test?idle_timeout=2s&org=databend&timeout=1s&tls_config=tls-settings&warehouse=wh", dsn1)
 
 	cfg1, err := ParseDSN(dsn1)
-	t.Logf("%+v", cfg1)
 	require.Nil(t, err)
 	assert.Equal(t, cfg, cfg1)
 }
