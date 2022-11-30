@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/avast/retry-go"
+	"github.com/pkg/errors"
 
 	"github.com/databendcloud/bendsql/api/apierrors"
 )
@@ -79,18 +81,20 @@ func (c *APIClient) makeURL(path string, args ...interface{}) string {
 }
 
 func (c *APIClient) makeHeaders() http.Header {
-
 	headers := http.Header{}
 	headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.User, c.Password)))
-	var splitHost []string
-	if len(strings.Split(c.Host, ".")) > 0 {
-		splitHost = strings.Split(strings.Split(c.Host, ".")[0], "--")
-	}
 
-	if len(splitHost) == 2 {
-		headers.Set(DatabendCloudTenantHeader, splitHost[0])
-		headers.Set(DatabendCloudWarehouseHeader, splitHost[1])
-	}
+	// NOTE: no need to add header here
+	// var splitHost []string
+	// if len(strings.Split(c.Host, ".")) > 0 {
+	// 	splitHost = strings.Split(strings.Split(c.Host, ".")[0], "--")
+	// }
+
+	// if len(splitHost) == 2 {
+	// 	headers.Set(DatabendCloudTenantHeader, splitHost[0])
+	// 	headers.Set(DatabendCloudWarehouseHeader, splitHost[1])
+	// }
+
 	return headers
 }
 
@@ -142,7 +146,7 @@ func buildQuery(query string, params []driver.Value) (string, error) {
 }
 
 func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.Value, respCh chan QueryResponse) error {
-	fmt.Printf("query sync %s", query)
+	// fmt.Printf("query sync %s", query)
 	var r0 *QueryResponse
 	err := retry.Do(
 		func() error {
@@ -209,23 +213,44 @@ func (c *APIClient) QueryPage(queryId, path string) (*QueryResponse, error) {
 	return &result, nil
 }
 
-func (c *APIClient) UploadToStageByPresignURL(presignURL, fileName string, header map[string]interface{}) error {
+func (c *APIClient) uploadToStage(fileName string) error {
+	rootStage := "~"
+	// fmt.Printf("uploading %s to stage %s... \n", fileName, rootStage)
+
+	if c.PresignedURLDisabled {
+		return c.uploadToStageByAPI(rootStage, fileName)
+	} else {
+		return c.UploadToStageByPresignURL(rootStage, fileName)
+	}
+}
+
+func (c *APIClient) UploadToStageByPresignURL(stage, fileName string) error {
+	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD @%s/%s", stage, filepath.Base(fileName))
+	resp, err := c.DoQuery(context.Background(), presignUploadSQL, nil)
+	if err != nil {
+		return err
+	}
+	if len(resp.Data) < 1 || len(resp.Data[0]) < 2 {
+		return fmt.Errorf("generate presign url failed")
+	}
+	headers, ok := resp.Data[0][1].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("no host for presign url")
+	}
+
+	presignURL := fmt.Sprintf("%v", resp.Data[0][2])
+
 	fileContent, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
 	}
-	file, err := os.Open(fileName)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
 	body := bytes.NewBuffer(fileContent)
 
 	httpReq, err := http.NewRequest("PUT", presignURL, body)
 	if err != nil {
 		return err
 	}
-	for k, v := range header {
+	for k, v := range headers {
 		httpReq.Header.Set(k, fmt.Sprintf("%v", v))
 	}
 	httpReq.Header.Set("Content-Length", strconv.FormatInt(int64(len(body.Bytes())), 10))
@@ -247,20 +272,63 @@ func (c *APIClient) UploadToStageByPresignURL(presignURL, fileName string, heade
 	return nil
 }
 
-func (c *APIClient) uploadToStage(fileName string) error {
-	rootStage := "~"
-	fmt.Printf("uploading %s to stage %s... \n", fileName, rootStage)
-	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD @%s/%s", rootStage, filepath.Base(fileName))
-	resp, err := c.DoQuery(context.Background(), presignUploadSQL, nil)
+func (c *APIClient) uploadToStageByAPI(stage, fileName string) error {
+	body := new(bytes.Buffer)
+
+	file, err := os.Open(fileName)
 	if err != nil {
 		return err
 	}
-	if len(resp.Data) < 1 || len(resp.Data[0]) < 2 {
-		return fmt.Errorf("generate presign url failed")
+	defer file.Close()
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("upload", file.Name())
+	if err != nil {
+		return errors.Wrap(err, "failed to create multipart writer form file")
 	}
-	headers, ok := resp.Data[0][1].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("no host for presign url")
+	_, err = io.Copy(part, file)
+	if err != nil {
+		return errors.Wrap(err, "failed to copy file to multipart writer form file")
 	}
-	return c.UploadToStageByPresignURL(fmt.Sprintf("%v", resp.Data[0][2]), fileName, headers)
+	err = writer.Close()
+	if err != nil {
+		return errors.Wrap(err, "failed to close multipart writer")
+	}
+
+	path := "/v1/upload_to_stage"
+	url := c.makeURL(path)
+	httpReq, err := http.NewRequest("PUT", url, body)
+	if err != nil {
+		return err
+	}
+
+	httpReq.Header = c.makeHeaders()
+	if len(c.Host) > 0 {
+		httpReq.Host = c.Host
+	}
+	httpReq.Header.Set("stage_name", stage)
+	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
+
+	httpClient := &http.Client{
+		Timeout: time.Second * 60,
+	}
+	httpResp, err := httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed http do request: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	httpRespBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return fmt.Errorf("io read error: %w", err)
+	}
+
+	if httpResp.StatusCode == http.StatusUnauthorized {
+		return apierrors.New("please check your user/password.", httpResp.StatusCode, httpRespBody)
+	} else if httpResp.StatusCode >= 500 {
+		return apierrors.New("please retry again later.", httpResp.StatusCode, httpRespBody)
+	} else if httpResp.StatusCode >= 400 {
+		return apierrors.New("please check your arguments.", httpResp.StatusCode, httpRespBody)
+	}
+
+	return nil
 }
