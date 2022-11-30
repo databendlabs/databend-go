@@ -23,6 +23,19 @@ import (
 	"github.com/databendcloud/bendsql/api/apierrors"
 )
 
+type APIClient struct {
+	ApiEndpoint string
+	Host        string
+
+	User     string
+	Password string
+
+	Tenant    string
+	Warehouse string
+
+	PresignedURLDisabled bool
+}
+
 func (c *APIClient) DoRequest(method, path string, headers http.Header, req interface{}, resp interface{}) error {
 	var err error
 	reqBody := []byte{}
@@ -83,18 +96,12 @@ func (c *APIClient) makeURL(path string, args ...interface{}) string {
 func (c *APIClient) makeHeaders() http.Header {
 	headers := http.Header{}
 	headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.User, c.Password)))
-
-	// NOTE: no need to add header here
-	// var splitHost []string
-	// if len(strings.Split(c.Host, ".")) > 0 {
-	// 	splitHost = strings.Split(strings.Split(c.Host, ".")[0], "--")
-	// }
-
-	// if len(splitHost) == 2 {
-	// 	headers.Set(DatabendTenantHeader, splitHost[0])
-	// 	headers.Set(DatabendWarehouseHeader, splitHost[1])
-	// }
-
+	if c.Tenant != "" {
+		headers.Set(DatabendTenantHeader, c.Tenant)
+	}
+	if c.Warehouse != "" {
+		headers.Set(DatabendWarehouseHeader, c.Warehouse)
+	}
 	return headers
 }
 

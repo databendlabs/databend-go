@@ -30,7 +30,7 @@ func TestFormatDSN(t *testing.T) {
 }
 
 func TestConfigURL(t *testing.T) {
-	dsn := "databend+https://username:password@app.databend.com:443/test?warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings"
+	dsn := "databend+https://username:password@app.databend.com:443/test?tenant=tn&warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings"
 	cfg, err := ParseDSN(dsn)
 	require.Nil(t, err)
 
@@ -42,13 +42,14 @@ func TestConfigURL(t *testing.T) {
 }
 
 func TestParseDSN(t *testing.T) {
-	dsn := "databend+https://username:password@app.databend.com:443/test?warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings"
+	dsn := "databend+https://username:password@app.databend.com:443/test?tenant=tn&warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings"
 	cfg, err := ParseDSN(dsn)
 	require.Nil(t, err)
 
 	assert.Equal(t, "username", cfg.User)
 	assert.Equal(t, "password", cfg.Password)
 	assert.Equal(t, "https", cfg.Scheme)
+	assert.Equal(t, "tn", cfg.Tenant)
 	assert.Equal(t, "wh", cfg.Warehouse)
 	assert.Equal(t, "databend", cfg.Org)
 	assert.Equal(t, "app.databend.com:443", cfg.Host)

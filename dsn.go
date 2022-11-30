@@ -24,6 +24,7 @@ type Config struct {
 	User            string // Username
 	Password        string // Password (requires User)
 	Database        string // Database name
+	Tenant          string // Tenant
 	Warehouse       string // Warehouse
 	AccessToken     string `json:"accessToken"`
 	RefreshToken    string `json:"refreshToken"`
@@ -59,6 +60,9 @@ func NewConfig() *Config {
 func (cfg *Config) FormatDSN() string {
 	u := cfg.url(nil, true)
 	query := u.Query()
+	if cfg.Tenant != "" {
+		query.Set("tenant", cfg.Tenant)
+	}
 	if cfg.Warehouse != "" {
 		query.Set("warehouse", cfg.Warehouse)
 	}
@@ -209,6 +213,8 @@ func parseDSNParams(cfg *Config, params map[string][]string) (err error) {
 			cfg.TLSConfig = v[0]
 		case "org":
 			cfg.Org = v[0]
+		case "tenant":
+			cfg.Tenant = v[0]
 		case "warehouse":
 			cfg.Warehouse = v[0]
 		case "accessToken":

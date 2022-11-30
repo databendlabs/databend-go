@@ -21,15 +21,6 @@ import (
 	"github.com/databendcloud/bendsql/api/apierrors"
 )
 
-type APIClient struct {
-	User        string
-	Password    string
-	ApiEndpoint string
-	Host        string
-
-	PresignedURLDisabled bool
-}
-
 const (
 	accept          = "Accept"
 	authorization   = "Authorization"
@@ -174,10 +165,12 @@ func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error
 		dc.logger = log.New(os.Stderr, "databend: ", log.LstdFlags)
 	}
 	dc.rest = &APIClient{
+		ApiEndpoint: fmt.Sprintf("%s://%s", dc.cfg.Scheme, dc.cfg.Host),
+		Host:        dc.cfg.Host,
+		Tenant:      dc.cfg.Tenant,
+		Warehouse:   dc.cfg.Warehouse,
 		User:        dc.cfg.User,
 		Password:    dc.cfg.Password,
-		Host:        dc.cfg.Host,
-		ApiEndpoint: fmt.Sprintf("%s://%s", dc.cfg.Scheme, dc.cfg.Host),
 
 		PresignedURLDisabled: dc.cfg.PresignedURLDisabled,
 	}
