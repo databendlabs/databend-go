@@ -44,6 +44,6 @@ jobs:
 
       - name: Test
         env:
-          TEST_DATABEND_DSN: "http://databend:databend@localhost:8000/default?idle_timeout=1h&presigned_url_disabled=1"
+          TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?idle_timeout=1h&presigned_url_disabled=1&sslmode=disable"
         run: |
           make ci

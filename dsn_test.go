@@ -42,18 +42,31 @@ func TestConfigURL(t *testing.T) {
 }
 
 func TestParseDSN(t *testing.T) {
-	dsn := "databend+https://username:password@app.databend.com:443/test?tenant=tn&warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings"
-	cfg, err := ParseDSN(dsn)
-	require.Nil(t, err)
+	dsn := "http://username:password@app.databend.com:8000/test?idle_timeout=2s&org=databend&tenant=tn&timeout=1s&tls_config=tls-settings&warehouse=wh"
 
-	assert.Equal(t, "username", cfg.User)
-	assert.Equal(t, "password", cfg.Password)
-	assert.Equal(t, "https", cfg.Scheme)
-	assert.Equal(t, "tn", cfg.Tenant)
-	assert.Equal(t, "wh", cfg.Warehouse)
-	assert.Equal(t, "databend", cfg.Org)
-	assert.Equal(t, "app.databend.com:443", cfg.Host)
-	assert.Equal(t, "test", cfg.Database)
-	assert.Equal(t, "tls-settings", cfg.TLSConfig)
-	assert.Equal(t, time.Second, cfg.Timeout)
+	tests := []string{
+		"databend+http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings",
+		"db+http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings",
+		"http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings",
+		"databend://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings&sslmode=disable",
+		"db://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&org=databend&timeout=1s&idle_timeout=2s&tls_config=tls-settings&sslmode=disable",
+	}
+
+	for _, test := range tests {
+		cfg, err := ParseDSN(test)
+		require.Nil(t, err)
+
+		assert.Equal(t, "username", cfg.User)
+		assert.Equal(t, "password", cfg.Password)
+		assert.Equal(t, "http", cfg.Scheme)
+		assert.Equal(t, "tn", cfg.Tenant)
+		assert.Equal(t, "wh", cfg.Warehouse)
+		assert.Equal(t, "databend", cfg.Org)
+		assert.Equal(t, "app.databend.com:8000", cfg.Host)
+		assert.Equal(t, "test", cfg.Database)
+		assert.Equal(t, "tls-settings", cfg.TLSConfig)
+		assert.Equal(t, time.Second, cfg.Timeout)
+
+		assert.Equal(t, cfg.FormatDSN(), dsn)
+	}
 }
