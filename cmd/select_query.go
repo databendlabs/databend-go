@@ -23,7 +23,6 @@ func getDSN() (string, *dc.Config, error) {
 		return ""
 	}
 
-	org := env("DATABEND_TEST_ORG", true)
 	user := env("DATABEND_TEST_USER", true)
 	password := env("DATABEND_TEST_PASSWORD", true)
 	warehouse := env("DATABEND_TEST_WAREHOUSE", true)
@@ -31,7 +30,6 @@ func getDSN() (string, *dc.Config, error) {
 	accessToken := env("DATABEND_TEST_ACCESSTOKEN", false)
 	var err error
 	cfg := dc.NewConfig()
-	cfg.Org = org
 	cfg.Warehouse = warehouse
 	cfg.User = user
 	cfg.Password = password
