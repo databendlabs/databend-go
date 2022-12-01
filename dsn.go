@@ -144,8 +144,16 @@ func ParseDSN(dsn string) (*Config, error) {
 	switch u.Scheme {
 	case "http", "https":
 		cfg.Scheme = u.Scheme
+	case "db+http", "db+https":
+		cfg.Scheme = u.Scheme[len("db+"):]
 	case "databend+http", "databend+https":
 		cfg.Scheme = u.Scheme[len("databend+"):]
+	case "databend", "db":
+		if u.Query().Get("sslmode") == "disable" {
+			cfg.Scheme = "http"
+		} else {
+			cfg.Scheme = "https"
+		}
 	default:
 		return nil, fmt.Errorf("invalid scheme: %s", cfg.Scheme)
 	}
@@ -221,6 +229,8 @@ func parseDSNParams(cfg *Config, params map[string][]string) (err error) {
 			cfg.AccessToken = v[0]
 		case "refreshToken":
 			cfg.RefreshToken = v[0]
+		case "sslmode":
+			// ignore
 		default:
 			cfg.Params[k] = v[0]
 		}
