@@ -20,14 +20,15 @@ const (
 
 // Config is a set of configuration parameters
 type Config struct {
-	Org             string // Org name
-	User            string // Username
-	Password        string // Password (requires User)
-	Database        string // Database name
-	Tenant          string // Tenant
-	Warehouse       string // Warehouse
-	AccessToken     string `json:"accessToken"`
-	RefreshToken    string `json:"refreshToken"`
+	Tenant    string // Tenant
+	Warehouse string // Warehouse
+	User      string // Username
+	Password  string // Password (requires User)
+	Database  string // Database name
+
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+
 	Scheme          string
 	Host            string
 	Timeout         time.Duration
@@ -65,9 +66,6 @@ func (cfg *Config) FormatDSN() string {
 	}
 	if cfg.Warehouse != "" {
 		query.Set("warehouse", cfg.Warehouse)
-	}
-	if cfg.Org != "" {
-		query.Set("org", cfg.Org)
 	}
 	if cfg.Timeout != 0 {
 		query.Set("timeout", cfg.Timeout.String())
@@ -219,15 +217,13 @@ func parseDSNParams(cfg *Config, params map[string][]string) (err error) {
 			cfg.Params[k] = v[0]
 		case "tls_config":
 			cfg.TLSConfig = v[0]
-		case "org":
-			cfg.Org = v[0]
 		case "tenant":
 			cfg.Tenant = v[0]
 		case "warehouse":
 			cfg.Warehouse = v[0]
-		case "accessToken":
+		case "access_token":
 			cfg.AccessToken = v[0]
-		case "refreshToken":
+		case "refresh_token":
 			cfg.RefreshToken = v[0]
 		case "sslmode":
 			// ignore
