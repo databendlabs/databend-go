@@ -144,9 +144,11 @@ func ParseDSN(dsn string) (*Config, error) {
 		cfg.Scheme = u.Scheme
 	case "db+http", "db+https":
 		cfg.Scheme = u.Scheme[len("db+"):]
+	case "bend+http", "bend+https":
+		cfg.Scheme = u.Scheme[len("bend+"):]
 	case "databend+http", "databend+https":
 		cfg.Scheme = u.Scheme[len("databend+"):]
-	case "databend", "db":
+	case "databend", "db", "bend":
 		if u.Query().Get("sslmode") == "disable" {
 			cfg.Scheme = "http"
 		} else {

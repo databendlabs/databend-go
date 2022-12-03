@@ -46,9 +46,11 @@ func TestParseDSN(t *testing.T) {
 	tests := []string{
 		"databend+http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&idle_timeout=2s&tls_config=tls-settings",
 		"db+http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&idle_timeout=2s&tls_config=tls-settings",
+		"bend+http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&idle_timeout=2s&tls_config=tls-settings",
 		"http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&idle_timeout=2s&tls_config=tls-settings",
 		"databend://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&idle_timeout=2s&tls_config=tls-settings&sslmode=disable",
 		"db://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&idle_timeout=2s&tls_config=tls-settings&sslmode=disable",
+		"bend://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&idle_timeout=2s&tls_config=tls-settings&sslmode=disable",
 	}
 
 	for _, test := range tests {
