@@ -19,8 +19,6 @@ import (
 
 	"github.com/avast/retry-go"
 	"github.com/pkg/errors"
-
-	"github.com/databendcloud/bendsql/api/apierrors"
 )
 
 type APIClient struct {
@@ -74,11 +72,11 @@ func (c *APIClient) DoRequest(method, path string, headers http.Header, req inte
 	}
 
 	if httpResp.StatusCode == http.StatusUnauthorized {
-		return apierrors.New("please check your user/password.", httpResp.StatusCode, httpRespBody)
+		return NewAPIError("please check your user/password.", httpResp.StatusCode, httpRespBody)
 	} else if httpResp.StatusCode >= 500 {
-		return apierrors.New("please retry again later.", httpResp.StatusCode, httpRespBody)
+		return NewAPIError("please retry again later.", httpResp.StatusCode, httpRespBody)
 	} else if httpResp.StatusCode >= 400 {
-		return apierrors.New("please check your arguments.", httpResp.StatusCode, httpRespBody)
+		return NewAPIError("please check your arguments.", httpResp.StatusCode, httpRespBody)
 	}
 
 	if resp != nil {
@@ -166,7 +164,7 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 		},
 		// other err no need to retry
 		retry.RetryIf(func(err error) bool {
-			if err != nil && (apierrors.IsProxyErr(err) || strings.Contains(err.Error(), apierrors.ProvisionWarehouseTimeout)) {
+			if err != nil && (IsProxyErr(err) || strings.Contains(err.Error(), ProvisionWarehouseTimeout)) {
 				return true
 			}
 			return false
@@ -330,11 +328,11 @@ func (c *APIClient) uploadToStageByAPI(stage, fileName string) error {
 	}
 
 	if httpResp.StatusCode == http.StatusUnauthorized {
-		return apierrors.New("please check your user/password.", httpResp.StatusCode, httpRespBody)
+		return NewAPIError("please check your user/password.", httpResp.StatusCode, httpRespBody)
 	} else if httpResp.StatusCode >= 500 {
-		return apierrors.New("please retry again later.", httpResp.StatusCode, httpRespBody)
+		return NewAPIError("please retry again later.", httpResp.StatusCode, httpRespBody)
 	} else if httpResp.StatusCode >= 400 {
-		return apierrors.New("please check your arguments.", httpResp.StatusCode, httpRespBody)
+		return NewAPIError("please check your arguments.", httpResp.StatusCode, httpRespBody)
 	}
 
 	return nil
