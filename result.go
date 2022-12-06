@@ -7,9 +7,9 @@ var emptyResult driver.Result = noResult{}
 type noResult struct{}
 
 func (noResult) LastInsertId() (int64, error) {
-	return 0, ErrNoLastInsertID
+	return 0, nil
 }
 
 func (noResult) RowsAffected() (int64, error) {
-	return 0, ErrNoRowsAffected
+	return 0, nil
 }
