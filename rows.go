@@ -18,8 +18,8 @@ type nextRows struct {
 }
 
 func newNextRows(dc *DatabendConn, respData *QueryResponse) (*nextRows, error) {
-	columns := make([]string, 0)
-	types := make([]string, 0)
+	var columns []string
+	var types []string
 	for _, field := range respData.Schema.Fields {
 		columns = append(columns, field.Name)
 		x := &TypeDetail{}
@@ -46,16 +46,21 @@ func newNextRows(dc *DatabendConn, respData *QueryResponse) (*nextRows, error) {
 			return nil, fmt.Errorf("newTextRows: failed to create a data parser for the type '%s': %w", typ, err)
 		}
 	}
-	return &nextRows{
+
+	rows := &nextRows{
 		dc:       dc,
 		respData: respData,
 		columns:  columns,
 		types:    types,
 		parsers:  parsers,
-	}, nil
+	}
+	return rows, nil
 }
 
 func (r *nextRows) Columns() []string {
+	if len(r.columns) == 0 {
+		return []string{"dummy"}
+	}
 	return r.columns
 }
 
@@ -112,3 +117,21 @@ func (r *nextRows) ColumnTypeScanType(index int) reflect.Type {
 func (r *nextRows) ColumnTypeDatabaseTypeName(index int) string {
 	return r.types[index]
 }
+
+// // ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypeLength
+// func (r *nextRows) ColumnTypeLength(index int) (int64, bool) {
+// 	// TODO: implement this
+// 	return 10, true
+// }
+
+// // ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypeNullable
+// func (r *nextRows) ColumnTypeNullable(index int) (bool, bool) {
+// 	// TODO: implement this
+// 	return true, true
+// }
+
+// // ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypePrecisionScale
+// func (r *nextRows) ColumnTypePrecisionScale(index int) (int64, int64, bool) {
+// 	// TODO: implement this
+// 	return 10, 10, true
+// }
