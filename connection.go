@@ -17,8 +17,6 @@ import (
 	"time"
 
 	"github.com/avast/retry-go"
-
-	"github.com/databendcloud/bendsql/api/apierrors"
 )
 
 const (
@@ -88,7 +86,7 @@ func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.
 		},
 		// other err no need to retry
 		retry.RetryIf(func(err error) bool {
-			if err != nil && (apierrors.IsProxyErr(err) || strings.Contains(err.Error(), apierrors.ProvisionWarehouseTimeout)) {
+			if err != nil && (IsProxyErr(err) || strings.Contains(err.Error(), ProvisionWarehouseTimeout)) {
 				return true
 			}
 			return false
