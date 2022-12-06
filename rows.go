@@ -58,9 +58,6 @@ func newNextRows(dc *DatabendConn, respData *QueryResponse) (*nextRows, error) {
 }
 
 func (r *nextRows) Columns() []string {
-	if len(r.columns) == 0 {
-		return []string{"dummy"}
-	}
 	return r.columns
 }
 

@@ -201,10 +201,6 @@ func (s *DatabendTestSuite) TestExec() {
 		s.r.Nil(err)
 		s.r.NotNil(result)
 
-		// _, err = result.LastInsertId()
-		// s.Equal(dc.ErrNoLastInsertID, err)
-		// , err = result.RowsAffected()
-		// s.Equal(dc.ErrNoRowsAffected, err)
 		if len(tc.query2) == 0 {
 			continue
 		}
