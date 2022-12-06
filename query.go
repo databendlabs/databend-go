@@ -1,9 +1,22 @@
 package godatabend
 
+import "fmt"
+
 type QueryError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Kind    string `json:"kind"`
+}
+
+func (e *QueryError) Error() string {
+	text := fmt.Sprintf("code: %d", e.Code)
+	if e.Message != "" {
+		text += fmt.Sprintf(", message: %s", e.Message)
+	}
+	if e.Kind != "" {
+		text += fmt.Sprintf(", kind: %s", e.Kind)
+	}
+	return text
 }
 
 type DataField struct {

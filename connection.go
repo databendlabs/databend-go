@@ -81,23 +81,23 @@ func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.
 		func() error {
 			r, err := dc.rest.DoQuery(ctx, query, args)
 			if err != nil {
-				return fmt.Errorf("query failed: %w", err)
+				return err
 			}
 			r0 = r
 			return nil
 		},
 		// other err no need to retry
 		retry.RetryIf(func(err error) bool {
-			if err != nil && !(apierrors.IsProxyErr(err) || strings.Contains(err.Error(), apierrors.ProvisionWarehouseTimeout)) {
-				return false
+			if err != nil && (apierrors.IsProxyErr(err) || strings.Contains(err.Error(), apierrors.ProvisionWarehouseTimeout)) {
+				return true
 			}
-			return true
+			return false
 		}),
 		retry.Delay(2*time.Second),
 		retry.Attempts(5),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("query failed after 5 retries: %w", err)
+		return nil, fmt.Errorf("query failed: %w", err)
 	}
 	if r0.Error != nil {
 		return nil, fmt.Errorf("query has error: %+v", r0.Error)

@@ -136,7 +136,7 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 		return nil, err
 	}
 	if result.Error != nil {
-		return nil, fmt.Errorf("query in warehouse %s in tenant %s has error: %v", headers.Get("X-Databend-Warehouse"), headers.Get("X-Databend-Tenant"), result.Error)
+		return nil, result.Error
 	}
 	return &result, nil
 }
@@ -159,23 +159,23 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 		func() error {
 			r, err := c.DoQuery(ctx, query, args)
 			if err != nil {
-				return fmt.Errorf("query failed: %w", err)
+				return err
 			}
 			r0 = r
 			return nil
 		},
 		// other err no need to retry
 		retry.RetryIf(func(err error) bool {
-			if err != nil && !(apierrors.IsProxyErr(err) || strings.Contains(err.Error(), apierrors.ProvisionWarehouseTimeout)) {
-				return false
+			if err != nil && (apierrors.IsProxyErr(err) || strings.Contains(err.Error(), apierrors.ProvisionWarehouseTimeout)) {
+				return true
 			}
-			return true
+			return false
 		}),
 		retry.Delay(2*time.Second),
 		retry.Attempts(10),
 	)
 	if err != nil {
-		return fmt.Errorf("query failed after 10 retries: %w", err)
+		return fmt.Errorf("query failed: %w", err)
 	}
 	if r0.Error != nil {
 		return fmt.Errorf("query has error: %+v", r0.Error)

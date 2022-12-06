@@ -4,13 +4,14 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 )
 
 type nextRows struct {
 	dc       *DatabendConn
-	respData QueryResponse
+	respData *QueryResponse
 	columns  []string
 	types    []string
 	parsers  []DataParser
@@ -47,7 +48,7 @@ func newNextRows(dc *DatabendConn, respData *QueryResponse) (*nextRows, error) {
 	}
 	return &nextRows{
 		dc:       dc,
-		respData: *respData,
+		respData: respData,
 		columns:  columns,
 		types:    types,
 		parsers:  parsers,
@@ -59,42 +60,45 @@ func (r *nextRows) Columns() []string {
 }
 
 func (r *nextRows) Close() error {
+	// FIXME: should check & call final here
 	r.dc.cancel = nil
 	return nil
 }
 
 func (r *nextRows) Next(dest []driver.Value) error {
-	if r.respData.State == "Succeeded" && len(r.respData.Data) == 0 {
-		return fmt.Errorf("end")
+	if r.respData.State != "Succeeded" {
+		return fmt.Errorf("query state: %s", r.respData.State)
 	}
 	r.dc.log("the state is ", r.respData.State)
-	if len(r.respData.Data) > 0 {
-		lineData := r.respData.Data[0]
-		r.respData.Data = r.respData.Data[1:]
 
-		for j := range lineData {
-			reader := strings.NewReader(fmt.Sprintf("%v", lineData[j]))
-			v, err := r.parsers[j].Parse(reader)
+	if len(r.respData.Data) == 0 {
+		if r.respData.NextURI != "" {
+			res, err := r.dc.rest.QueryPage(r.respData.Id, r.respData.NextURI)
 			if err != nil {
-				r.dc.log("parse error ", err)
 				return err
 			}
-			dest[j] = v
-		}
-		if len(dest) != 0 {
-			return nil
+			r.dc.log(res.NextURI)
+			r.respData = res
+			if res.Error != nil {
+				return err
+			}
 		}
 	}
-
-	res, err := r.dc.rest.QueryPage(r.respData.Id, r.respData.NextURI)
-	if err != nil {
-		return err
+	if len(r.respData.Data) == 0 {
+		return io.EOF
 	}
-	r.dc.log(res.NextURI)
 
-	r.respData = *res
-	if res.Error != nil {
-		return err
+	lineData := r.respData.Data[0]
+	r.respData.Data = r.respData.Data[1:]
+
+	for j := range lineData {
+		reader := strings.NewReader(fmt.Sprintf("%v", lineData[j]))
+		v, err := r.parsers[j].Parse(reader)
+		if err != nil {
+			r.dc.log("parse error ", err)
+			return err
+		}
+		dest[j] = v
 	}
 	return nil
 }
