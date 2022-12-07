@@ -81,6 +81,9 @@ func (cfg *Config) FormatDSN() string {
 	if cfg.Warehouse != "" {
 		query.Set("warehouse", cfg.Warehouse)
 	}
+	if cfg.AccessToken != "" {
+		query.Set("access_token", cfg.AccessToken)
+	}
 	if cfg.Timeout != 0 {
 		query.Set("timeout", cfg.Timeout.String())
 	}
