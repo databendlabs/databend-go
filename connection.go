@@ -176,6 +176,7 @@ func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error
 		Warehouse:   dc.cfg.Warehouse,
 		User:        dc.cfg.User,
 		Password:    dc.cfg.Password,
+		AccessToken: dc.cfg.AccessToken,
 
 		PresignedURLDisabled: dc.cfg.PresignedURLDisabled,
 	}

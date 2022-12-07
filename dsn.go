@@ -28,8 +28,7 @@ type Config struct {
 	Password  string // Password (requires User)
 	Database  string // Database name
 
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	AccessToken string
 
 	Host            string
 	Timeout         time.Duration
@@ -228,8 +227,6 @@ func parseDSNParams(cfg *Config, params map[string][]string) (err error) {
 			cfg.Warehouse = v[0]
 		case "access_token":
 			cfg.AccessToken = v[0]
-		case "refresh_token":
-			cfg.RefreshToken = v[0]
 		case "sslmode":
 			cfg.SSLMode = v[0]
 		default:
