@@ -93,7 +93,7 @@ func (c *APIClient) makeURL(path string, args ...interface{}) string {
 	return fmt.Sprintf(format, args...)
 }
 
-func (c *APIClient) makeHeaders() http.Header {
+func (c *APIClient) makeHeaders() (http.Header, error) {
 	headers := http.Header{}
 	if c.Tenant != "" {
 		headers.Set(DatabendTenantHeader, c.Tenant)
@@ -106,9 +106,11 @@ func (c *APIClient) makeHeaders() http.Header {
 		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.User, c.Password)))
 	} else if c.AccessToken != "" {
 		headers.Set(Authorization, fmt.Sprintf("Bearer %s", c.AccessToken))
+	} else {
+		return nil, errors.New("no user or access token")
 	}
 
-	return headers
+	return headers, nil
 }
 
 func encode(name string, key string) string {
@@ -127,7 +129,10 @@ var databendInsecureTransport = &http.Transport{
 }
 
 func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
-	headers := c.makeHeaders()
+	headers, err := c.makeHeaders()
+	if err != nil {
+		return nil, err
+	}
 	q, err := buildQuery(query, args)
 	if err != nil {
 		return nil, err
@@ -206,10 +211,13 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 }
 
 func (c *APIClient) QueryPage(queryId, path string) (*QueryResponse, error) {
-	headers := c.makeHeaders()
+	headers, err := c.makeHeaders()
+	if err != nil {
+		return nil, err
+	}
 	headers.Set("queryID", queryId)
 	var result QueryResponse
-	err := retry.Do(
+	err = retry.Do(
 		func() error {
 			err := c.DoRequest("GET", path, headers, nil, &result)
 			if err != nil {
@@ -311,10 +319,13 @@ func (c *APIClient) uploadToStageByAPI(stage, fileName string) error {
 	url := c.makeURL(path)
 	httpReq, err := http.NewRequest("PUT", url, body)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create http request")
 	}
 
-	httpReq.Header = c.makeHeaders()
+	httpReq.Header, err = c.makeHeaders()
+	if err != nil {
+		return errors.Wrap(err, "failed to make headers")
+	}
 	if len(c.Host) > 0 {
 		httpReq.Host = c.Host
 	}
@@ -326,13 +337,13 @@ func (c *APIClient) uploadToStageByAPI(stage, fileName string) error {
 	}
 	httpResp, err := httpClient.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("failed http do request: %w", err)
+		return errors.Wrap(err, "failed http do request")
 	}
 	defer httpResp.Body.Close()
 
 	httpRespBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return fmt.Errorf("io read error: %w", err)
+		return errors.Wrap(err, "failed to read http response body")
 	}
 
 	if httpResp.StatusCode == http.StatusUnauthorized {
