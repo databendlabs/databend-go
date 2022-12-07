@@ -144,7 +144,7 @@ func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (drive
 
 func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error) {
 	dc := &DatabendConn{
-		url: config.url(map[string]string{"default_format": "TabSeparatedWithNamesAndTypes"}, false),
+		url: config.url(map[string]string{"default_format": "TabSeparatedWithNamesAndTypes"}),
 		ctx: ctx,
 		cfg: &config,
 		transport: &http.Transport{
@@ -162,8 +162,15 @@ func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error
 	if config.Debug {
 		dc.logger = log.New(os.Stderr, "databend: ", log.LstdFlags)
 	}
+	var apiScheme string
+	switch dc.cfg.SSLMode {
+	case "disable":
+		apiScheme = "http"
+	default:
+		apiScheme = "https"
+	}
 	dc.rest = &APIClient{
-		ApiEndpoint: fmt.Sprintf("%s://%s", dc.cfg.Scheme, dc.cfg.Host),
+		ApiEndpoint: fmt.Sprintf("%s://%s", apiScheme, dc.cfg.Host),
 		Host:        dc.cfg.Host,
 		Tenant:      dc.cfg.Tenant,
 		Warehouse:   dc.cfg.Warehouse,
