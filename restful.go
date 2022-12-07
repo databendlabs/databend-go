@@ -28,6 +28,8 @@ type APIClient struct {
 	User     string
 	Password string
 
+	AccessToken string
+
 	Tenant    string
 	Warehouse string
 
@@ -93,13 +95,19 @@ func (c *APIClient) makeURL(path string, args ...interface{}) string {
 
 func (c *APIClient) makeHeaders() http.Header {
 	headers := http.Header{}
-	headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.User, c.Password)))
 	if c.Tenant != "" {
 		headers.Set(DatabendTenantHeader, c.Tenant)
 	}
 	if c.Warehouse != "" {
 		headers.Set(DatabendWarehouseHeader, c.Warehouse)
 	}
+
+	if c.User != "" {
+		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.User, c.Password)))
+	} else if c.AccessToken != "" {
+		headers.Set(Authorization, fmt.Sprintf("Bearer %s", c.AccessToken))
+	}
+
 	return headers
 }
 
