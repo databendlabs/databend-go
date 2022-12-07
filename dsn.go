@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -13,6 +14,7 @@ const (
 	defaultLoginTimeout   = 60 * time.Second  // Timeout for retry for login EXCLUDING clientTimeout
 	defaultRequestTimeout = 0 * time.Second   // Timeout for retry for request EXCLUDING clientTimeout
 	defaultDomain         = "app.databend.com"
+	defaultScheme         = "databend"
 )
 const (
 	clientType = "Go"
@@ -29,7 +31,6 @@ type Config struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 
-	Scheme          string
 	Host            string
 	Timeout         time.Duration
 	IdleTimeout     time.Duration
@@ -41,6 +42,7 @@ type Config struct {
 	GzipCompression bool
 	Params          map[string]string
 	TLSConfig       string
+	SSLMode         string
 
 	PresignedURLDisabled bool
 }
@@ -48,7 +50,6 @@ type Config struct {
 // NewConfig creates a new config with default values
 func NewConfig() *Config {
 	return &Config{
-		Scheme:      "https",
 		Host:        fmt.Sprintf("%s:443", defaultDomain),
 		IdleTimeout: time.Hour,
 		Location:    time.UTC,
@@ -59,7 +60,21 @@ func NewConfig() *Config {
 // FormatDSN formats the given Config into a DSN string which can be passed to
 // the driver.
 func (cfg *Config) FormatDSN() string {
-	u := cfg.url(nil, true)
+	u := &url.URL{
+		Host:   cfg.Host,
+		Scheme: defaultScheme,
+		Path:   "/",
+	}
+	if len(cfg.User) > 0 {
+		if len(cfg.Password) > 0 {
+			u.User = url.UserPassword(cfg.User, cfg.Password)
+		} else {
+			u.User = url.User(cfg.User)
+		}
+	}
+	if len(cfg.Database) > 0 {
+		u.Path = cfg.Database
+	}
 	query := u.Query()
 	if cfg.Tenant != "" {
 		query.Set("tenant", cfg.Tenant)
@@ -91,6 +106,9 @@ func (cfg *Config) FormatDSN() string {
 	if cfg.TLSConfig != "" {
 		query.Set("tls_config", cfg.TLSConfig)
 	}
+	if cfg.SSLMode != "" {
+		query.Set("sslmode", cfg.SSLMode)
+	}
 	if cfg.PresignedURLDisabled {
 		query.Set("presigned_url_disabled", "1")
 	}
@@ -99,11 +117,10 @@ func (cfg *Config) FormatDSN() string {
 	return u.String()
 }
 
-func (cfg *Config) url(extra map[string]string, dsn bool) *url.URL {
+func (cfg *Config) url(extra map[string]string) *url.URL {
 	u := &url.URL{
-		Host:   cfg.Host,
-		Scheme: cfg.Scheme,
-		Path:   "/",
+		Host: cfg.Host,
+		Path: "/",
 	}
 	if len(cfg.User) > 0 {
 		if len(cfg.Password) > 0 {
@@ -114,12 +131,15 @@ func (cfg *Config) url(extra map[string]string, dsn bool) *url.URL {
 	}
 	query := u.Query()
 	if len(cfg.Database) > 0 {
-		if dsn {
-			u.Path += cfg.Database
-		} else {
-			query.Set("database", cfg.Database)
-		}
+		query.Set("database", cfg.Database)
 	}
+
+	if cfg.SSLMode == "disable" {
+		u.Scheme = "http"
+	} else {
+		u.Scheme = "https"
+	}
+
 	for k, v := range cfg.Params {
 		query.Set(k, v)
 	}
@@ -139,38 +159,8 @@ func ParseDSN(dsn string) (*Config, error) {
 	}
 	cfg := NewConfig()
 
-	switch u.Scheme {
-	case "http", "https":
-		cfg.Scheme = u.Scheme
-	case "db+http", "db+https":
-		cfg.Scheme = u.Scheme[len("db+"):]
-	case "dd+http", "dd+https":
-		cfg.Scheme = u.Scheme[len("dd+"):]
-	case "bend+http", "bend+https":
-		cfg.Scheme = u.Scheme[len("bend+"):]
-	case "databend+http", "databend+https":
-		cfg.Scheme = u.Scheme[len("databend+"):]
-	case "databend", "db", "dd", "bend":
-		if u.Query().Get("sslmode") == "disable" {
-			cfg.Scheme = "http"
-		} else {
-			cfg.Scheme = "https"
-		}
-	default:
-		return nil, fmt.Errorf("invalid scheme: %s", cfg.Scheme)
-	}
-
-	if _, _, err := net.SplitHostPort(u.Host); err == nil {
-		cfg.Host = u.Host
-	} else {
-		switch cfg.Scheme {
-		case "http":
-			cfg.Host = net.JoinHostPort(u.Host, "80")
-		case "https":
-			cfg.Host = net.JoinHostPort(u.Host, "443")
-		default:
-			return nil, fmt.Errorf("invalid scheme: %s", cfg.Scheme)
-		}
+	if strings.HasSuffix(u.Scheme, "http") {
+		cfg.SSLMode = "disable"
 	}
 
 	if len(u.Path) > 1 {
@@ -187,6 +177,18 @@ func ParseDSN(dsn string) (*Config, error) {
 	if err = parseDSNParams(cfg, map[string][]string(u.Query())); err != nil {
 		return nil, err
 	}
+
+	if _, _, err := net.SplitHostPort(u.Host); err == nil {
+		cfg.Host = u.Host
+	} else {
+		switch cfg.SSLMode {
+		case "disable":
+			cfg.Host = net.JoinHostPort(u.Host, "80")
+		default:
+			cfg.Host = net.JoinHostPort(u.Host, "443")
+		}
+	}
+
 	return cfg, nil
 }
 
@@ -218,7 +220,6 @@ func parseDSNParams(cfg *Config, params map[string][]string) (err error) {
 			cfg.Params[k] = v[0]
 		case "presigned_url_disabled":
 			cfg.PresignedURLDisabled, err = strconv.ParseBool(v[0])
-			cfg.Params[k] = v[0]
 		case "tls_config":
 			cfg.TLSConfig = v[0]
 		case "tenant":
@@ -230,7 +231,7 @@ func parseDSNParams(cfg *Config, params map[string][]string) (err error) {
 		case "refresh_token":
 			cfg.RefreshToken = v[0]
 		case "sslmode":
-			// ignore
+			cfg.SSLMode = v[0]
 		default:
 			cfg.Params[k] = v[0]
 		}
