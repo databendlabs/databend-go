@@ -60,7 +60,7 @@ func parseTypeDesc(tokens []*token) (*TypeDesc, []*token, error) {
 	}
 }
 
-// ParseTypeDesc parses the type description that ClickHouse provides.
+// ParseTypeDesc parses the type description that Databend  provides.
 //
 // The grammar is quite simple:
 //

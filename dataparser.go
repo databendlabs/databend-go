@@ -113,9 +113,6 @@ type nullableParser struct {
 }
 
 func (p *nullableParser) Parse(s io.RuneScanner) (driver.Value, error) {
-	// Clickhouse returns `\N` string for `null` in tsv format.
-	// For checking this value we need to check first two runes in `io.RuneScanner`, but we can't reset `io.RuneScanner` after it.
-	// Copy io.RuneScanner to `bytes.Buffer` and use it twice (1st for casting to string and checking to null, 2nd for passing to original parser)
 	var dB *bytes.Buffer
 
 	dType := p.DataParser.Type()
@@ -596,14 +593,7 @@ func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParse
 	case "Nothing":
 		return &nothingParser{}, nil
 	case "Nullable":
-		if len(t.Args) == 0 {
-			return nil, fmt.Errorf("nullable should pass original type")
-		}
-		p, err := newDataParser(t.Args[0], unquote, opt)
-		if err != nil {
-			return nil, err
-		}
-		return &nullableParser{p}, nil
+		return &stringParser{unquote: unquote}, nil
 	case "Date":
 		loc := time.UTC
 		if opt != nil && opt.Location != nil {
