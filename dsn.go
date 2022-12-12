@@ -152,50 +152,7 @@ func (cfg *Config) url(extra map[string]string) *url.URL {
 	return u
 }
 
-// ParseDSN parses the DSN string to a Config
-func ParseDSN(dsn string) (*Config, error) {
-	u, err := url.Parse(dsn)
-	if err != nil {
-		return nil, err
-	}
-	cfg := NewConfig()
-
-	if strings.HasSuffix(u.Scheme, "http") {
-		cfg.SSLMode = SSL_MODE_DISABLE
-	}
-
-	if len(u.Path) > 1 {
-		// skip '/'
-		cfg.Database = u.Path[1:]
-	}
-	if u.User != nil {
-		// it is expected that empty password will be dropped out on Parse and Format
-		cfg.User = u.User.Username()
-		if passwd, ok := u.User.Password(); ok {
-			cfg.Password = passwd
-		}
-	}
-	if err = parseDSNParams(cfg, map[string][]string(u.Query())); err != nil {
-		return nil, err
-	}
-
-	if _, _, err := net.SplitHostPort(u.Host); err == nil {
-		cfg.Host = u.Host
-	} else {
-		switch cfg.SSLMode {
-		case SSL_MODE_DISABLE:
-			cfg.Host = net.JoinHostPort(u.Host, "80")
-		default:
-			cfg.Host = net.JoinHostPort(u.Host, "443")
-		}
-	}
-
-	return cfg, nil
-}
-
-// parseDSNParams parses the DSN "query string"
-// Values must be url.QueryEscape'ed
-func parseDSNParams(cfg *Config, params map[string][]string) (err error) {
+func (cfg *Config) AddParams(params map[string][]string) (err error) {
 	for k, v := range params {
 		if len(v) == 0 {
 			continue
@@ -240,4 +197,45 @@ func parseDSNParams(cfg *Config, params map[string][]string) (err error) {
 	}
 
 	return
+}
+
+// ParseDSN parses the DSN string to a Config
+func ParseDSN(dsn string) (*Config, error) {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return nil, err
+	}
+	cfg := NewConfig()
+
+	if strings.HasSuffix(u.Scheme, "http") {
+		cfg.SSLMode = SSL_MODE_DISABLE
+	}
+
+	if len(u.Path) > 1 {
+		// skip '/'
+		cfg.Database = u.Path[1:]
+	}
+	if u.User != nil {
+		// it is expected that empty password will be dropped out on Parse and Format
+		cfg.User = u.User.Username()
+		if passwd, ok := u.User.Password(); ok {
+			cfg.Password = passwd
+		}
+	}
+	if err = cfg.AddParams(map[string][]string(u.Query())); err != nil {
+		return nil, err
+	}
+
+	if _, _, err := net.SplitHostPort(u.Host); err == nil {
+		cfg.Host = u.Host
+	} else {
+		switch cfg.SSLMode {
+		case SSL_MODE_DISABLE:
+			cfg.Host = net.JoinHostPort(u.Host, "80")
+		default:
+			cfg.Host = net.JoinHostPort(u.Host, "443")
+		}
+	}
+
+	return cfg, nil
 }
