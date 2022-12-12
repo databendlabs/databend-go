@@ -152,47 +152,40 @@ func (cfg *Config) url(extra map[string]string) *url.URL {
 	return u
 }
 
-func (cfg *Config) AddParams(params map[string][]string) (err error) {
+func (cfg *Config) AddParams(params map[string]string) (err error) {
 	for k, v := range params {
-		if len(v) == 0 {
-			continue
-		}
-
 		switch k {
 		case "timeout":
-			cfg.Timeout, err = time.ParseDuration(v[0])
+			cfg.Timeout, err = time.ParseDuration(v)
 		case "idle_timeout":
-			cfg.IdleTimeout, err = time.ParseDuration(v[0])
+			cfg.IdleTimeout, err = time.ParseDuration(v)
 		case "read_timeout":
-			cfg.ReadTimeout, err = time.ParseDuration(v[0])
+			cfg.ReadTimeout, err = time.ParseDuration(v)
 		case "write_timeout":
-			cfg.WriteTimeout, err = time.ParseDuration(v[0])
+			cfg.WriteTimeout, err = time.ParseDuration(v)
 		case "location":
-			cfg.Location, err = time.LoadLocation(v[0])
+			cfg.Location, err = time.LoadLocation(v)
 		case "debug":
-			cfg.Debug, err = strconv.ParseBool(v[0])
-		case "default_format", "query", "database":
-			err = fmt.Errorf("unknown option '%s'", k)
+			cfg.Debug, err = strconv.ParseBool(v)
 		case "enable_http_compression":
-			cfg.GzipCompression, err = strconv.ParseBool(v[0])
-			cfg.Params[k] = v[0]
+			cfg.GzipCompression, err = strconv.ParseBool(v)
+			cfg.Params[k] = v
 		case "presigned_url_disabled":
-			cfg.PresignedURLDisabled, err = strconv.ParseBool(v[0])
+			cfg.PresignedURLDisabled, err = strconv.ParseBool(v)
 		case "tls_config":
-			cfg.TLSConfig = v[0]
+			cfg.TLSConfig = v
 		case "tenant":
-			cfg.Tenant = v[0]
+			cfg.Tenant = v
 		case "warehouse":
-			cfg.Warehouse = v[0]
+			cfg.Warehouse = v
 		case "access_token":
-			cfg.AccessToken = v[0]
+			cfg.AccessToken = v
 		case "sslmode":
-			cfg.SSLMode = v[0]
+			cfg.SSLMode = v
+		case "default_format", "query", "database":
+			return fmt.Errorf("unknown option '%s'", k)
 		default:
-			cfg.Params[k] = v[0]
-		}
-		if err != nil {
-			return err
+			cfg.Params[k] = v
 		}
 	}
 
@@ -222,7 +215,16 @@ func ParseDSN(dsn string) (*Config, error) {
 			cfg.Password = passwd
 		}
 	}
-	if err = cfg.AddParams(map[string][]string(u.Query())); err != nil {
+
+	params := make(map[string]string)
+	for k, v := range u.Query() {
+		if len(v) == 0 {
+			continue
+		}
+		params[k] = v[0]
+	}
+
+	if err = cfg.AddParams(params); err != nil {
 		return nil, err
 	}
 
