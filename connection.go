@@ -164,7 +164,7 @@ func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error
 	}
 	var apiScheme string
 	switch dc.cfg.SSLMode {
-	case "disable":
+	case SSL_MODE_DISABLE:
 		apiScheme = "http"
 	default:
 		apiScheme = "https"

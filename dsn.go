@@ -15,9 +15,8 @@ const (
 	defaultRequestTimeout = 0 * time.Second   // Timeout for retry for request EXCLUDING clientTimeout
 	defaultDomain         = "app.databend.com"
 	defaultScheme         = "databend"
-)
-const (
-	clientType = "Go"
+
+	SSL_MODE_DISABLE = "disable"
 )
 
 // Config is a set of configuration parameters
@@ -136,7 +135,7 @@ func (cfg *Config) url(extra map[string]string) *url.URL {
 		query.Set("database", cfg.Database)
 	}
 
-	if cfg.SSLMode == "disable" {
+	if cfg.SSLMode == SSL_MODE_DISABLE {
 		u.Scheme = "http"
 	} else {
 		u.Scheme = "https"
@@ -162,7 +161,7 @@ func ParseDSN(dsn string) (*Config, error) {
 	cfg := NewConfig()
 
 	if strings.HasSuffix(u.Scheme, "http") {
-		cfg.SSLMode = "disable"
+		cfg.SSLMode = SSL_MODE_DISABLE
 	}
 
 	if len(u.Path) > 1 {
@@ -184,7 +183,7 @@ func ParseDSN(dsn string) (*Config, error) {
 		cfg.Host = u.Host
 	} else {
 		switch cfg.SSLMode {
-		case "disable":
+		case SSL_MODE_DISABLE:
 			cfg.Host = net.JoinHostPort(u.Host, "80")
 		default:
 			cfg.Host = net.JoinHostPort(u.Host, "443")

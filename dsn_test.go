@@ -63,7 +63,7 @@ func TestParseDSN(t *testing.T) {
 		assert.Equal(t, "app.databend.com:8000", cfg.Host)
 		assert.Equal(t, "test", cfg.Database)
 		assert.Equal(t, "tls-settings", cfg.TLSConfig)
-		assert.Equal(t, "disable", cfg.SSLMode)
+		assert.Equal(t, SSL_MODE_DISABLE, cfg.SSLMode)
 		assert.Equal(t, time.Second, cfg.Timeout)
 
 		assert.Equal(t, dsn, cfg.FormatDSN())
