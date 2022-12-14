@@ -86,6 +86,7 @@ func (r *nextRows) Next(dest []driver.Value) error {
 			}
 		}
 	}
+
 	if len(r.respData.Data) == 0 {
 		return io.EOF
 	}

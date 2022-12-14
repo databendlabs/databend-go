@@ -88,6 +88,8 @@ func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.
 		retry.RetryIf(func(err error) bool {
 			if err != nil && (IsProxyErr(err) || strings.Contains(err.Error(), ProvisionWarehouseTimeout)) {
 				return true
+			} else if len(r0.Schema.Fields) == 0 {
+				return true
 			}
 			return false
 		}),
