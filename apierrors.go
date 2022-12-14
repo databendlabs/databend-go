@@ -21,7 +21,9 @@ import (
 	"strings"
 )
 
-var ProvisionWarehouseTimeout = "ProvisionWarehouseTimeout"
+var (
+	ProvisionWarehouseTimeout = "ProvisionWarehouseTimeout"
+)
 
 type APIErrorResponseBody struct {
 	Error   string `json:"error"`

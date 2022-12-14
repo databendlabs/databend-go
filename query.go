@@ -55,5 +55,10 @@ type QueryProgress struct {
 }
 
 type QueryRequest struct {
-	SQL string `json:"sql"`
+	SQL        string `json:"sql"`
+	Pagination `json:"pagination"`
+}
+
+type Pagination struct {
+	WaitTime int32 `json:"wait_time_secs" default:"10"`
 }
