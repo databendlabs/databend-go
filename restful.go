@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/avast/retry-go"
@@ -128,7 +127,7 @@ var databendInsecureTransport = &http.Transport{
 	}).DialContext,
 }
 
-func (c *APIClient) DoQuery(ctx context.Context, query string, stageFile string, args []driver.Value) (*QueryResponse, error) {
+func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
 	headers, err := c.makeHeaders()
 	if err != nil {
 		return nil, err
@@ -138,6 +137,33 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, stageFile string,
 		return nil, err
 	}
 	request := QueryRequest{
+		SQL: q,
+		Pagination: Pagination{
+			WaitTime: 15,
+		},
+	}
+	path := "/v1/query"
+	var result QueryResponse
+	err = c.DoRequest("POST", path, headers, request, &result)
+	if err != nil {
+		return nil, err
+	}
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &result, nil
+}
+
+func (c *APIClient) DoStageInsertQuery(ctx context.Context, query string, stageFile string, args []driver.Value) (*QueryResponse, error) {
+	headers, err := c.makeHeaders()
+	if err != nil {
+		return nil, err
+	}
+	q, err := buildQuery(query, args)
+	if err != nil {
+		return nil, err
+	}
+	request := QueryStageAttachRequest{
 		SQL: q,
 		Pagination: Pagination{
 			WaitTime: 15,
@@ -170,27 +196,19 @@ func buildQuery(query string, params []driver.Value) (string, error) {
 }
 
 func (c *APIClient) QuerySync(ctx context.Context, query string, stageFile string, args []driver.Value, respCh chan QueryResponse) error {
-	// fmt.Printf("query sync %s", query)
 	var r0 *QueryResponse
-	err := retry.Do(
-		func() error {
-			r, err := c.DoQuery(ctx, query, stageFile, args)
-			if err != nil {
-				return err
-			}
-			r0 = r
-			return nil
-		},
-		// other err no need to retry
-		retry.RetryIf(func(err error) bool {
-			if err != nil && (IsProxyErr(err) || strings.Contains(err.Error(), ProvisionWarehouseTimeout)) {
-				return true
-			}
-			return false
-		}),
-		retry.Delay(2*time.Second),
-		retry.Attempts(10),
-	)
+	var err error
+	if stageFile != "" {
+		r0, err = c.DoStageInsertQuery(ctx, query, stageFile, args)
+		if err != nil {
+			return err
+		}
+	}
+	r0, err = c.DoQuery(ctx, query, args)
+	if err != nil {
+		return err
+	}
+	// other err no need to retry
 	if err != nil {
 		return fmt.Errorf("query failed: %w", err)
 	}
@@ -253,7 +271,7 @@ func (c *APIClient) uploadToStage(fileName string) error {
 
 func (c *APIClient) UploadToStageByPresignURL(stage, fileName string) error {
 	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD @%s/%s", stage, filepath.Base(fileName))
-	resp, err := c.DoQuery(context.Background(), presignUploadSQL, "", nil)
+	resp, err := c.DoQuery(context.Background(), presignUploadSQL, nil)
 	if err != nil {
 		return err
 	}

@@ -55,6 +55,11 @@ type QueryProgress struct {
 }
 
 type QueryRequest struct {
+	SQL        string `json:"sql"`
+	Pagination `json:"pagination"`
+}
+
+type QueryStageAttachRequest struct {
 	SQL             string `json:"sql"`
 	Pagination      `json:"pagination"`
 	StageAttachment `json:"stage_attachment"`

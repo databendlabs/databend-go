@@ -77,7 +77,7 @@ func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.
 	var r0 *QueryResponse
 	err := retry.Do(
 		func() error {
-			r, err := dc.rest.DoQuery(ctx, query, "", args)
+			r, err := dc.rest.DoQuery(ctx, query, args)
 			if err != nil {
 				return err
 			}

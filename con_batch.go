@@ -37,7 +37,7 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver
 	}
 	queryTableSchema := "DESCRIBE " + tableName
 
-	r, err := dc.rest.DoQuery(ctx, queryTableSchema, "", nil)
+	r, err := dc.rest.DoQuery(ctx, queryTableSchema, nil)
 	if err != nil {
 		return nil, err
 	}
