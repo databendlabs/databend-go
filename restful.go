@@ -128,7 +128,7 @@ var databendInsecureTransport = &http.Transport{
 	}).DialContext,
 }
 
-func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
+func (c *APIClient) DoQuery(ctx context.Context, query string, stageFile string, args []driver.Value) (*QueryResponse, error) {
 	headers, err := c.makeHeaders()
 	if err != nil {
 		return nil, err
@@ -141,6 +141,9 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 		SQL: q,
 		Pagination: Pagination{
 			WaitTime: 15,
+		},
+		StageAttachment: StageAttachment{
+			Location: stageFile,
 		},
 	}
 	path := "/v1/query"
@@ -166,12 +169,12 @@ func buildQuery(query string, params []driver.Value) (string, error) {
 	return query, nil
 }
 
-func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.Value, respCh chan QueryResponse) error {
+func (c *APIClient) QuerySync(ctx context.Context, query string, stageFile string, args []driver.Value, respCh chan QueryResponse) error {
 	// fmt.Printf("query sync %s", query)
 	var r0 *QueryResponse
 	err := retry.Do(
 		func() error {
-			r, err := c.DoQuery(ctx, query, args)
+			r, err := c.DoQuery(ctx, query, stageFile, args)
 			if err != nil {
 				return err
 			}
@@ -250,15 +253,16 @@ func (c *APIClient) uploadToStage(fileName string) error {
 
 func (c *APIClient) UploadToStageByPresignURL(stage, fileName string) error {
 	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD @%s/%s", stage, filepath.Base(fileName))
-	resp, err := c.DoQuery(context.Background(), presignUploadSQL, nil)
+	resp, err := c.DoQuery(context.Background(), presignUploadSQL, "", nil)
 	if err != nil {
 		return err
 	}
 	if len(resp.Data) < 1 || len(resp.Data[0]) < 2 {
 		return fmt.Errorf("generate presign url failed")
 	}
-	headers, ok := resp.Data[0][1].(map[string]interface{})
-	if !ok {
+	headers := make(map[string]interface{})
+	err = json.Unmarshal([]byte(fmt.Sprintf("%v", resp.Data[0][1])), &headers)
+	if err != nil {
 		return fmt.Errorf("no host for presign url")
 	}
 
