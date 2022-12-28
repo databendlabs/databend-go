@@ -95,6 +95,7 @@ func (c *APIClient) makeURL(path string, args ...interface{}) string {
 
 func (c *APIClient) makeHeaders() (http.Header, error) {
 	headers := http.Header{}
+	headers.Set(WarehouseRoute, "warehouse")
 	if c.Tenant != "" {
 		headers.Set(DatabendTenantHeader, c.Tenant)
 	}
