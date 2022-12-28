@@ -62,7 +62,12 @@ func (r *nextRows) Columns() []string {
 }
 
 func (r *nextRows) Close() error {
-	// FIXME: should check & call final here
+	if len(r.respData.NextURI) != 0 {
+		_, err := r.dc.rest.QueryPage(r.respData.Id, r.respData.NextURI)
+		if err != nil {
+			return err
+		}
+	}
 	r.dc.cancel = nil
 	return nil
 }
