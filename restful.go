@@ -150,10 +150,27 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	if err != nil {
 		return nil, err
 	}
+
+	return c.waitForQueryResult(&result)
+}
+
+func (c *APIClient) waitForQueryResult(result *QueryResponse) (*QueryResponse, error) {
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return &result, nil
+	switch result.State {
+	case QUERY_STATE_RUNNING:
+		// sleep 0.1s and fetch result again
+		time.Sleep(100 * time.Millisecond)
+
+		result2, err := c.QueryPage(result.Id, result.NextURI)
+		if err != nil {
+			return nil, err
+		}
+		return c.waitForQueryResult(result2)
+	default:
+		return result, nil
+	}
 }
 
 func buildQuery(query string, params []driver.Value) (string, error) {

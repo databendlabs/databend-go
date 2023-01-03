@@ -2,6 +2,10 @@ package godatabend
 
 import "fmt"
 
+const (
+	QUERY_STATE_RUNNING = "Running"
+)
+
 type QueryError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
