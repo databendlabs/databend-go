@@ -73,7 +73,7 @@ func (r *nextRows) Close() error {
 }
 
 func (r *nextRows) Next(dest []driver.Value) error {
-	if r.respData.State != "Succeeded" {
+	if r.respData.State != QUERY_STATE_SUCCEEDED {
 		return fmt.Errorf("query state: %s", r.respData.State)
 	}
 	r.dc.log("the state is ", r.respData.State)
