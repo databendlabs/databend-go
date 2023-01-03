@@ -17,10 +17,36 @@ type nextRows struct {
 	parsers  []DataParser
 }
 
-func newNextRows(dc *DatabendConn, respData *QueryResponse) (*nextRows, error) {
+func waitForQueryResult(dc *DatabendConn, result *QueryResponse) (*QueryResponse, error) {
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	var err error
+	for result.NextURI != "" && len(result.Data) == 0 {
+		dc.log("wait for query result", result.Id, result.NextURI)
+		result, err = dc.rest.QueryPage(result.Id, result.NextURI)
+		if err != nil {
+			return nil, err
+		}
+		if result.Error != nil {
+			return nil, result.Error
+		}
+	}
+
+	return result, nil
+}
+
+func newNextRows(dc *DatabendConn, resp *QueryResponse) (*nextRows, error) {
 	var columns []string
 	var types []string
-	for _, field := range respData.Schema.Fields {
+
+	result, err := waitForQueryResult(dc, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, field := range result.Schema.Fields {
 		columns = append(columns, field.Name)
 		x := &TypeDetail{}
 		res, err := json.Marshal(field.DataType)
@@ -49,7 +75,7 @@ func newNextRows(dc *DatabendConn, respData *QueryResponse) (*nextRows, error) {
 
 	rows := &nextRows{
 		dc:       dc,
-		respData: respData,
+		respData: result,
 		columns:  columns,
 		types:    types,
 		parsers:  parsers,
@@ -73,23 +99,12 @@ func (r *nextRows) Close() error {
 }
 
 func (r *nextRows) Next(dest []driver.Value) error {
-	if r.respData.State != QUERY_STATE_SUCCEEDED {
-		return fmt.Errorf("query state: %s", r.respData.State)
-	}
-	r.dc.log("the state is ", r.respData.State)
-
 	if len(r.respData.Data) == 0 {
-		if r.respData.NextURI != "" {
-			res, err := r.dc.rest.QueryPage(r.respData.Id, r.respData.NextURI)
-			if err != nil {
-				return err
-			}
-			r.dc.log(res.NextURI)
-			r.respData = res
-			if res.Error != nil {
-				return err
-			}
+		resp, err := waitForQueryResult(r.dc, r.respData)
+		if err != nil {
+			return err
 		}
+		r.respData = resp
 	}
 
 	if len(r.respData.Data) == 0 {
