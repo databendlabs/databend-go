@@ -141,7 +141,7 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	request := QueryRequest{
 		SQL: q,
 		Pagination: Pagination{
-			WaitTime: 15,
+			WaitTime: 90,
 		},
 	}
 	path := "/v1/query"

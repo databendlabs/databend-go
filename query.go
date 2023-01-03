@@ -60,5 +60,5 @@ type QueryRequest struct {
 }
 
 type Pagination struct {
-	WaitTime int32 `json:"wait_time_secs" default:"10"`
+	WaitTime int32 `json:"wait_time_secs" default:"60"`
 }
