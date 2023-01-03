@@ -2,11 +2,6 @@ package godatabend
 
 import "fmt"
 
-const (
-	QUERY_STATE_RUNNING   = "Running"
-	QUERY_STATE_SUCCEEDED = "Succeeded"
-)
-
 type QueryError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
