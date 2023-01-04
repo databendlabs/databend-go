@@ -219,17 +219,10 @@ func (c *APIClient) QueryPage(queryId, path string) (*QueryResponse, error) {
 	}
 	headers.Set("queryID", queryId)
 	var result QueryResponse
-	err = retry.Do(
-		func() error {
-			err := c.DoRequest("GET", path, headers, nil, &result)
-			if err != nil {
-				return fmt.Errorf("query failed: %w", err)
-			}
-			return nil
-		},
-		retry.Delay(2*time.Second),
-		retry.Attempts(5),
-	)
+	err = c.DoRequest("GET", path, headers, nil, &result)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
 	if err != nil {
 		return nil, err
 	}
