@@ -31,6 +31,7 @@ func ConnectDSN() error {
 ```
 
 ## Connection Settings
+If you are using the [databend cloud](https://app.databend.com/) you can get the connection settings using the following way.
 - host - the connect host such as `tenant--warehousename.ch.datafusecloud.com` that you can get from databend cloud as follows:
 	<img width="1084" alt="image" src="https://user-images.githubusercontent.com/7600925/201461064-d503cfb3-43e0-4c7c-b270-2898452ebc8e.png">
 
