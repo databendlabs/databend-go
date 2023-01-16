@@ -1,6 +1,12 @@
 # databend-go
 Golang driver for [databend cloud](https://www.databend.com/)
 
+## Installation
+
+```
+go get https://github.com/databendcloud/databend-go
+```
+
 ## Key features
 
 - Supports native Databend HTTP client-server protocol
@@ -110,3 +116,6 @@ dsn, cfg, err := getDSN()
 		fmt.Println(col2)
 	}
 ```
+
+## Compatibility
+- version >= v0.3.0 require databend-query v0.9.0 or later
