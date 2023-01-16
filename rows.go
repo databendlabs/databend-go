@@ -2,7 +2,6 @@ package godatabend
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"io"
 	"reflect"
@@ -46,18 +45,9 @@ func newNextRows(dc *DatabendConn, resp *QueryResponse) (*nextRows, error) {
 		return nil, err
 	}
 
-	for _, field := range result.Schema.Fields {
+	for _, field := range result.Schema {
 		columns = append(columns, field.Name)
-		x := &TypeDetail{}
-		res, err := json.Marshal(field.DataType)
-		if err != nil {
-			return nil, err
-		}
-		err = json.Unmarshal(res, &x)
-		if err != nil {
-			return nil, err
-		}
-		types = append(types, x.Type)
+		types = append(types, field.Type)
 	}
 
 	parsers := make([]DataParser, len(types))

@@ -10,12 +10,10 @@ import (
 func TestTextRows(t *testing.T) {
 	rows, err := newNextRows(&DatabendConn{}, &QueryResponse{
 		Data: [][]interface{}{{1, 2, "3"}, {3, 2, "1"}},
-		Schema: DataSchema{
-			Fields: []DataField{
-				{Name: "age", DataType: TypeDetail{Type: "Int32"}},
-				{Name: "height", DataType: TypeDetail{Type: "Int64"}},
-				{Name: "score", DataType: TypeDetail{Type: "String"}},
-			},
+		Schema: []DataField{
+			{Name: "age", Type: "Int32"},
+			{Name: "height", Type: "Int64"},
+			{Name: "score", Type: "String"},
 		},
 		State: "Succeeded",
 	})
