@@ -20,16 +20,8 @@ func (e *QueryError) Error() string {
 }
 
 type DataField struct {
-	Name     string     `json:"name"`
-	DataType TypeDetail `json:"data_type"`
-}
-
-type TypeDetail struct {
+	Name string `json:"name"`
 	Type string `json:"type"`
-}
-
-type DataSchema struct {
-	Fields []DataField `json:"fields"`
 }
 
 type QueryResponse struct {
@@ -38,7 +30,7 @@ type QueryResponse struct {
 	FinalURI string          `json:"final_uri"`
 	Id       string          `json:"id"`
 	NextURI  string          `json:"next_uri"`
-	Schema   DataSchema      `json:"schema,omitempty"`
+	Schema   []DataField     `json:"schema"`
 	State    string          `json:"state"`
 	Stats    QueryStats      `json:"stats"`
 	StatsURI string          `json:"stats_uri"`

@@ -94,8 +94,8 @@ func (s *DatabendTestSuite) TestDesc() {
 		{"s2", "VARCHAR", "NO", "", ""},
 		{"a16", "ARRAY(INT16)", "NO", "[]", ""},
 		{"a8", "ARRAY(UINT8)", "NO", "[]", ""},
-		{"d", "DATE", "NO", "0", ""},
-		{"t", "TIMESTAMP", "NO", "0", ""},
+		{"d", "DATE", "NO", "1970-01-01", ""},
+		{"t", "TIMESTAMP", "NO", "1970-01-01 00:00:00.000000", ""},
 	}, result)
 	rows.Close()
 }
