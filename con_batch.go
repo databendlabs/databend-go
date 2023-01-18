@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -23,33 +22,11 @@ var httpInsertRe = regexp.MustCompile(`(?i)^INSERT INTO\s+\x60?([\w.^\(]+)\x60?\
 
 func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver.Batch, error) {
 	matches := httpInsertRe.FindStringSubmatch(query)
-	if len(matches) < 3 {
+	if len(matches) < 2 {
 		return nil, errors.New("cannot get table name from query")
 	}
 	tableName := matches[1]
-	var rColumns []string
-	if matches[2] != "" {
-		colMatch := strings.TrimSuffix(strings.TrimPrefix(matches[2], "("), ")")
-		rColumns = strings.Split(colMatch, ",")
-		for i := range rColumns {
-			rColumns[i] = strings.TrimSpace(rColumns[i])
-		}
-	}
 	query = "INSERT INTO " + tableName
-	queryTableSchema := "DESCRIBE " + tableName
-
-	r, err := dc.rest.DoQuery(ctx, queryTableSchema, nil)
-	if err != nil {
-		return nil, err
-	}
-	// get Table columns and types
-	var columnNames, columnTypes []string
-	for i := range r.Data {
-		if len(r.Data[i]) > 1 {
-			columnNames = append(columnNames, r.Data[i][0])
-			columnTypes = append(columnTypes, r.Data[i][1])
-		}
-	}
 
 	csvFileName := fmt.Sprintf("%s.csv", uuid.NewString())
 
@@ -59,18 +36,12 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver
 	}
 	defer csvFile.Close()
 	writer := csv.NewWriter(csvFile)
-	err = writer.Write(columnNames)
-	if err != nil {
-		return nil, err
-	}
 	writer.Flush()
 
 	return &httpBatch{
 		query:       query,
 		ctx:         ctx,
 		conn:        dc,
-		columnNames: columnNames,
-		columnTypes: columnTypes,
 		tableSchema: tableName,
 		batchFile:   csvFileName,
 	}, nil
@@ -81,8 +52,6 @@ type httpBatch struct {
 	err         error
 	ctx         context.Context
 	conn        *DatabendConn
-	columnNames []string
-	columnTypes []string
 	batchFile   string
 	tableSchema string
 }

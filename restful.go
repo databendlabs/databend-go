@@ -263,6 +263,7 @@ func (c *APIClient) UploadToStageByPresignURL(stage, fileName string) error {
 	if len(resp.Data) < 1 || len(resp.Data[0]) < 2 {
 		return fmt.Errorf("generate presign url failed")
 	}
+
 	headers := make(map[string]string)
 	err = json.Unmarshal([]byte(resp.Data[0][1]), &headers)
 	if err != nil {
