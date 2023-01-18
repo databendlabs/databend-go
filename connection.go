@@ -158,27 +158,10 @@ func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error
 			ResponseHeaderTimeout: config.ReadTimeout,
 			TLSClientConfig:       getTLSConfigClone(config.TLSConfig),
 		},
+		rest: NewAPIClientFromConfig(&config),
 	}
 	if config.Debug {
 		dc.logger = log.New(os.Stderr, "databend: ", log.LstdFlags)
-	}
-	var apiScheme string
-	switch dc.cfg.SSLMode {
-	case SSL_MODE_DISABLE:
-		apiScheme = "http"
-	default:
-		apiScheme = "https"
-	}
-	dc.rest = &APIClient{
-		ApiEndpoint: fmt.Sprintf("%s://%s", apiScheme, dc.cfg.Host),
-		Host:        dc.cfg.Host,
-		Tenant:      dc.cfg.Tenant,
-		Warehouse:   dc.cfg.Warehouse,
-		User:        dc.cfg.User,
-		Password:    dc.cfg.Password,
-		AccessToken: dc.cfg.AccessToken,
-
-		PresignedURLDisabled: dc.cfg.PresignedURLDisabled,
 	}
 	return dc, nil
 }

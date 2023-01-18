@@ -27,6 +27,7 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver
 	}
 	tableName := matches[1]
 	query = "INSERT INTO " + tableName
+
 	csvFileName := fmt.Sprintf("%s.csv", uuid.NewString())
 
 	csvFile, err := os.OpenFile(csvFileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)

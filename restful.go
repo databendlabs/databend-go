@@ -22,6 +22,8 @@ import (
 )
 
 type APIClient struct {
+	cli *http.Client
+
 	ApiEndpoint string
 	Host        string
 
@@ -36,33 +38,59 @@ type APIClient struct {
 	PresignedURLDisabled bool
 }
 
-func (c *APIClient) DoRequest(method, path string, headers http.Header, req interface{}, resp interface{}) error {
+func NewAPIClientFromConfig(cfg *Config) *APIClient {
+	var apiScheme string
+	switch cfg.SSLMode {
+	case SSL_MODE_DISABLE:
+		apiScheme = "http"
+	default:
+		apiScheme = "https"
+	}
+	return &APIClient{
+		cli: &http.Client{
+			Timeout: cfg.Timeout,
+		},
+		ApiEndpoint: fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
+		Host:        cfg.Host,
+		Tenant:      cfg.Tenant,
+		Warehouse:   cfg.Warehouse,
+		User:        cfg.User,
+		Password:    cfg.Password,
+		AccessToken: cfg.AccessToken,
+
+		PresignedURLDisabled: cfg.PresignedURLDisabled,
+	}
+}
+
+func (c *APIClient) doRequest(path string, req interface{}, resp interface{}) error {
 	var err error
 	reqBody := []byte{}
 	if req != nil {
 		reqBody, err = json.Marshal(req)
 		if err != nil {
-			panic(err)
+			return errors.Wrap(err, "failed to marshal request body")
 		}
 	}
 
 	url := c.makeURL(path)
-	httpReq, err := http.NewRequest(method, url, bytes.NewBuffer(reqBody))
+	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(reqBody))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create http request")
 	}
 
-	if headers != nil {
-		httpReq.Header = headers.Clone()
+	headers, err := c.makeHeaders()
+	if err != nil {
+		return errors.Wrap(err, "failed to make request headers")
 	}
-	httpReq.Header.Set(contentType, jsonContentType)
-	httpReq.Header.Set(accept, jsonContentType)
+	headers.Set(contentType, jsonContentType)
+	headers.Set(accept, jsonContentType)
+	httpReq.Header = headers
+
 	if len(c.Host) > 0 {
 		httpReq.Host = c.Host
 	}
 
-	httpClient := &http.Client{}
-	httpResp, err := httpClient.Do(httpReq)
+	httpResp, err := c.cli.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("failed http do request: %w", err)
 	}
@@ -130,10 +158,6 @@ var databendInsecureTransport = &http.Transport{
 }
 
 func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
-	headers, err := c.makeHeaders()
-	if err != nil {
-		return nil, err
-	}
 	q, err := buildQuery(query, args)
 	if err != nil {
 		return nil, err
@@ -146,7 +170,7 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	}
 	path := "/v1/query"
 	var result QueryResponse
-	err = c.DoRequest("POST", path, headers, request, &result)
+	err = c.doRequest(path, request, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +223,7 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 	respCh <- *r0
 	nextUri := r0.NextURI
 	for len(nextUri) != 0 {
-		p, err := c.QueryPage(r0.Id, nextUri)
+		p, err := c.QueryPage(nextUri)
 		if err != nil {
 			return err
 		}
@@ -212,27 +236,17 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 	return nil
 }
 
-func (c *APIClient) QueryPage(queryId, path string) (*QueryResponse, error) {
-	headers, err := c.makeHeaders()
-	if err != nil {
-		return nil, err
-	}
-	headers.Set("queryID", queryId)
+func (c *APIClient) QueryPage(nextURI string) (*QueryResponse, error) {
 	var result QueryResponse
-	err = c.DoRequest("GET", path, headers, nil, &result)
+	err := c.doRequest(nextURI, nil, &result)
 	if err != nil {
-		return nil, fmt.Errorf("query failed: %w", err)
-	}
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query page failed: %w", err)
 	}
 	return &result, nil
 }
 
 func (c *APIClient) uploadToStage(fileName string) error {
 	rootStage := "~"
-	// fmt.Printf("uploading %s to stage %s... \n", fileName, rootStage)
-
 	if c.PresignedURLDisabled {
 		return c.uploadToStageByAPI(rootStage, fileName)
 	} else {
@@ -249,10 +263,11 @@ func (c *APIClient) UploadToStageByPresignURL(stage, fileName string) error {
 	if len(resp.Data) < 1 || len(resp.Data[0]) < 2 {
 		return fmt.Errorf("generate presign url failed")
 	}
-	headers := make(map[string]interface{})
-	err = json.Unmarshal([]byte(fmt.Sprintf("%v", resp.Data[0][1])), &headers)
+
+	headers := make(map[string]string)
+	err = json.Unmarshal([]byte(resp.Data[0][1]), &headers)
 	if err != nil {
-		return fmt.Errorf("no host for presign url")
+		return errors.Wrap(err, "failed to unmarshal presign url headers")
 	}
 
 	presignURL := fmt.Sprintf("%v", resp.Data[0][2])

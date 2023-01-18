@@ -23,8 +23,8 @@ func waitForQueryResult(dc *DatabendConn, result *QueryResponse) (*QueryResponse
 
 	var err error
 	for result.NextURI != "" && len(result.Data) == 0 {
-		dc.log("wait for query result", result.Id, result.NextURI)
-		result, err = dc.rest.QueryPage(result.Id, result.NextURI)
+		dc.log("wait for query result", result.NextURI)
+		result, err = dc.rest.QueryPage(result.NextURI)
 		if err != nil {
 			return nil, err
 		}
@@ -79,7 +79,7 @@ func (r *nextRows) Columns() []string {
 
 func (r *nextRows) Close() error {
 	if len(r.respData.NextURI) != 0 {
-		_, err := r.dc.rest.QueryPage(r.respData.Id, r.respData.NextURI)
+		_, err := r.dc.rest.QueryPage(r.respData.NextURI)
 		if err != nil {
 			return err
 		}
@@ -105,7 +105,7 @@ func (r *nextRows) Next(dest []driver.Value) error {
 	r.respData.Data = r.respData.Data[1:]
 
 	for j := range lineData {
-		reader := strings.NewReader(fmt.Sprintf("%v", lineData[j]))
+		reader := strings.NewReader(lineData[j])
 		v, err := r.parsers[j].Parse(reader)
 		if err != nil {
 			r.dc.log("parse error ", err)

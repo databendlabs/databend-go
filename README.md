@@ -118,4 +118,4 @@ dsn, cfg, err := getDSN()
 ```
 
 ## Compatibility
-- version >= v0.3.0 require databend-query v0.9.0 or later
+- If databend version >= v0.9.0 or later, you need to use databend-go version >= v0.3.0.
