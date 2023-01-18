@@ -46,8 +46,8 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver
 	var columnNames, columnTypes []string
 	for i := range r.Data {
 		if len(r.Data[i]) > 1 {
-			columnNames = append(columnNames, fmt.Sprintf("%s", r.Data[i][0]))
-			columnTypes = append(columnTypes, fmt.Sprintf("%s", r.Data[i][1]))
+			columnNames = append(columnNames, r.Data[i][0])
+			columnTypes = append(columnTypes, r.Data[i][1])
 		}
 	}
 

@@ -105,7 +105,7 @@ func (r *nextRows) Next(dest []driver.Value) error {
 	r.respData.Data = r.respData.Data[1:]
 
 	for j := range lineData {
-		reader := strings.NewReader(fmt.Sprintf("%v", lineData[j]))
+		reader := strings.NewReader(lineData[j])
 		v, err := r.parsers[j].Parse(reader)
 		if err != nil {
 			r.dc.log("parse error ", err)

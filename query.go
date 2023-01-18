@@ -25,15 +25,15 @@ type DataField struct {
 }
 
 type QueryResponse struct {
-	Data     [][]interface{} `json:"data"`
-	Error    *QueryError     `json:"error"`
-	FinalURI string          `json:"final_uri"`
-	Id       string          `json:"id"`
-	NextURI  string          `json:"next_uri"`
-	Schema   []DataField     `json:"schema"`
-	State    string          `json:"state"`
-	Stats    QueryStats      `json:"stats"`
-	StatsURI string          `json:"stats_uri"`
+	Data     [][]string  `json:"data"`
+	Error    *QueryError `json:"error"`
+	FinalURI string      `json:"final_uri"`
+	Id       string      `json:"id"`
+	NextURI  string      `json:"next_uri"`
+	Schema   []DataField `json:"schema"`
+	State    string      `json:"state"`
+	Stats    QueryStats  `json:"stats"`
+	StatsURI string      `json:"stats_uri"`
 }
 
 type QueryStats struct {
