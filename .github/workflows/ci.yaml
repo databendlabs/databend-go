@@ -11,11 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     services:
       databend:
-        # image: datafuselabs/databend-query
         image: datafuselabs/databend
         env:
-          DATABEND_DEFAULT_USER: databend
-          DATABEND_DEFAULT_PASSWORD: databend
+          DATABEND_QUERY_DEFAULT_USER: databend
+          DATABEND_QUERY_DEFAULT_PASSWORD: databend
+          MINIO_ENABLED: true
         # options: >-
         #   --health-cmd "curl -fs http://localhost:8000/v1/health || exit 1"
         #   --health-interval 10s
@@ -23,6 +23,7 @@ jobs:
         #   --health-retries 5
         ports:
           - 8000:8000
+          - 9000:9000
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -44,6 +45,7 @@ jobs:
 
       - name: Test
         env:
-          TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?idle_timeout=1h&presigned_url_disabled=1&sslmode=disable"
+          # TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?idle_timeout=1h&presigned_url_disabled=1&sslmode=disable"
+          TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?sslmode=disable"
         run: |
           make ci
