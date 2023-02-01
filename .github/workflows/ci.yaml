@@ -13,8 +13,8 @@ jobs:
       databend:
         image: datafuselabs/databend
         env:
-          DATABEND_QUERY_DEFAULT_USER: databend
-          DATABEND_QUERY_DEFAULT_PASSWORD: databend
+          QUERY_DEFAULT_USER: databend
+          QUERY_DEFAULT_PASSWORD: databend
           MINIO_ENABLED: true
         # options: >-
         #   --health-cmd "curl -fs http://localhost:8000/v1/health || exit 1"
