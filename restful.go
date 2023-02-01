@@ -62,7 +62,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 	}
 }
 
-func (c *APIClient) doRequest(path string, req interface{}, resp interface{}) error {
+func (c *APIClient) doRequest(method, path string, req interface{}, resp interface{}) error {
 	var err error
 	reqBody := []byte{}
 	if req != nil {
@@ -73,7 +73,7 @@ func (c *APIClient) doRequest(path string, req interface{}, resp interface{}) er
 	}
 
 	url := c.makeURL(path)
-	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(reqBody))
+	httpReq, err := http.NewRequest(method, url, bytes.NewBuffer(reqBody))
 	if err != nil {
 		return errors.Wrap(err, "failed to create http request")
 	}
@@ -170,7 +170,7 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	}
 	path := "/v1/query"
 	var result QueryResponse
-	err = c.doRequest(path, request, &result)
+	err = c.doRequest("POST", path, request, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +238,7 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 
 func (c *APIClient) QueryPage(nextURI string) (*QueryResponse, error) {
 	var result QueryResponse
-	err := c.doRequest(nextURI, nil, &result)
+	err := c.doRequest("GET", nextURI, nil, &result)
 	if err != nil {
 		return nil, fmt.Errorf("query page failed: %w", err)
 	}
