@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -24,8 +22,6 @@ const (
 	authorization   = "Authorization"
 	contentType     = "Content-Type"
 	jsonContentType = "application/json; charset=utf-8"
-	timeZone        = "Time-Zone"
-	userAgent       = "User-Agent"
 )
 
 type DatabendConn struct {
@@ -33,7 +29,6 @@ type DatabendConn struct {
 	ctx                context.Context
 	cfg                *Config
 	SQLState           string
-	transport          *http.Transport
 	cancel             context.CancelFunc
 	closed             int32
 	stmts              []*databendStmt
@@ -144,20 +139,9 @@ func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (drive
 
 func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error) {
 	dc := &DatabendConn{
-		url: config.url(map[string]string{"default_format": "TabSeparatedWithNamesAndTypes"}),
-		ctx: ctx,
-		cfg: &config,
-		transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout:   config.Timeout,
-				KeepAlive: config.IdleTimeout,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          1,
-			IdleConnTimeout:       config.IdleTimeout,
-			ResponseHeaderTimeout: config.ReadTimeout,
-			TLSClientConfig:       getTLSConfigClone(config.TLSConfig),
-		},
+		url:  config.url(map[string]string{"default_format": "TabSeparatedWithNamesAndTypes"}),
+		ctx:  ctx,
+		cfg:  &config,
 		rest: NewAPIClientFromConfig(&config),
 	}
 	if config.Debug {
@@ -179,15 +163,10 @@ func (dc *DatabendConn) Close() error {
 	if atomic.CompareAndSwapInt32(&dc.closed, 0, 1) {
 		dc.log("close connection", dc.url.Scheme, dc.url.Host, dc.url.Path)
 		cancel := dc.cancel
-		transport := dc.transport
-		dc.transport = nil
 		dc.cancel = nil
 
 		if cancel != nil {
 			cancel()
-		}
-		if transport != nil {
-			transport.CloseIdleConnections()
 		}
 		dc.cleanup()
 	}
