@@ -1,6 +1,9 @@
 package godatabend
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type QueryError struct {
 	Code    int    `json:"code"`
@@ -52,5 +55,5 @@ type QueryRequest struct {
 }
 
 type Pagination struct {
-	WaitTime int32 `json:"wait_time_secs" default:"60"`
+	WaitTime time.Duration `json:"wait_time_secs" default:"60"`
 }

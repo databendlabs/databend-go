@@ -10,13 +10,12 @@ import (
 )
 
 const (
-	defaultClientTimeout  = 900 * time.Second // Timeout for network round trip + read out http response
-	defaultLoginTimeout   = 60 * time.Second  // Timeout for retry for login EXCLUDING clientTimeout
-	defaultRequestTimeout = 0 * time.Second   // Timeout for retry for request EXCLUDING clientTimeout
-	defaultDomain         = "app.databend.com"
-	defaultScheme         = "databend"
-
-	SSL_MODE_DISABLE = "disable"
+	defaultDomain                        = "app.databend.com"
+	defaultScheme                        = "databend"
+	defaultWaitTimeSecs    time.Duration = 60
+	defaultMaxRowsInBuffer int64         = 5 * 1000 * 1000
+	defaultMaxRowsPerPage  int64         = 10000
+	SSL_MODE_DISABLE                     = "disable"
 )
 
 // Config is a set of configuration parameters
@@ -29,14 +28,17 @@ type Config struct {
 
 	AccessToken string
 
-	Host            string
-	Timeout         time.Duration
-	IdleTimeout     time.Duration
-	ReadTimeout     time.Duration
-	WriteTimeout    time.Duration
+	Host    string
+	Timeout time.Duration
+	/* Pagination params: WaitTimeSecs,  MaxRowsInBuffer, MaxRowsPerPage
+	Pagination: critical conditions for each HTTP request to return (before all remaining result is ready to return)
+	Related docs:https://databend.rs/doc/integrations/api/rest#query-request
+	*/
+	WaitTimeSecs    time.Duration
+	MaxRowsInBuffer int64
+	MaxRowsPerPage  int64
 	Location        *time.Location
 	Debug           bool
-	UseDBLocation   bool
 	GzipCompression bool
 	Params          map[string]string
 	TLSConfig       string
@@ -48,10 +50,12 @@ type Config struct {
 // NewConfig creates a new config with default values
 func NewConfig() *Config {
 	return &Config{
-		Host:        fmt.Sprintf("%s:443", defaultDomain),
-		IdleTimeout: time.Hour,
-		Location:    time.UTC,
-		Params:      make(map[string]string),
+		Host:            fmt.Sprintf("%s:443", defaultDomain),
+		Location:        time.UTC,
+		Params:          make(map[string]string),
+		WaitTimeSecs:    defaultWaitTimeSecs,
+		MaxRowsInBuffer: defaultMaxRowsInBuffer,
+		MaxRowsPerPage:  defaultMaxRowsPerPage,
 	}
 }
 
@@ -86,14 +90,14 @@ func (cfg *Config) FormatDSN() string {
 	if cfg.Timeout != 0 {
 		query.Set("timeout", cfg.Timeout.String())
 	}
-	if cfg.IdleTimeout != 0 {
-		query.Set("idle_timeout", cfg.IdleTimeout.String())
+	if cfg.WaitTimeSecs != 0 {
+		query.Set("wait_time_secs", cfg.WaitTimeSecs.String())
 	}
-	if cfg.ReadTimeout != 0 {
-		query.Set("read_timeout", cfg.ReadTimeout.String())
+	if cfg.MaxRowsInBuffer != 0 {
+		query.Set("max_rows_in_buffer", strconv.FormatInt(cfg.MaxRowsInBuffer, 10))
 	}
-	if cfg.WriteTimeout != 0 {
-		query.Set("write_timeout", cfg.WriteTimeout.String())
+	if cfg.MaxRowsPerPage != 0 {
+		query.Set("max_rows_per_page", strconv.FormatInt(cfg.MaxRowsPerPage, 10))
 	}
 	if cfg.Location != time.UTC && cfg.Location != nil {
 		query.Set("location", cfg.Location.String())
@@ -157,12 +161,12 @@ func (cfg *Config) AddParams(params map[string]string) (err error) {
 		switch k {
 		case "timeout":
 			cfg.Timeout, err = time.ParseDuration(v)
-		case "idle_timeout":
-			cfg.IdleTimeout, err = time.ParseDuration(v)
-		case "read_timeout":
-			cfg.ReadTimeout, err = time.ParseDuration(v)
-		case "write_timeout":
-			cfg.WriteTimeout, err = time.ParseDuration(v)
+		case "wait_time_secs":
+			cfg.WaitTimeSecs, err = time.ParseDuration(v)
+		case "max_rows_in_buffer":
+			cfg.MaxRowsInBuffer, err = strconv.ParseInt(v, 10, 64)
+		case "max_rows_per_page":
+			cfg.MaxRowsPerPage, err = strconv.ParseInt(v, 10, 64)
 		case "location":
 			cfg.Location, err = time.LoadLocation(v)
 		case "debug":
