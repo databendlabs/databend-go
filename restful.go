@@ -168,7 +168,9 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	request := QueryRequest{
 		SQL: q,
 		Pagination: Pagination{
-			WaitTime: c.WaitTimeSecs,
+			WaitTime:        c.WaitTimeSecs,
+			MaxRowsInBuffer: c.MaxRowsInBuffer,
+			MaxRowsPerPage:  c.MaxRowsPerPage,
 		},
 	}
 	path := "/v1/query"
