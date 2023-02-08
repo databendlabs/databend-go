@@ -9,7 +9,7 @@ import (
 )
 
 func TestFormatDSN(t *testing.T) {
-	dsn := "databend+https://username:password@tn3ftqihs.ch.aws-us-east-2.default.databend.com/test?timeout=1s&wait_time_secs=10s&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&warehouse=wh"
+	dsn := "databend+https://username:password@tn3ftqihs.ch.aws-us-east-2.default.databend.com/test?timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&warehouse=wh"
 	cfg, err := ParseDSN(dsn)
 	require.Nil(t, err)
 
@@ -19,7 +19,7 @@ func TestFormatDSN(t *testing.T) {
 	assert.Equal(t, "tls-settings", cfg.TLSConfig)
 	assert.Equal(t, time.Second, cfg.Timeout)
 	assert.Equal(t, defaultMaxRowsPerPage, cfg.MaxRowsPerPage)
-	assert.Equal(t, time.Second*10, cfg.WaitTimeSecs)
+	assert.Equal(t, int64(10), cfg.WaitTimeSecs)
 	assert.Equal(t, defaultMaxRowsInBuffer, cfg.MaxRowsInBuffer)
 
 	dsn1 := cfg.FormatDSN()
@@ -39,15 +39,15 @@ func TestConfigURL(t *testing.T) {
 
 func TestParseDSN(t *testing.T) {
 	tests := []string{
-		"databend+http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10s&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings",
-		"db+http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10s&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings",
-		"bend+http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10s&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings",
-		"http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10s&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings",
-		"databend://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10s&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&sslmode=disable",
-		"db://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10s&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&sslmode=disable",
-		"dd://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10s&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&sslmode=disable",
-		"bend://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10s&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&sslmode=disable",
-		"https://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10s&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&sslmode=disable",
+		"databend+http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings",
+		"db+http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings",
+		"bend+http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings",
+		"http://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings",
+		"databend://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&sslmode=disable",
+		"db://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&sslmode=disable",
+		"dd://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&sslmode=disable",
+		"bend://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&sslmode=disable",
+		"https://username:password@app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&sslmode=disable",
 	}
 
 	for _, test := range tests {
@@ -63,7 +63,7 @@ func TestParseDSN(t *testing.T) {
 		assert.Equal(t, "tls-settings", cfg.TLSConfig)
 		assert.Equal(t, SSL_MODE_DISABLE, cfg.SSLMode)
 		assert.Equal(t, time.Second, cfg.Timeout)
-		assert.Equal(t, time.Second*10, cfg.WaitTimeSecs)
+		assert.Equal(t, int64(10), cfg.WaitTimeSecs)
 		assert.Equal(t, defaultMaxRowsInBuffer, cfg.MaxRowsInBuffer)
 
 	}
