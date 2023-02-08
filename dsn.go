@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	defaultDomain                        = "app.databend.com"
-	defaultScheme                        = "databend"
-	defaultWaitTimeSecs    time.Duration = 60
-	defaultMaxRowsInBuffer int64         = 5 * 1000 * 1000
-	defaultMaxRowsPerPage  int64         = 10000
-	SSL_MODE_DISABLE                     = "disable"
+	defaultDomain                = "app.databend.com"
+	defaultScheme                = "databend"
+	defaultWaitSeconds     int64 = 60
+	defaultMaxRowsInBuffer int64 = 5 * 1000 * 1000
+	defaultMaxRowsPerPage  int64 = 10000
+	SSL_MODE_DISABLE             = "disable"
 )
 
 // Config is a set of configuration parameters
@@ -34,7 +34,7 @@ type Config struct {
 	Pagination: critical conditions for each HTTP request to return (before all remaining result is ready to return)
 	Related docs:https://databend.rs/doc/integrations/api/rest#query-request
 	*/
-	WaitTimeSecs    time.Duration
+	WaitTimeSecs    int64
 	MaxRowsInBuffer int64
 	MaxRowsPerPage  int64
 	Location        *time.Location
@@ -53,7 +53,7 @@ func NewConfig() *Config {
 		Host:            fmt.Sprintf("%s:443", defaultDomain),
 		Location:        time.UTC,
 		Params:          make(map[string]string),
-		WaitTimeSecs:    defaultWaitTimeSecs,
+		WaitTimeSecs:    defaultWaitSeconds,
 		MaxRowsInBuffer: defaultMaxRowsInBuffer,
 		MaxRowsPerPage:  defaultMaxRowsPerPage,
 	}
@@ -91,7 +91,7 @@ func (cfg *Config) FormatDSN() string {
 		query.Set("timeout", cfg.Timeout.String())
 	}
 	if cfg.WaitTimeSecs != 0 {
-		query.Set("wait_time_secs", cfg.WaitTimeSecs.String())
+		query.Set("wait_time_secs", strconv.FormatInt(cfg.WaitTimeSecs, 10))
 	}
 	if cfg.MaxRowsInBuffer != 0 {
 		query.Set("max_rows_in_buffer", strconv.FormatInt(cfg.MaxRowsInBuffer, 10))
@@ -162,7 +162,7 @@ func (cfg *Config) AddParams(params map[string]string) (err error) {
 		case "timeout":
 			cfg.Timeout, err = time.ParseDuration(v)
 		case "wait_time_secs":
-			cfg.WaitTimeSecs, err = time.ParseDuration(v)
+			cfg.WaitTimeSecs, err = strconv.ParseInt(v, 10, 64)
 		case "max_rows_in_buffer":
 			cfg.MaxRowsInBuffer, err = strconv.ParseInt(v, 10, 64)
 		case "max_rows_per_page":

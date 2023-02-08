@@ -32,7 +32,7 @@ type APIClient struct {
 	Tenant      string
 	Warehouse   string
 
-	WaitTimeSecs         time.Duration
+	WaitTimeSeconds      int64
 	MaxRowsInBuffer      int64
 	MaxRowsPerPage       int64
 	PresignedURLDisabled bool
@@ -58,7 +58,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		Password:    cfg.Password,
 		AccessToken: cfg.AccessToken,
 
-		WaitTimeSecs:         cfg.WaitTimeSecs,
+		WaitTimeSeconds:      cfg.WaitTimeSecs,
 		MaxRowsInBuffer:      cfg.MaxRowsInBuffer,
 		MaxRowsPerPage:       cfg.MaxRowsPerPage,
 		PresignedURLDisabled: cfg.PresignedURLDisabled,
@@ -168,7 +168,7 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	request := QueryRequest{
 		SQL: q,
 		Pagination: Pagination{
-			WaitTime:        c.WaitTimeSecs,
+			WaitTime:        c.WaitTimeSeconds,
 			MaxRowsInBuffer: c.MaxRowsInBuffer,
 			MaxRowsPerPage:  c.MaxRowsPerPage,
 		},
