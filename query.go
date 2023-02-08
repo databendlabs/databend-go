@@ -2,7 +2,6 @@ package godatabend
 
 import (
 	"fmt"
-	"time"
 )
 
 type QueryError struct {
@@ -55,7 +54,7 @@ type QueryRequest struct {
 }
 
 type Pagination struct {
-	WaitTime        time.Duration `json:"wait_time_secs" default:"60"`
-	MaxRowsInBuffer int64         `json:"max_rows_in_buffer"`
-	MaxRowsPerPage  int64         `json:"max_rows_per_page"`
+	WaitTime        int64 `json:"wait_time_secs" default:"60"`
+	MaxRowsInBuffer int64 `json:"max_rows_in_buffer"`
+	MaxRowsPerPage  int64 `json:"max_rows_per_page"`
 }
