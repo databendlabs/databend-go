@@ -24,19 +24,19 @@ import (
 type APIClient struct {
 	cli *http.Client
 
-	ApiEndpoint       string
-	Host              string
-	User              string
-	Password          string
-	AccessToken       string
-	AccessTokenLoader TokenLoader
-	Tenant            string
-	Warehouse         string
+	apiEndpoint       string
+	host              string
+	user              string
+	password          string
+	accessToken       string
+	accessTokenLoader TokenLoader
+	tenant            string
+	warehouse         string
 
-	WaitTimeSeconds      int64
-	MaxRowsInBuffer      int64
-	MaxRowsPerPage       int64
-	PresignedURLDisabled bool
+	waitTimeSeconds      int64
+	maxRowsInBuffer      int64
+	maxRowsPerPage       int64
+	presignedURLDisabled bool
 }
 
 func NewAPIClientFromConfig(cfg *Config) *APIClient {
@@ -51,27 +51,27 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		cli: &http.Client{
 			Timeout: cfg.Timeout,
 		},
-		ApiEndpoint:       fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
-		Host:              cfg.Host,
-		Tenant:            cfg.Tenant,
-		Warehouse:         cfg.Warehouse,
-		User:              cfg.User,
-		Password:          cfg.Password,
-		AccessToken:       cfg.AccessToken,
-		AccessTokenLoader: cfg.AccessTokenLoader,
+		apiEndpoint:       fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
+		host:              cfg.Host,
+		tenant:            cfg.Tenant,
+		warehouse:         cfg.Warehouse,
+		user:              cfg.User,
+		password:          cfg.Password,
+		accessToken:       cfg.AccessToken,
+		accessTokenLoader: cfg.AccessTokenLoader,
 
-		WaitTimeSeconds:      cfg.WaitTimeSecs,
-		MaxRowsInBuffer:      cfg.MaxRowsInBuffer,
-		MaxRowsPerPage:       cfg.MaxRowsPerPage,
-		PresignedURLDisabled: cfg.PresignedURLDisabled,
+		waitTimeSeconds:      cfg.WaitTimeSecs,
+		maxRowsInBuffer:      cfg.MaxRowsInBuffer,
+		maxRowsPerPage:       cfg.MaxRowsPerPage,
+		presignedURLDisabled: cfg.PresignedURLDisabled,
 	}
 }
 
 func (c *APIClient) loadAccessToken(ctx context.Context) (string, error) {
-	if c.AccessTokenLoader != nil {
-		return c.AccessTokenLoader.LoadAccessToken(ctx)
+	if c.accessTokenLoader != nil {
+		return c.accessTokenLoader.LoadAccessToken(ctx)
 	}
-	return c.AccessToken, nil
+	return c.accessToken, nil
 }
 
 func (c *APIClient) doRequest(method, path string, req interface{}, resp interface{}) error {
@@ -98,8 +98,8 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 	headers.Set(accept, jsonContentType)
 	httpReq.Header = headers
 
-	if len(c.Host) > 0 {
-		httpReq.Host = c.Host
+	if len(c.host) > 0 {
+		httpReq.Host = c.host
 	}
 
 	httpResp, err := c.cli.Do(httpReq)
@@ -129,23 +129,23 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 	return nil
 }
 func (c *APIClient) makeURL(path string, args ...interface{}) string {
-	format := c.ApiEndpoint + path
+	format := c.apiEndpoint + path
 	return fmt.Sprintf(format, args...)
 }
 
 func (c *APIClient) makeHeaders() (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
-	if c.Tenant != "" {
-		headers.Set(DatabendTenantHeader, c.Tenant)
+	if c.tenant != "" {
+		headers.Set(DatabendTenantHeader, c.tenant)
 	}
-	if c.Warehouse != "" {
-		headers.Set(DatabendWarehouseHeader, c.Warehouse)
+	if c.warehouse != "" {
+		headers.Set(DatabendWarehouseHeader, c.warehouse)
 	}
 
-	if c.User != "" {
-		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.User, c.Password)))
-	} else if c.AccessToken != "" {
+	if c.user != "" {
+		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.user, c.password)))
+	} else if c.accessToken != "" {
 		accessToken, err := c.loadAccessToken(context.TODO())
 		if err != nil {
 			return nil, fmt.Errorf("failed to load access token: %w", err)
@@ -181,9 +181,9 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	request := QueryRequest{
 		SQL: q,
 		Pagination: Pagination{
-			WaitTime:        c.WaitTimeSeconds,
-			MaxRowsInBuffer: c.MaxRowsInBuffer,
-			MaxRowsPerPage:  c.MaxRowsPerPage,
+			WaitTime:        c.waitTimeSeconds,
+			MaxRowsInBuffer: c.maxRowsInBuffer,
+			MaxRowsPerPage:  c.maxRowsPerPage,
 		},
 	}
 	path := "/v1/query"
@@ -265,7 +265,7 @@ func (c *APIClient) QueryPage(nextURI string) (*QueryResponse, error) {
 
 func (c *APIClient) uploadToStage(fileName string) error {
 	rootStage := "~"
-	if c.PresignedURLDisabled {
+	if c.presignedURLDisabled {
 		return c.uploadToStageByAPI(rootStage, fileName)
 	} else {
 		return c.UploadToStageByPresignURL(rootStage, fileName)
@@ -355,8 +355,8 @@ func (c *APIClient) uploadToStageByAPI(stage, fileName string) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to make headers")
 	}
-	if len(c.Host) > 0 {
-		httpReq.Host = c.Host
+	if len(c.host) > 0 {
+		httpReq.Host = c.host
 	}
 	httpReq.Header.Set("stage_name", stage)
 	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
