@@ -2,7 +2,9 @@ package godatabend
 
 import "context"
 
-type TokenLoader interface {
+// AccessToken is used on Bearer authentication. The token may have a limited
+// lifetime, you can rotate your token by this interface.
+type AccessTokenLoader interface {
 	LoadAccessToken(ctx context.Context) (string, error)
 }
 

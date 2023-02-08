@@ -27,7 +27,7 @@ type Config struct {
 	Database  string // Database name
 
 	AccessToken       string
-	AccessTokenLoader TokenLoader
+	AccessTokenLoader AccessTokenLoader
 
 	Host    string
 	Timeout time.Duration

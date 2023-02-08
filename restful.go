@@ -29,7 +29,7 @@ type APIClient struct {
 	user              string
 	password          string
 	accessToken       string
-	accessTokenLoader TokenLoader
+	accessTokenLoader AccessTokenLoader
 	tenant            string
 	warehouse         string
 
