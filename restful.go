@@ -24,13 +24,14 @@ import (
 type APIClient struct {
 	cli *http.Client
 
-	ApiEndpoint string
-	Host        string
-	User        string
-	Password    string
-	AccessToken string
-	Tenant      string
-	Warehouse   string
+	ApiEndpoint       string
+	Host              string
+	User              string
+	Password          string
+	AccessToken       string
+	AccessTokenLoader TokenLoader
+	Tenant            string
+	Warehouse         string
 
 	WaitTimeSeconds      int64
 	MaxRowsInBuffer      int64
@@ -50,19 +51,27 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		cli: &http.Client{
 			Timeout: cfg.Timeout,
 		},
-		ApiEndpoint: fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
-		Host:        cfg.Host,
-		Tenant:      cfg.Tenant,
-		Warehouse:   cfg.Warehouse,
-		User:        cfg.User,
-		Password:    cfg.Password,
-		AccessToken: cfg.AccessToken,
+		ApiEndpoint:       fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
+		Host:              cfg.Host,
+		Tenant:            cfg.Tenant,
+		Warehouse:         cfg.Warehouse,
+		User:              cfg.User,
+		Password:          cfg.Password,
+		AccessToken:       cfg.AccessToken,
+		AccessTokenLoader: cfg.AccessTokenLoader,
 
 		WaitTimeSeconds:      cfg.WaitTimeSecs,
 		MaxRowsInBuffer:      cfg.MaxRowsInBuffer,
 		MaxRowsPerPage:       cfg.MaxRowsPerPage,
 		PresignedURLDisabled: cfg.PresignedURLDisabled,
 	}
+}
+
+func (c *APIClient) loadAccessToken(ctx context.Context) (string, error) {
+	if c.AccessTokenLoader != nil {
+		return c.AccessTokenLoader.LoadAccessToken(ctx)
+	}
+	return c.AccessToken, nil
 }
 
 func (c *APIClient) doRequest(method, path string, req interface{}, resp interface{}) error {
@@ -137,9 +146,13 @@ func (c *APIClient) makeHeaders() (http.Header, error) {
 	if c.User != "" {
 		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.User, c.Password)))
 	} else if c.AccessToken != "" {
-		headers.Set(Authorization, fmt.Sprintf("Bearer %s", c.AccessToken))
+		accessToken, err := c.loadAccessToken(context.TODO())
+		if err != nil {
+			return nil, fmt.Errorf("failed to load access token: %w", err)
+		}
+		headers.Set(Authorization, fmt.Sprintf("Bearer %s", accessToken))
 	} else {
-		return nil, errors.New("no user or access token")
+		return nil, errors.New("no user password or access token")
 	}
 
 	return headers, nil
