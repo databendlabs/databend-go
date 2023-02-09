@@ -6,7 +6,7 @@ import "context"
 // lifetime, you can rotate your token by this interface.
 type AccessTokenLoader interface {
 	// LoadAccessToken is called whenever a new request is made to the server.
-	LoadAccessToken(ctx context.Context) (string, error)
+	LoadAccessToken(ctx context.Context, forceRotate bool) (string, error)
 }
 
 type StaticTokenLoader struct {

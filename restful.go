@@ -21,6 +21,13 @@ import (
 	"github.com/pkg/errors"
 )
 
+type AuthMethod string
+
+const (
+	AuthMethodUserPassword AuthMethod = "userPassword"
+	AuthMethodAccessToken  AuthMethod = "accessToken"
+)
+
 type APIClient struct {
 	cli *http.Client
 
@@ -67,9 +74,9 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 	}
 }
 
-func (c *APIClient) loadAccessToken(ctx context.Context) (string, error) {
+func (c *APIClient) loadAccessToken(ctx context.Context, forceRotate bool) (string, error) {
 	if c.accessTokenLoader != nil {
-		return c.accessTokenLoader.LoadAccessToken(ctx)
+		return c.accessTokenLoader.LoadAccessToken(ctx, forceRotate)
 	}
 	return c.accessToken, nil
 }
@@ -90,47 +97,67 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 		return errors.Wrap(err, "failed to create http request")
 	}
 
-	headers, err := c.makeHeaders()
-	if err != nil {
-		return errors.Wrap(err, "failed to make request headers")
-	}
-	headers.Set(contentType, jsonContentType)
-	headers.Set(accept, jsonContentType)
-	httpReq.Header = headers
-
-	if len(c.host) > 0 {
-		httpReq.Host = c.host
-	}
-
-	httpResp, err := c.cli.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("failed http do request: %w", err)
-	}
-	defer httpResp.Body.Close()
-
-	httpRespBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return fmt.Errorf("io read error: %w", err)
-	}
-
-	if httpResp.StatusCode == http.StatusUnauthorized {
-		return NewAPIError("please check your user/password.", httpResp.StatusCode, httpRespBody)
-	} else if httpResp.StatusCode >= 500 {
-		return NewAPIError("please retry again later.", httpResp.StatusCode, httpRespBody)
-	} else if httpResp.StatusCode >= 400 {
-		return NewAPIError("please check your arguments.", httpResp.StatusCode, httpRespBody)
-	}
-
-	if resp != nil {
-		if err := json.Unmarshal(httpRespBody, &resp); err != nil {
-			return err
+	maxRetries := 2
+	for i := 1; i <= maxRetries; i++ {
+		headers, err := c.makeHeaders()
+		if err != nil {
+			return errors.Wrap(err, "failed to make request headers")
 		}
+		headers.Set(contentType, jsonContentType)
+		headers.Set(accept, jsonContentType)
+		httpReq.Header = headers
+
+		if len(c.host) > 0 {
+			httpReq.Host = c.host
+		}
+
+		httpResp, err := c.cli.Do(httpReq)
+		if err != nil {
+			return fmt.Errorf("failed http do request: %w", err)
+		}
+		defer httpResp.Body.Close()
+
+		httpRespBody, err := io.ReadAll(httpResp.Body)
+		if err != nil {
+			return fmt.Errorf("io read error: %w", err)
+		}
+
+		if httpResp.StatusCode == http.StatusUnauthorized {
+			if c.authMethod() == AuthMethodAccessToken && i < maxRetries {
+				// retry with a rotated access token
+				c.loadAccessToken(context.Background(), true)
+				continue
+			}
+			return NewAPIError("authorization failed", httpResp.StatusCode, httpRespBody)
+		} else if httpResp.StatusCode >= 500 {
+			return NewAPIError("please retry again later.", httpResp.StatusCode, httpRespBody)
+		} else if httpResp.StatusCode >= 400 {
+			return NewAPIError("please check your arguments.", httpResp.StatusCode, httpRespBody)
+		}
+
+		if resp != nil {
+			if err := json.Unmarshal(httpRespBody, &resp); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	return nil
+	return fmt.Errorf("failed to do request after %d retries", maxRetries)
 }
+
 func (c *APIClient) makeURL(path string, args ...interface{}) string {
 	format := c.apiEndpoint + path
 	return fmt.Sprintf(format, args...)
+}
+
+func (c *APIClient) authMethod() AuthMethod {
+	if c.user != "" {
+		return AuthMethodUserPassword
+	}
+	if c.accessToken != "" || c.accessTokenLoader != nil {
+		return AuthMethodAccessToken
+	}
+	return ""
 }
 
 func (c *APIClient) makeHeaders() (http.Header, error) {
@@ -143,15 +170,16 @@ func (c *APIClient) makeHeaders() (http.Header, error) {
 		headers.Set(DatabendWarehouseHeader, c.warehouse)
 	}
 
-	if c.user != "" {
+	switch c.authMethod() {
+	case AuthMethodUserPassword:
 		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.user, c.password)))
-	} else if c.accessToken != "" {
-		accessToken, err := c.loadAccessToken(context.TODO())
+	case AuthMethodAccessToken:
+		accessToken, err := c.loadAccessToken(context.TODO(), false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load access token: %w", err)
 		}
 		headers.Set(Authorization, fmt.Sprintf("Bearer %s", accessToken))
-	} else {
+	default:
 		return nil, errors.New("no user password or access token")
 	}
 
