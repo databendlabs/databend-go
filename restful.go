@@ -21,21 +21,29 @@ import (
 	"github.com/pkg/errors"
 )
 
+type AuthMethod string
+
+const (
+	AuthMethodUserPassword AuthMethod = "userPassword"
+	AuthMethodAccessToken  AuthMethod = "accessToken"
+)
+
 type APIClient struct {
 	cli *http.Client
 
-	ApiEndpoint string
-	Host        string
-	User        string
-	Password    string
-	AccessToken string
-	Tenant      string
-	Warehouse   string
+	apiEndpoint       string
+	host              string
+	user              string
+	password          string
+	accessToken       string
+	accessTokenLoader AccessTokenLoader
+	tenant            string
+	warehouse         string
 
-	WaitTimeSeconds      int64
-	MaxRowsInBuffer      int64
-	MaxRowsPerPage       int64
-	PresignedURLDisabled bool
+	waitTimeSeconds      int64
+	maxRowsInBuffer      int64
+	maxRowsPerPage       int64
+	presignedURLDisabled bool
 }
 
 func NewAPIClientFromConfig(cfg *Config) *APIClient {
@@ -50,19 +58,27 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		cli: &http.Client{
 			Timeout: cfg.Timeout,
 		},
-		ApiEndpoint: fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
-		Host:        cfg.Host,
-		Tenant:      cfg.Tenant,
-		Warehouse:   cfg.Warehouse,
-		User:        cfg.User,
-		Password:    cfg.Password,
-		AccessToken: cfg.AccessToken,
+		apiEndpoint:       fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
+		host:              cfg.Host,
+		tenant:            cfg.Tenant,
+		warehouse:         cfg.Warehouse,
+		user:              cfg.User,
+		password:          cfg.Password,
+		accessToken:       cfg.AccessToken,
+		accessTokenLoader: cfg.AccessTokenLoader,
 
-		WaitTimeSeconds:      cfg.WaitTimeSecs,
-		MaxRowsInBuffer:      cfg.MaxRowsInBuffer,
-		MaxRowsPerPage:       cfg.MaxRowsPerPage,
-		PresignedURLDisabled: cfg.PresignedURLDisabled,
+		waitTimeSeconds:      cfg.WaitTimeSecs,
+		maxRowsInBuffer:      cfg.MaxRowsInBuffer,
+		maxRowsPerPage:       cfg.MaxRowsPerPage,
+		presignedURLDisabled: cfg.PresignedURLDisabled,
 	}
+}
+
+func (c *APIClient) loadAccessToken(ctx context.Context, forceRotate bool) (string, error) {
+	if c.accessTokenLoader != nil {
+		return c.accessTokenLoader.LoadAccessToken(ctx, forceRotate)
+	}
+	return c.accessToken, nil
 }
 
 func (c *APIClient) doRequest(method, path string, req interface{}, resp interface{}) error {
@@ -81,65 +97,90 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 		return errors.Wrap(err, "failed to create http request")
 	}
 
-	headers, err := c.makeHeaders()
-	if err != nil {
-		return errors.Wrap(err, "failed to make request headers")
-	}
-	headers.Set(contentType, jsonContentType)
-	headers.Set(accept, jsonContentType)
-	httpReq.Header = headers
-
-	if len(c.Host) > 0 {
-		httpReq.Host = c.Host
-	}
-
-	httpResp, err := c.cli.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("failed http do request: %w", err)
-	}
-	defer httpResp.Body.Close()
-
-	httpRespBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return fmt.Errorf("io read error: %w", err)
-	}
-
-	if httpResp.StatusCode == http.StatusUnauthorized {
-		return NewAPIError("please check your user/password.", httpResp.StatusCode, httpRespBody)
-	} else if httpResp.StatusCode >= 500 {
-		return NewAPIError("please retry again later.", httpResp.StatusCode, httpRespBody)
-	} else if httpResp.StatusCode >= 400 {
-		return NewAPIError("please check your arguments.", httpResp.StatusCode, httpRespBody)
-	}
-
-	if resp != nil {
-		if err := json.Unmarshal(httpRespBody, &resp); err != nil {
-			return err
+	maxRetries := 2
+	for i := 1; i <= maxRetries; i++ {
+		headers, err := c.makeHeaders()
+		if err != nil {
+			return errors.Wrap(err, "failed to make request headers")
 		}
+		headers.Set(contentType, jsonContentType)
+		headers.Set(accept, jsonContentType)
+		httpReq.Header = headers
+
+		if len(c.host) > 0 {
+			httpReq.Host = c.host
+		}
+
+		httpResp, err := c.cli.Do(httpReq)
+		if err != nil {
+			return fmt.Errorf("failed http do request: %w", err)
+		}
+		defer httpResp.Body.Close()
+
+		httpRespBody, err := io.ReadAll(httpResp.Body)
+		if err != nil {
+			return fmt.Errorf("io read error: %w", err)
+		}
+
+		if httpResp.StatusCode == http.StatusUnauthorized {
+			if c.authMethod() == AuthMethodAccessToken && i < maxRetries {
+				// retry with a rotated access token
+				c.loadAccessToken(context.Background(), true)
+				continue
+			}
+			return NewAPIError("authorization failed", httpResp.StatusCode, httpRespBody)
+		} else if httpResp.StatusCode >= 500 {
+			return NewAPIError("please retry again later.", httpResp.StatusCode, httpRespBody)
+		} else if httpResp.StatusCode >= 400 {
+			return NewAPIError("please check your arguments.", httpResp.StatusCode, httpRespBody)
+		}
+
+		if resp != nil {
+			if err := json.Unmarshal(httpRespBody, &resp); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	return nil
+	return fmt.Errorf("failed to do request after %d retries", maxRetries)
 }
+
 func (c *APIClient) makeURL(path string, args ...interface{}) string {
-	format := c.ApiEndpoint + path
+	format := c.apiEndpoint + path
 	return fmt.Sprintf(format, args...)
+}
+
+func (c *APIClient) authMethod() AuthMethod {
+	if c.user != "" {
+		return AuthMethodUserPassword
+	}
+	if c.accessToken != "" || c.accessTokenLoader != nil {
+		return AuthMethodAccessToken
+	}
+	return ""
 }
 
 func (c *APIClient) makeHeaders() (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
-	if c.Tenant != "" {
-		headers.Set(DatabendTenantHeader, c.Tenant)
+	if c.tenant != "" {
+		headers.Set(DatabendTenantHeader, c.tenant)
 	}
-	if c.Warehouse != "" {
-		headers.Set(DatabendWarehouseHeader, c.Warehouse)
+	if c.warehouse != "" {
+		headers.Set(DatabendWarehouseHeader, c.warehouse)
 	}
 
-	if c.User != "" {
-		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.User, c.Password)))
-	} else if c.AccessToken != "" {
-		headers.Set(Authorization, fmt.Sprintf("Bearer %s", c.AccessToken))
-	} else {
-		return nil, errors.New("no user or access token")
+	switch c.authMethod() {
+	case AuthMethodUserPassword:
+		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.user, c.password)))
+	case AuthMethodAccessToken:
+		accessToken, err := c.loadAccessToken(context.TODO(), false)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load access token: %w", err)
+		}
+		headers.Set(Authorization, fmt.Sprintf("Bearer %s", accessToken))
+	default:
+		return nil, errors.New("no user password or access token")
 	}
 
 	return headers, nil
@@ -168,9 +209,9 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	request := QueryRequest{
 		SQL: q,
 		Pagination: Pagination{
-			WaitTime:        c.WaitTimeSeconds,
-			MaxRowsInBuffer: c.MaxRowsInBuffer,
-			MaxRowsPerPage:  c.MaxRowsPerPage,
+			WaitTime:        c.waitTimeSeconds,
+			MaxRowsInBuffer: c.maxRowsInBuffer,
+			MaxRowsPerPage:  c.maxRowsPerPage,
 		},
 	}
 	path := "/v1/query"
@@ -252,7 +293,7 @@ func (c *APIClient) QueryPage(nextURI string) (*QueryResponse, error) {
 
 func (c *APIClient) uploadToStage(fileName string) error {
 	rootStage := "~"
-	if c.PresignedURLDisabled {
+	if c.presignedURLDisabled {
 		return c.uploadToStageByAPI(rootStage, fileName)
 	} else {
 		return c.UploadToStageByPresignURL(rootStage, fileName)
@@ -342,8 +383,8 @@ func (c *APIClient) uploadToStageByAPI(stage, fileName string) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to make headers")
 	}
-	if len(c.Host) > 0 {
-		httpReq.Host = c.Host
+	if len(c.host) > 0 {
+		httpReq.Host = c.host
 	}
 	httpReq.Header.Set("stage_name", stage)
 	httpReq.Header.Set("Content-Type", writer.FormDataContentType())

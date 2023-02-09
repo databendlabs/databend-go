@@ -26,7 +26,8 @@ type Config struct {
 	Password  string // Password (requires User)
 	Database  string // Database name
 
-	AccessToken string
+	AccessToken       string
+	AccessTokenLoader AccessTokenLoader
 
 	Host    string
 	Timeout time.Duration
