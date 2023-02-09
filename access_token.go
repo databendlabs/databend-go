@@ -1,6 +1,10 @@
 package godatabend
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"os"
+)
 
 // AccessToken is used on Bearer authentication. The token may have a limited
 // lifetime, you can rotate your token by this interface.
@@ -21,4 +25,22 @@ func NewStaticTokenLoader(accessToken string) *StaticTokenLoader {
 
 func (l *StaticTokenLoader) LoadAccessToken(ctx context.Context) (string, error) {
 	return l.AccessToken, nil
+}
+
+type AccessTokenFileLoader struct {
+	path string
+}
+
+func NewAccessTokenFileLoader(path string) *AccessTokenFileLoader {
+	return &AccessTokenFileLoader{
+		path: path,
+	}
+}
+
+func (l *AccessTokenFileLoader) LoadAccessToken(ctx context.Context, forceRotate bool) (string, error) {
+	buf, err := os.ReadFile(l.path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read access token file: %w", err)
+	}
+	return string(buf), nil
 }
