@@ -13,36 +13,36 @@ type AccessTokenLoader interface {
 	LoadAccessToken(ctx context.Context, forceRotate bool) (string, error)
 }
 
-type StaticTokenLoader struct {
+type StaticAccessTokenLoader struct {
 	AccessToken string
 }
 
-func NewStaticTokenLoader(accessToken string) *StaticTokenLoader {
-	return &StaticTokenLoader{
+func NewStaticAccessTokenLoader(accessToken string) *StaticAccessTokenLoader {
+	return &StaticAccessTokenLoader{
 		AccessToken: accessToken,
 	}
 }
 
-func (l *StaticTokenLoader) LoadAccessToken(ctx context.Context) (string, error) {
+func (l *StaticAccessTokenLoader) LoadAccessToken(ctx context.Context, forceRotate bool) (string, error) {
 	return l.AccessToken, nil
 }
 
-type AccessTokenFileLoader struct {
+type FileAccessTokenLoader struct {
 	path string
 }
 
-type AccessTokenFileData struct {
+type FileAccessTokenData struct {
 	AccessToken string `toml:"access_token"`
 }
 
-func NewAccessTokenFileLoader(path string) *AccessTokenFileLoader {
-	return &AccessTokenFileLoader{
+func NewFileAccessTokenLoader(path string) *FileAccessTokenLoader {
+	return &FileAccessTokenLoader{
 		path: path,
 	}
 }
 
-func (l *AccessTokenFileLoader) LoadAccessToken(ctx context.Context, forceRotate bool) (string, error) {
-	data := &AccessTokenFileData{}
+func (l *FileAccessTokenLoader) LoadAccessToken(ctx context.Context, forceRotate bool) (string, error) {
+	data := &FileAccessTokenData{}
 	_, err := toml.DecodeFile(l.path, &data)
 	if err != nil {
 		return "", err
