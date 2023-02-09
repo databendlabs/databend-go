@@ -2,8 +2,8 @@ package godatabend
 
 import (
 	"context"
-	"fmt"
-	"os"
+
+	"github.com/BurntSushi/toml"
 )
 
 // AccessToken is used on Bearer authentication. The token may have a limited
@@ -31,6 +31,10 @@ type AccessTokenFileLoader struct {
 	path string
 }
 
+type AccessTokenFileData struct {
+	AccessToken string `toml:"access_token"`
+}
+
 func NewAccessTokenFileLoader(path string) *AccessTokenFileLoader {
 	return &AccessTokenFileLoader{
 		path: path,
@@ -38,9 +42,10 @@ func NewAccessTokenFileLoader(path string) *AccessTokenFileLoader {
 }
 
 func (l *AccessTokenFileLoader) LoadAccessToken(ctx context.Context, forceRotate bool) (string, error) {
-	buf, err := os.ReadFile(l.path)
+	data := &AccessTokenFileData{}
+	_, err := toml.DecodeFile(l.path, &data)
 	if err != nil {
-		return "", fmt.Errorf("failed to read access token file: %w", err)
+		return "", err
 	}
-	return string(buf), nil
+	return data.AccessToken, nil
 }

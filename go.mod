@@ -3,6 +3,7 @@ module github.com/databendcloud/databend-go
 go 1.18
 
 require (
+	github.com/BurntSushi/toml v1.2.1
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/google/uuid v1.3.0
 	github.com/pkg/errors v0.9.1
