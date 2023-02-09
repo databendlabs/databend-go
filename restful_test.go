@@ -21,10 +21,10 @@ func TestMakeHeadersUserPassword(t *testing.T) {
 
 func TestMakeHeadersAccessToken(t *testing.T) {
 	c := APIClient{
-		host:        "tn3ftqihs--bl.ch.aws-us-east-2.default.databend.com",
-		tenant:      "tn3ftqihs",
-		accessToken: "abc123",
-		warehouse:   "small-abc",
+		host:              "tn3ftqihs--bl.ch.aws-us-east-2.default.databend.com",
+		tenant:            "tn3ftqihs",
+		accessTokenLoader: NewStaticAccessTokenLoader("abc123"),
+		warehouse:         "small-abc",
 	}
 	headers, err := c.makeHeaders()
 	assert.Nil(t, err)

@@ -13,17 +13,17 @@ type AccessTokenLoader interface {
 	LoadAccessToken(ctx context.Context, forceRotate bool) (string, error)
 }
 
-type StaticTokenLoader struct {
+type StaticAccessTokenLoader struct {
 	AccessToken string
 }
 
-func NewStaticTokenLoader(accessToken string) *StaticTokenLoader {
-	return &StaticTokenLoader{
+func NewStaticAccessTokenLoader(accessToken string) *StaticAccessTokenLoader {
+	return &StaticAccessTokenLoader{
 		AccessToken: accessToken,
 	}
 }
 
-func (l *StaticTokenLoader) LoadAccessToken(ctx context.Context) (string, error) {
+func (l *StaticAccessTokenLoader) LoadAccessToken(ctx context.Context, forceRotate bool) (string, error) {
 	return l.AccessToken, nil
 }
 

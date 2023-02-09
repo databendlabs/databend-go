@@ -31,15 +31,12 @@ const (
 type APIClient struct {
 	cli *http.Client
 
-	apiEndpoint string
-	host        string
-	tenant      string
-	warehouse   string
-	user        string
-	password    string
-
-	accessToken       string
-	accessTokenFile   string
+	apiEndpoint       string
+	host              string
+	tenant            string
+	warehouse         string
+	user              string
+	password          string
 	accessTokenLoader AccessTokenLoader
 
 	waitTimeSeconds      int64
@@ -66,9 +63,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		warehouse:         cfg.Warehouse,
 		user:              cfg.User,
 		password:          cfg.Password,
-		accessToken:       cfg.AccessToken,
-		accessTokenFile:   cfg.AccessTokenFile,
-		accessTokenLoader: cfg.AccessTokenLoader,
+		accessTokenLoader: initAccessTokenLoader(cfg),
 
 		waitTimeSeconds:      cfg.WaitTimeSecs,
 		maxRowsInBuffer:      cfg.MaxRowsInBuffer,
@@ -77,15 +72,15 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 	}
 }
 
-func (c *APIClient) loadAccessToken(ctx context.Context, forceRotate bool) (string, error) {
-	if c.accessTokenLoader != nil {
-		return c.accessTokenLoader.LoadAccessToken(ctx, forceRotate)
+func initAccessTokenLoader(cfg *Config) AccessTokenLoader {
+	if cfg.AccessTokenLoader != nil {
+		return cfg.AccessTokenLoader
+	} else if cfg.AccessTokenFile != "" {
+		return NewAccessTokenFileLoader(cfg.AccessTokenFile)
+	} else if cfg.AccessToken != "" {
+		return NewStaticAccessTokenLoader(cfg.AccessToken)
 	}
-	if c.accessTokenFile != "" {
-		c.accessTokenLoader = NewAccessTokenFileLoader(c.accessTokenFile)
-		return c.accessTokenLoader.LoadAccessToken(ctx, forceRotate)
-	}
-	return c.accessToken, nil
+	return nil
 }
 
 func (c *APIClient) doRequest(method, path string, req interface{}, resp interface{}) error {
@@ -132,7 +127,7 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 		if httpResp.StatusCode == http.StatusUnauthorized {
 			if c.authMethod() == AuthMethodAccessToken && i < maxRetries {
 				// retry with a rotated access token
-				c.loadAccessToken(context.Background(), true)
+				c.accessTokenLoader.LoadAccessToken(context.Background(), true)
 				continue
 			}
 			return NewAPIError("authorization failed", httpResp.StatusCode, httpRespBody)
@@ -161,7 +156,7 @@ func (c *APIClient) authMethod() AuthMethod {
 	if c.user != "" {
 		return AuthMethodUserPassword
 	}
-	if c.accessToken != "" || c.accessTokenLoader != nil {
+	if c.accessTokenLoader != nil {
 		return AuthMethodAccessToken
 	}
 	return ""
@@ -181,7 +176,7 @@ func (c *APIClient) makeHeaders() (http.Header, error) {
 	case AuthMethodUserPassword:
 		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.user, c.password)))
 	case AuthMethodAccessToken:
-		accessToken, err := c.loadAccessToken(context.TODO(), false)
+		accessToken, err := c.accessTokenLoader.LoadAccessToken(context.TODO(), false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load access token: %w", err)
 		}
