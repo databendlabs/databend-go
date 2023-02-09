@@ -76,7 +76,7 @@ func initAccessTokenLoader(cfg *Config) AccessTokenLoader {
 	if cfg.AccessTokenLoader != nil {
 		return cfg.AccessTokenLoader
 	} else if cfg.AccessTokenFile != "" {
-		return NewAccessTokenFileLoader(cfg.AccessTokenFile)
+		return NewFileAccessTokenLoader(cfg.AccessTokenFile)
 	} else if cfg.AccessToken != "" {
 		return NewStaticAccessTokenLoader(cfg.AccessToken)
 	}
