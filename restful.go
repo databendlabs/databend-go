@@ -77,8 +77,10 @@ func initAccessTokenLoader(cfg *Config) AccessTokenLoader {
 		return cfg.AccessTokenLoader
 	} else if cfg.AccessTokenFile != "" {
 		return NewAccessTokenFileLoader(cfg.AccessTokenFile)
+	} else if cfg.AccessToken != "" {
+		return NewStaticAccessTokenLoader(cfg.AccessToken)
 	}
-	return NewStaticAccessTokenLoader(cfg.AccessToken)
+	return nil
 }
 
 func (c *APIClient) doRequest(method, path string, req interface{}, resp interface{}) error {
