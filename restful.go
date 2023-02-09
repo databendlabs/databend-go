@@ -31,14 +31,16 @@ const (
 type APIClient struct {
 	cli *http.Client
 
-	apiEndpoint       string
-	host              string
-	user              string
-	password          string
+	apiEndpoint string
+	host        string
+	tenant      string
+	warehouse   string
+	user        string
+	password    string
+
 	accessToken       string
+	accessTokenFile   string
 	accessTokenLoader AccessTokenLoader
-	tenant            string
-	warehouse         string
 
 	waitTimeSeconds      int64
 	maxRowsInBuffer      int64
@@ -65,6 +67,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		user:              cfg.User,
 		password:          cfg.Password,
 		accessToken:       cfg.AccessToken,
+		accessTokenFile:   cfg.AccessTokenFile,
 		accessTokenLoader: cfg.AccessTokenLoader,
 
 		waitTimeSeconds:      cfg.WaitTimeSecs,
@@ -76,6 +79,10 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 
 func (c *APIClient) loadAccessToken(ctx context.Context, forceRotate bool) (string, error) {
 	if c.accessTokenLoader != nil {
+		return c.accessTokenLoader.LoadAccessToken(ctx, forceRotate)
+	}
+	if c.accessTokenFile != "" {
+		c.accessTokenLoader = NewAccessTokenFileLoader(c.accessTokenFile)
 		return c.accessTokenLoader.LoadAccessToken(ctx, forceRotate)
 	}
 	return c.accessToken, nil
