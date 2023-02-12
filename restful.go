@@ -35,6 +35,7 @@ type APIClient struct {
 	host              string
 	tenant            string
 	warehouse         string
+	database          string
 	user              string
 	password          string
 	accessTokenLoader AccessTokenLoader
@@ -61,6 +62,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		host:              cfg.Host,
 		tenant:            cfg.Tenant,
 		warehouse:         cfg.Warehouse,
+		database:          cfg.Database,
 		user:              cfg.User,
 		password:          cfg.Password,
 		accessTokenLoader: initAccessTokenLoader(cfg),
@@ -203,19 +205,37 @@ var databendInsecureTransport = &http.Transport{
 	}).DialContext,
 }
 
+func (c *APIClient) getPagenationConfig() *PaginationConfig {
+	if c.maxRowsPerPage == 0 && c.maxRowsInBuffer == 0 && c.waitTimeSeconds == 0 {
+		return nil
+	}
+	return &PaginationConfig{
+		MaxRowsPerPage:  c.maxRowsPerPage,
+		MaxRowsInBuffer: c.maxRowsInBuffer,
+		WaitTime:        c.waitTimeSeconds,
+	}
+}
+
+func (c *APIClient) getSessionConfig() *SessionConfig {
+	if c.database == "" {
+		return nil
+	}
+	return &SessionConfig{
+		Database: c.database,
+	}
+}
+
 func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
 	q, err := buildQuery(query, args)
 	if err != nil {
 		return nil, err
 	}
 	request := QueryRequest{
-		SQL: q,
-		Pagination: Pagination{
-			WaitTime:        c.waitTimeSeconds,
-			MaxRowsInBuffer: c.maxRowsInBuffer,
-			MaxRowsPerPage:  c.maxRowsPerPage,
-		},
+		SQL:        q,
+		Pagination: c.getPagenationConfig(),
+		Session:    c.getSessionConfig(),
 	}
+
 	path := "/v1/query"
 	var result QueryResponse
 	err = c.doRequest("POST", path, request, &result)

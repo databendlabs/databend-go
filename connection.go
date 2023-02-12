@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/url"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -25,7 +24,6 @@ const (
 )
 
 type DatabendConn struct {
-	url                *url.URL
 	ctx                context.Context
 	cfg                *Config
 	SQLState           string
@@ -139,7 +137,6 @@ func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (drive
 
 func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error) {
 	dc := &DatabendConn{
-		url:  config.url(map[string]string{"default_format": "TabSeparatedWithNamesAndTypes"}),
 		ctx:  ctx,
 		cfg:  &config,
 		rest: NewAPIClientFromConfig(&config),
@@ -161,7 +158,7 @@ func (dc *DatabendConn) log(msg ...interface{}) {
 // connection as no longer in use.
 func (dc *DatabendConn) Close() error {
 	if atomic.CompareAndSwapInt32(&dc.closed, 0, 1) {
-		dc.log("close connection", dc.url.Scheme, dc.url.Host, dc.url.Path)
+		dc.log("close connection", dc.rest)
 		cancel := dc.cancel
 		dc.cancel = nil
 
