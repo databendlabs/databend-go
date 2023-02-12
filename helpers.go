@@ -65,28 +65,28 @@ func generateDescTable(query string) (string, error) {
 
 func databendParquetReflect(databendType string) string {
 
-	var parquetTyep string
+	var parquetType string
 	switch databendType {
 	case "VARCHAR":
-		parquetTyep = "type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"
+		parquetType = "type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"
 
 	case "BOOLEAN":
-		parquetTyep = "type=BOOLEAN"
+		parquetType = "type=BOOLEAN"
 	case "TINYINT", "SMALLINT", "INT":
-		parquetTyep = "type=INT32"
+		parquetType = "type=INT32"
 	case "BIGINT":
-		parquetTyep = "type=INT64"
+		parquetType = "type=INT64"
 	case "FLOAT":
-		parquetTyep = "type=FLOAT"
+		parquetType = "type=FLOAT"
 	case "DOUBLE":
-		parquetTyep = "type=DOUBLE"
+		parquetType = "type=DOUBLE"
 	case "DATE":
-		parquetTyep = "type=INT32, convertedtype=DATE"
+		parquetType = "type=INT32, convertedtype=DATE"
 	case "TIMESTAMP":
-		parquetTyep = "type=INT64"
+		parquetType = "type=INT64"
 	case "ARRAY":
-		parquetTyep = "type=LIST, convertedtype=LIST"
+		parquetType = "type=LIST, convertedtype=LIST"
 
 	}
-	return parquetTyep
+	return parquetType
 }

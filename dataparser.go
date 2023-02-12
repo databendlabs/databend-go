@@ -295,7 +295,7 @@ func (p *tupleParser) Parse(s io.RuneScanner) (driver.Value, error) {
 		return nil, fmt.Errorf("unexpected character '%c', expected '(' at the beginning of tuple", r)
 	}
 
-	struc := reflect.New(p.Type()).Elem()
+	rStruct := reflect.New(p.Type()).Elem()
 	for i, arg := range p.args {
 		if i > 0 {
 			r := read(s)
@@ -309,7 +309,7 @@ func (p *tupleParser) Parse(s io.RuneScanner) (driver.Value, error) {
 			return nil, fmt.Errorf("failed to parse tuple element: %v", err)
 		}
 
-		struc.Field(i).Set(reflect.ValueOf(v))
+		rStruct.Field(i).Set(reflect.ValueOf(v))
 	}
 
 	r = read(s)
@@ -317,7 +317,7 @@ func (p *tupleParser) Parse(s io.RuneScanner) (driver.Value, error) {
 		return nil, fmt.Errorf("unexpected character '%c', expected ')' at the end of tuple", r)
 	}
 
-	return struc.Interface(), nil
+	return rStruct.Interface(), nil
 }
 
 type arrayParser struct {
