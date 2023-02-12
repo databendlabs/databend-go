@@ -9,14 +9,14 @@ import (
 )
 
 func Map(v interface{}) driver.Valuer {
-	return mapp{v: v}
+	return tmap{v: v}
 }
 
-type mapp struct {
+type tmap struct {
 	v interface{}
 }
 
-func (a mapp) Value() (driver.Value, error) {
+func (a tmap) Value() (driver.Value, error) {
 	return textEncode.Encode(a)
 }
 

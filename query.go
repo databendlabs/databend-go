@@ -49,12 +49,19 @@ type QueryProgress struct {
 }
 
 type QueryRequest struct {
-	SQL        string `json:"sql"`
-	Pagination `json:"pagination"`
+	SQL        string            `json:"sql"`
+	Pagination *PaginationConfig `json:"pagination,omitempty"`
+	Session    *SessionConfig    `json:"session,omitempty"`
 }
 
-type Pagination struct {
-	WaitTime        int64 `json:"wait_time_secs" default:"60"`
-	MaxRowsInBuffer int64 `json:"max_rows_in_buffer"`
-	MaxRowsPerPage  int64 `json:"max_rows_per_page"`
+type PaginationConfig struct {
+	WaitTime        int64 `json:"wait_time_secs,omitempty"`
+	MaxRowsInBuffer int64 `json:"max_rows_in_buffer,omitempty"`
+	MaxRowsPerPage  int64 `json:"max_rows_per_page,omitempty"`
+}
+
+type SessionConfig struct {
+	Database              string            `json:"database,omitempty"`
+	KeepServerSessionSecs uint64            `json:"keep_server_session_secs,omitempty"`
+	Settings              map[string]string `json:"settings,omitempty"`
 }

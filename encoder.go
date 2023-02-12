@@ -29,7 +29,7 @@ func (e *textEncoder) Encode(value driver.Value) ([]byte, error) {
 		return e.encodeArray(reflect.ValueOf(v.v))
 	case tuple:
 		return e.encodeTuple(reflect.ValueOf(v.v))
-	case mapp:
+	case tmap:
 		return e.encodeMap(reflect.ValueOf(v.v))
 	case []byte:
 		return v, nil

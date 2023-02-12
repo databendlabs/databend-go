@@ -6,7 +6,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// AccessToken is used on Bearer authentication. The token may have a limited
+// AccessTokenLoader is used on Bearer authentication. The token may have a limited
 // lifetime, you can rotate your token by this interface.
 type AccessTokenLoader interface {
 	// LoadAccessToken is called whenever a new request is made to the server.

@@ -10,12 +10,9 @@ import (
 )
 
 const (
-	defaultDomain                = "app.databend.com"
-	defaultScheme                = "databend"
-	defaultWaitSeconds     int64 = 60
-	defaultMaxRowsInBuffer int64 = 5 * 1000 * 1000
-	defaultMaxRowsPerPage  int64 = 10000
-	SSL_MODE_DISABLE             = "disable"
+	defaultDomain    = "app.databend.com"
+	defaultScheme    = "databend"
+	SSL_MODE_DISABLE = "disable"
 )
 
 // Config is a set of configuration parameters
@@ -52,12 +49,9 @@ type Config struct {
 // NewConfig creates a new config with default values
 func NewConfig() *Config {
 	return &Config{
-		Host:            fmt.Sprintf("%s:443", defaultDomain),
-		Location:        time.UTC,
-		Params:          make(map[string]string),
-		WaitTimeSecs:    defaultWaitSeconds,
-		MaxRowsInBuffer: defaultMaxRowsInBuffer,
-		MaxRowsPerPage:  defaultMaxRowsPerPage,
+		Host:     fmt.Sprintf("%s:443", defaultDomain),
+		Location: time.UTC,
+		Params:   make(map[string]string),
 	}
 }
 
@@ -125,40 +119,6 @@ func (cfg *Config) FormatDSN() string {
 
 	u.RawQuery = query.Encode()
 	return u.String()
-}
-
-func (cfg *Config) url(extra map[string]string) *url.URL {
-	u := &url.URL{
-		Host: cfg.Host,
-		Path: "/",
-	}
-	if len(cfg.User) > 0 {
-		if len(cfg.Password) > 0 {
-			u.User = url.UserPassword(cfg.User, cfg.Password)
-		} else {
-			u.User = url.User(cfg.User)
-		}
-	}
-	query := u.Query()
-	if len(cfg.Database) > 0 {
-		query.Set("database", cfg.Database)
-	}
-
-	if cfg.SSLMode == SSL_MODE_DISABLE {
-		u.Scheme = "http"
-	} else {
-		u.Scheme = "https"
-	}
-
-	for k, v := range cfg.Params {
-		query.Set(k, v)
-	}
-	for k, v := range extra {
-		query.Set(k, v)
-	}
-
-	u.RawQuery = query.Encode()
-	return u
 }
 
 func (cfg *Config) AddParams(params map[string]string) (err error) {

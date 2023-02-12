@@ -18,23 +18,14 @@ func TestFormatDSN(t *testing.T) {
 	assert.Equal(t, "test", cfg.Database)
 	assert.Equal(t, "tls-settings", cfg.TLSConfig)
 	assert.Equal(t, time.Second, cfg.Timeout)
-	assert.Equal(t, defaultMaxRowsPerPage, cfg.MaxRowsPerPage)
+	assert.Equal(t, int64(10000), cfg.MaxRowsPerPage)
 	assert.Equal(t, int64(10), cfg.WaitTimeSecs)
-	assert.Equal(t, defaultMaxRowsInBuffer, cfg.MaxRowsInBuffer)
+	assert.Equal(t, int64(5000000), cfg.MaxRowsInBuffer)
 
 	dsn1 := cfg.FormatDSN()
 	cfg1, err := ParseDSN(dsn1)
 	require.Nil(t, err)
 	assert.Equal(t, cfg, cfg1)
-}
-
-func TestConfigURL(t *testing.T) {
-	dsn := "databend+https://username:password@app.databend.com:443/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10s&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings"
-	cfg, err := ParseDSN(dsn)
-	require.Nil(t, err)
-
-	u1 := cfg.url(map[string]string{"default_format": "Native"}).String()
-	assert.Equal(t, "https://username:password@app.databend.com:443/?database=test&default_format=Native", u1)
 }
 
 func TestParseDSN(t *testing.T) {
@@ -73,7 +64,7 @@ func TestParseDSN(t *testing.T) {
 			assert.Equal(t, SSL_MODE_DISABLE, cfg.SSLMode)
 			assert.Equal(t, time.Second, cfg.Timeout)
 			assert.Equal(t, int64(10), cfg.WaitTimeSecs)
-			assert.Equal(t, defaultMaxRowsInBuffer, cfg.MaxRowsInBuffer)
+			assert.Equal(t, int64(5000000), cfg.MaxRowsInBuffer)
 		}
 	})
 }
