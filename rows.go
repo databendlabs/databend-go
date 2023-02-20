@@ -20,7 +20,8 @@ func waitForQueryResult(dc *DatabendConn, result *QueryResponse) (*QueryResponse
 	if result.Error != nil {
 		return nil, result.Error
 	}
-
+	// save schema for final result
+	schema := result.Schema
 	var err error
 	for result.NextURI != "" && len(result.Data) == 0 {
 		dc.log("wait for query result", result.NextURI)
@@ -32,7 +33,7 @@ func waitForQueryResult(dc *DatabendConn, result *QueryResponse) (*QueryResponse
 			return nil, result.Error
 		}
 	}
-
+	result.Schema = schema
 	return result, nil
 }
 
