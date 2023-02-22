@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	dc "github.com/databendcloud/databend-go"
@@ -135,7 +136,13 @@ func batchInsert(dsn string) error {
 	}
 	defer db.Close()
 	scope, err := db.Begin()
-	batch, err := scope.Prepare("INSERT INTO books")
+	if err != nil {
+		return errors.Wrap(err, "begin failed")
+	}
+	batch, err := scope.Prepare("INSERT INTO books VALUES(?, ?, ?)")
+	if err != nil {
+		return errors.Wrap(err, "prepare failed")
+	}
 	for i := 0; i < 10; i++ {
 		_, err = batch.Exec(
 			"book",
