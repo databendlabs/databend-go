@@ -229,7 +229,7 @@ func (c *APIClient) getSessionConfig() *SessionConfig {
 	}
 }
 
-func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
+func (c *APIClient) DoQuery(query string, args []driver.Value) (*QueryResponse, error) {
 	q, err := buildQuery(query, args)
 	if err != nil {
 		return nil, err
@@ -244,28 +244,35 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	var result QueryResponse
 	err = c.doRequest("POST", path, request, &result)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to do query request")
 	}
 	return &result, nil
 }
 
-func (c *APIClient) QuerySingle(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
-	result, err := c.DoQuery(ctx, query, args)
-	if err != nil {
-		return nil, err
+func (c *APIClient) waitForQuery(result *QueryResponse) (*QueryResponse, error) {
+	if result.Error != nil {
+		return nil, errors.Wrap(result.Error, "query failed")
 	}
 	for result.NextURI != "" {
 		ret, err := c.QueryPage(result.NextURI)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to query page")
 		}
 		if ret.Error != nil {
-			return nil, ret.Error
+			return nil, errors.Wrap(ret.Error, "query page failed")
 		}
 		result.Data = append(result.Data, ret.Data...)
 		result.NextURI = ret.NextURI
 	}
 	return result, nil
+}
+
+func (c *APIClient) QuerySingle(query string, args []driver.Value) (*QueryResponse, error) {
+	result, err := c.DoQuery(query, args)
+	if err != nil {
+		return nil, err
+	}
+	return c.waitForQuery(result)
 }
 
 func buildQuery(query string, params []driver.Value) (string, error) {
@@ -279,12 +286,12 @@ func buildQuery(query string, params []driver.Value) (string, error) {
 	return query, nil
 }
 
-func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.Value, respCh chan QueryResponse) error {
+func (c *APIClient) QuerySync(query string, args []driver.Value, respCh chan QueryResponse) error {
 	// fmt.Printf("query sync %s", query)
 	var r0 *QueryResponse
 	err := retry.Do(
 		func() error {
-			r, err := c.DoQuery(ctx, query, args)
+			r, err := c.DoQuery(query, args)
 			if err != nil {
 				return err
 			}
@@ -335,18 +342,46 @@ func (c *APIClient) QueryPage(nextURI string) (*QueryResponse, error) {
 	return &result, nil
 }
 
-func (c *APIClient) UploadToStage(stage string, input *bufio.Reader) error {
+func (c *APIClient) InsertWithStage(tableSchema, stagePath string) (*QueryResponse, error) {
+	request := QueryRequest{
+		SQL:        fmt.Sprintf("INSERT INTO %s VALUES;", tableSchema),
+		Pagination: c.getPagenationConfig(),
+		Session:    c.getSessionConfig(),
+		StageAttachment: &StageAttachmentConfig{
+			Location: stagePath,
+			FileFormatOptions: map[string]string{
+				"type":             "CSV",
+				"field_delimiter":  ",",
+				"record_delimiter": "\n",
+				"skip_header":      "1",
+			},
+			CopyOptions: map[string]string{
+				"purge": "true",
+			},
+		},
+	}
+
+	path := "/v1/query"
+	var result QueryResponse
+	err := c.doRequest("POST", path, request, &result)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to insert with stage")
+	}
+	return c.waitForQuery(&result)
+}
+
+func (c *APIClient) UploadToStage(stage string, input *bufio.Reader, size int64) error {
 	if c.presignedURLDisabled {
-		return c.uploadToStageByAPI(stage, input)
+		return c.uploadToStageByAPI(stage, input, size)
 	} else {
-		return c.uploadToStageByPresignURL(stage, input)
+		return c.uploadToStageByPresignURL(stage, input, size)
 	}
 }
 
 func (c *APIClient) getPresignedURL(stage string) (*PresignedResponse, error) {
 	var headers string
 	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD %s", stage)
-	resp, err := c.QuerySingle(context.Background(), presignUploadSQL, nil)
+	resp, err := c.QuerySingle(presignUploadSQL, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query presign url")
 	}
@@ -367,7 +402,7 @@ func (c *APIClient) getPresignedURL(stage string) (*PresignedResponse, error) {
 	return result, nil
 }
 
-func (c *APIClient) uploadToStageByPresignURL(stage string, input *bufio.Reader) error {
+func (c *APIClient) uploadToStageByPresignURL(stage string, input *bufio.Reader, size int64) error {
 	presigned, err := c.getPresignedURL(stage)
 	if err != nil {
 		return errors.Wrap(err, "failed to get presigned url")
@@ -380,6 +415,7 @@ func (c *APIClient) uploadToStageByPresignURL(stage string, input *bufio.Reader)
 	for k, v := range presigned.Headers {
 		req.Header.Set(k, v)
 	}
+	req.ContentLength = size
 	// TODO: configurable timeout
 	httpClient := &http.Client{
 		Timeout: time.Second * 60,
@@ -399,7 +435,7 @@ func (c *APIClient) uploadToStageByPresignURL(stage string, input *bufio.Reader)
 	return nil
 }
 
-func (c *APIClient) uploadToStageByAPI(stage string, input *bufio.Reader) error {
+func (c *APIClient) uploadToStageByAPI(stage string, input *bufio.Reader, size int64) error {
 	body := new(bytes.Buffer)
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("upload", stage)
