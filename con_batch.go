@@ -1,6 +1,7 @@
 package godatabend
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql/driver"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 
 	"github.com/google/uuid"
@@ -122,7 +124,14 @@ func (b *httpBatch) AppendToFile(v []driver.Value) error {
 }
 
 func (b *httpBatch) UploadToStage() error {
-	return b.conn.rest.uploadToStage(b.batchFile)
+	f, err := os.Open(b.batchFile)
+	if err != nil {
+		return errors.Wrap(err, "open batch file failed")
+	}
+	defer f.Close()
+	input := bufio.NewReader(f)
+	stagePath := fmt.Sprintf("@~/batch/%s", filepath.Base(b.batchFile))
+	return b.conn.rest.UploadToStage(stagePath, input)
 }
 
 var _ ldriver.Batch = (*httpBatch)(nil)

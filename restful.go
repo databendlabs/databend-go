@@ -1,6 +1,7 @@
 package godatabend
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql/driver"
@@ -11,9 +12,6 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +25,12 @@ const (
 	AuthMethodUserPassword AuthMethod = "userPassword"
 	AuthMethodAccessToken  AuthMethod = "accessToken"
 )
+
+type PresignedResponse struct {
+	Method  string
+	Headers map[string]string
+	URL     string
+}
 
 type APIClient struct {
 	cli *http.Client
@@ -117,13 +121,13 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 
 		httpResp, err := c.cli.Do(httpReq)
 		if err != nil {
-			return fmt.Errorf("failed http do request: %w", err)
+			return errors.Wrap(err, "failed to do http request")
 		}
 		defer httpResp.Body.Close()
 
 		httpRespBody, err := io.ReadAll(httpResp.Body)
 		if err != nil {
-			return fmt.Errorf("io read error: %w", err)
+			return errors.Wrap(err, "failed to read http response body")
 		}
 
 		if httpResp.StatusCode == http.StatusUnauthorized {
@@ -146,7 +150,7 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 		}
 		return nil
 	}
-	return fmt.Errorf("failed to do request after %d retries", maxRetries)
+	return errors.Errorf("failed to do request after %d retries", maxRetries)
 }
 
 func (c *APIClient) makeURL(path string, args ...interface{}) string {
@@ -180,7 +184,7 @@ func (c *APIClient) makeHeaders() (http.Header, error) {
 	case AuthMethodAccessToken:
 		accessToken, err := c.accessTokenLoader.LoadAccessToken(context.TODO(), false)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load access token: %w", err)
+			return nil, errors.Wrap(err, "failed to load access token")
 		}
 		headers.Set(Authorization, fmt.Sprintf("Bearer %s", accessToken))
 	default:
@@ -242,15 +246,33 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	if err != nil {
 		return nil, err
 	}
-
 	return &result, nil
+}
+
+func (c *APIClient) QuerySingle(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
+	result, err := c.DoQuery(ctx, query, args)
+	if err != nil {
+		return nil, err
+	}
+	for result.NextURI != "" {
+		ret, err := c.QueryPage(result.NextURI)
+		if err != nil {
+			return nil, err
+		}
+		if ret.Error != nil {
+			return nil, ret.Error
+		}
+		result.Data = append(result.Data, ret.Data...)
+		result.NextURI = ret.NextURI
+	}
+	return result, nil
 }
 
 func buildQuery(query string, params []driver.Value) (string, error) {
 	if len(params) > 0 && params[0] != nil {
 		result, err := interpolateParams(query, params)
 		if err != nil {
-			return result, fmt.Errorf("buildRequest: failed to interpolate params: %w", err)
+			return result, errors.Wrap(err, "buildRequest: failed to interpolate params")
 		}
 		return result, nil
 	}
@@ -280,10 +302,10 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 		retry.Attempts(10),
 	)
 	if err != nil {
-		return fmt.Errorf("query failed: %w", err)
+		return errors.Wrap(err, "query sync failed")
 	}
 	if r0.Error != nil {
-		return fmt.Errorf("query has error: %+v", r0.Error)
+		return errors.Wrap(r0.Error, "query has error")
 	}
 	if err != nil {
 		return err
@@ -296,7 +318,7 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 			return err
 		}
 		if p.Error != nil {
-			return fmt.Errorf("query has error: %+v", p.Error)
+			return errors.Wrap(p.Error, "query page has error")
 		}
 		nextUri = p.NextURI
 		respCh <- *p
@@ -308,84 +330,84 @@ func (c *APIClient) QueryPage(nextURI string) (*QueryResponse, error) {
 	var result QueryResponse
 	err := c.doRequest("GET", nextURI, nil, &result)
 	if err != nil {
-		return nil, fmt.Errorf("query page failed: %w", err)
+		return nil, errors.Wrap(err, "failed to query page")
 	}
 	return &result, nil
 }
 
-func (c *APIClient) uploadToStage(fileName string) error {
-	rootStage := "~"
+func (c *APIClient) UploadToStage(stage string, input *bufio.Reader) error {
 	if c.presignedURLDisabled {
-		return c.uploadToStageByAPI(rootStage, fileName)
+		return c.uploadToStageByAPI(stage, input)
 	} else {
-		return c.UploadToStageByPresignURL(rootStage, fileName)
+		return c.uploadToStageByPresignURL(stage, input)
 	}
 }
 
-func (c *APIClient) UploadToStageByPresignURL(stage, fileName string) error {
-	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD @%s/%s", stage, filepath.Base(fileName))
-	resp, err := c.DoQuery(context.Background(), presignUploadSQL, nil)
+func (c *APIClient) getPresignedURL(stage string) (*PresignedResponse, error) {
+	var headers string
+	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD %s", stage)
+	resp, err := c.QuerySingle(context.Background(), presignUploadSQL, nil)
 	if err != nil {
-		return err
+		return nil, errors.Wrap(err, "failed to query presign url")
 	}
 	if len(resp.Data) < 1 || len(resp.Data[0]) < 2 {
-		return fmt.Errorf("generate presign url failed")
+		return nil, errors.Errorf("generate presign url invalid response: %+v", resp.Data)
 	}
 
-	headers := make(map[string]string)
-	err = json.Unmarshal([]byte(resp.Data[0][1]), &headers)
+	result := &PresignedResponse{
+		Method:  resp.Data[0][0],
+		Headers: make(map[string]string),
+		URL:     resp.Data[0][2],
+	}
+	headers = resp.Data[0][1]
+	err = json.Unmarshal([]byte(headers), &result.Headers)
 	if err != nil {
-		return errors.Wrap(err, "failed to unmarshal presign url headers")
+		return nil, errors.Wrap(err, "failed to unmarshal headers")
+	}
+	return result, nil
+}
+
+func (c *APIClient) uploadToStageByPresignURL(stage string, input *bufio.Reader) error {
+	presigned, err := c.getPresignedURL(stage)
+	if err != nil {
+		return errors.Wrap(err, "failed to get presigned url")
 	}
 
-	presignURL := fmt.Sprintf("%v", resp.Data[0][2])
-
-	fileContent, err := os.ReadFile(fileName)
+	req, err := http.NewRequest("PUT", presigned.URL, input)
 	if err != nil {
 		return err
 	}
-	body := bytes.NewBuffer(fileContent)
-
-	httpReq, err := http.NewRequest("PUT", presignURL, body)
-	if err != nil {
-		return err
+	for k, v := range presigned.Headers {
+		req.Header.Set(k, v)
 	}
-	for k, v := range headers {
-		httpReq.Header.Set(k, fmt.Sprintf("%v", v))
-	}
-	httpReq.Header.Set("Content-Length", strconv.FormatInt(int64(len(body.Bytes())), 10))
+	// TODO: configurable timeout
 	httpClient := &http.Client{
 		Timeout: time.Second * 60,
 	}
-	httpResp, err := httpClient.Do(httpReq)
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed http do request: %w", err)
+		return errors.Wrap(err, "failed to upload to stage by presigned url")
 	}
-	defer httpResp.Body.Close()
-	httpRespBody, err := io.ReadAll(httpResp.Body)
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
-	if httpResp.StatusCode >= 400 {
-		return fmt.Errorf("request got bad status: %d req=%s resp=%s", httpResp.StatusCode, body, httpRespBody)
+	if resp.StatusCode >= 400 {
+		return errors.Errorf("failed to upload to stage by presigned url, status code: %d, body: %s", resp.StatusCode, string(respBody))
 	}
 	return nil
 }
 
-func (c *APIClient) uploadToStageByAPI(stage, fileName string) error {
+func (c *APIClient) uploadToStageByAPI(stage string, input *bufio.Reader) error {
 	body := new(bytes.Buffer)
-
-	file, err := os.Open(fileName)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
 	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("upload", file.Name())
+	part, err := writer.CreateFormFile("upload", stage)
 	if err != nil {
 		return errors.Wrap(err, "failed to create multipart writer form file")
 	}
-	_, err = io.Copy(part, file)
+	// TODO: do async upload
+	_, err = io.Copy(part, input)
 	if err != nil {
 		return errors.Wrap(err, "failed to copy file to multipart writer form file")
 	}
@@ -396,41 +418,42 @@ func (c *APIClient) uploadToStageByAPI(stage, fileName string) error {
 
 	path := "/v1/upload_to_stage"
 	url := c.makeURL(path)
-	httpReq, err := http.NewRequest("PUT", url, body)
+	req, err := http.NewRequest("PUT", url, body)
 	if err != nil {
 		return errors.Wrap(err, "failed to create http request")
 	}
 
-	httpReq.Header, err = c.makeHeaders()
+	req.Header, err = c.makeHeaders()
 	if err != nil {
 		return errors.Wrap(err, "failed to make headers")
 	}
 	if len(c.host) > 0 {
-		httpReq.Host = c.host
+		req.Host = c.host
 	}
-	httpReq.Header.Set("stage_name", stage)
-	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("stage_name", stage)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 
+	// TODO: configurable timeout
 	httpClient := &http.Client{
 		Timeout: time.Second * 60,
 	}
-	httpResp, err := httpClient.Do(httpReq)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "failed http do request")
 	}
-	defer httpResp.Body.Close()
+	defer resp.Body.Close()
 
-	httpRespBody, err := io.ReadAll(httpResp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return errors.Wrap(err, "failed to read http response body")
 	}
 
-	if httpResp.StatusCode == http.StatusUnauthorized {
-		return NewAPIError("please check your user/password.", httpResp.StatusCode, httpRespBody)
-	} else if httpResp.StatusCode >= 500 {
-		return NewAPIError("please retry again later.", httpResp.StatusCode, httpRespBody)
-	} else if httpResp.StatusCode >= 400 {
-		return NewAPIError("please check your arguments.", httpResp.StatusCode, httpRespBody)
+	if resp.StatusCode == http.StatusUnauthorized {
+		return NewAPIError("please check your user/password.", resp.StatusCode, respBody)
+	} else if resp.StatusCode >= 500 {
+		return NewAPIError("please retry again later.", resp.StatusCode, respBody)
+	} else if resp.StatusCode >= 400 {
+		return NewAPIError("please check your arguments.", resp.StatusCode, respBody)
 	}
 
 	return nil
