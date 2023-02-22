@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -17,14 +18,13 @@ import (
 )
 
 // \x60 represents a backtick
-var httpInsertRe = regexp.MustCompile(`(?i)^INSERT INTO\s+\x60?([\w.^\(]+)\x60?\s*(\([^\)]*\))?`)
+var httpInsertRe = regexp.MustCompile(`(?i)^INSERT INTO\s+\x60?([\w.^\(]+)\x60?\s*(\([^\)]*\))? VALUES`)
 
 func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver.Batch, error) {
 	matches := httpInsertRe.FindStringSubmatch(query)
 	if len(matches) < 2 {
 		return nil, errors.New("cannot get table name from query")
 	}
-	tableName := matches[1]
 	csvFileName := fmt.Sprintf("%s.csv", uuid.NewString())
 
 	csvFile, err := os.OpenFile(csvFileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
@@ -36,19 +36,19 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver
 	writer.Flush()
 
 	return &httpBatch{
-		ctx:         ctx,
-		conn:        dc,
-		tableSchema: tableName,
-		batchFile:   csvFileName,
+		query:     query,
+		ctx:       ctx,
+		conn:      dc,
+		batchFile: csvFileName,
 	}, nil
 }
 
 type httpBatch struct {
-	err         error
-	ctx         context.Context
-	conn        *DatabendConn
-	batchFile   string
-	tableSchema string
+	query     string
+	ctx       context.Context
+	conn      *DatabendConn
+	batchFile string
+	err       error
 }
 
 func (b *httpBatch) BatchInsert() error {
@@ -58,11 +58,11 @@ func (b *httpBatch) BatchInsert() error {
 			b.conn.log("delete batch insert file failed: ", err)
 		}
 	}()
-	stagePath, err := b.UploadToStage()
+	stage, err := b.UploadToStage()
 	if err != nil {
 		return errors.Wrap(err, "upload to stage failed")
 	}
-	_, err = b.conn.rest.InsertWithStage(b.tableSchema, stagePath)
+	_, err = b.conn.rest.InsertWithStage(b.query, stage, nil, nil)
 	if err != nil {
 		return errors.Wrap(err, "insert with stage failed")
 	}
@@ -80,7 +80,6 @@ func (b *httpBatch) AppendToFile(v []driver.Value) error {
 	for i := range v {
 		lineData = append(lineData, fmt.Sprintf("%v", v[i]))
 	}
-	// fmt.Printf("%v", lineData)
 	writer := csv.NewWriter(csvFile)
 	err = writer.Write(lineData)
 	if err != nil {
@@ -91,21 +90,24 @@ func (b *httpBatch) AppendToFile(v []driver.Value) error {
 	return nil
 }
 
-func (b *httpBatch) UploadToStage() (string, error) {
+func (b *httpBatch) UploadToStage() (*StageLocation, error) {
 	fi, err := os.Stat(b.batchFile)
 	if err != nil {
-		return "", errors.Wrap(err, "get batch file size failed")
+		return nil, errors.Wrap(err, "get batch file size failed")
 	}
 	size := fi.Size()
 
 	f, err := os.Open(b.batchFile)
 	if err != nil {
-		return "", errors.Wrap(err, "open batch file failed")
+		return nil, errors.Wrap(err, "open batch file failed")
 	}
 	defer f.Close()
 	input := bufio.NewReader(f)
-	stagePath := fmt.Sprintf("@~/batch/%s", filepath.Base(b.batchFile))
-	return stagePath, b.conn.rest.UploadToStage(stagePath, input, size)
+	stage := &StageLocation{
+		Name: "~",
+		Path: fmt.Sprintf("batch/%d-%s", time.Now().Unix(), filepath.Base(b.batchFile)),
+	}
+	return stage, b.conn.rest.UploadToStage(stage, input, size)
 }
 
 var _ ldriver.Batch = (*httpBatch)(nil)

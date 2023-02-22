@@ -32,6 +32,66 @@ type PresignedResponse struct {
 	URL     string
 }
 
+type StageLocation struct {
+	Name string
+	Path string
+}
+
+func (sl *StageLocation) String() string {
+	return fmt.Sprintf("@%s/%s", sl.Name, sl.Path)
+}
+
+type FileFormatOptions struct {
+	Type            string
+	FieldDelimiter  string
+	RecordDelimiter string
+	SkipHeader      int
+}
+
+func NewDefaultCSVFormatOptions() *FileFormatOptions {
+	return &FileFormatOptions{
+		Type:            "CSV",
+		FieldDelimiter:  ",",
+		RecordDelimiter: "\n",
+		SkipHeader:      0,
+	}
+}
+
+func (o *FileFormatOptions) ToMap() map[string]string {
+	opts := map[string]string{}
+	if o.Type != "" {
+		opts["type"] = o.Type
+	}
+	if o.FieldDelimiter != "" {
+		opts["field_delimiter"] = o.FieldDelimiter
+	}
+	if o.RecordDelimiter != "" {
+		opts["record_delimiter"] = o.RecordDelimiter
+	}
+	if o.SkipHeader > 0 {
+		opts["skip_header"] = fmt.Sprintf("%d", o.SkipHeader)
+	}
+	return opts
+}
+
+type CopyOptions struct {
+	Purge bool
+}
+
+func NewDefaultCopyOptions() *CopyOptions {
+	return &CopyOptions{
+		Purge: true,
+	}
+}
+
+func (o *CopyOptions) ToMap() map[string]string {
+	opts := map[string]string{}
+	if o.Purge {
+		opts["purge"] = "true"
+	}
+	return opts
+}
+
 type APIClient struct {
 	cli *http.Client
 
@@ -342,22 +402,24 @@ func (c *APIClient) QueryPage(nextURI string) (*QueryResponse, error) {
 	return &result, nil
 }
 
-func (c *APIClient) InsertWithStage(tableSchema, stagePath string) (*QueryResponse, error) {
+func (c *APIClient) InsertWithStage(sql string, stage *StageLocation, fileFormatOptions *FileFormatOptions, copyOptions *CopyOptions) (*QueryResponse, error) {
+	if stage == nil {
+		return nil, errors.New("stage location required for insert with stage")
+	}
+	if fileFormatOptions == nil {
+		fileFormatOptions = NewDefaultCSVFormatOptions()
+	}
+	if copyOptions == nil {
+		copyOptions = NewDefaultCopyOptions()
+	}
 	request := QueryRequest{
-		SQL:        fmt.Sprintf("INSERT INTO %s VALUES;", tableSchema),
+		SQL:        sql,
 		Pagination: c.getPagenationConfig(),
 		Session:    c.getSessionConfig(),
 		StageAttachment: &StageAttachmentConfig{
-			Location: stagePath,
-			FileFormatOptions: map[string]string{
-				"type":             "CSV",
-				"field_delimiter":  ",",
-				"record_delimiter": "\n",
-				"skip_header":      "1",
-			},
-			CopyOptions: map[string]string{
-				"purge": "true",
-			},
+			Location:          stage.String(),
+			FileFormatOptions: fileFormatOptions.ToMap(),
+			CopyOptions:       copyOptions.ToMap(),
 		},
 	}
 
@@ -370,7 +432,7 @@ func (c *APIClient) InsertWithStage(tableSchema, stagePath string) (*QueryRespon
 	return c.waitForQuery(&result)
 }
 
-func (c *APIClient) UploadToStage(stage string, input *bufio.Reader, size int64) error {
+func (c *APIClient) UploadToStage(stage *StageLocation, input *bufio.Reader, size int64) error {
 	if c.presignedURLDisabled {
 		return c.uploadToStageByAPI(stage, input, size)
 	} else {
@@ -378,7 +440,7 @@ func (c *APIClient) UploadToStage(stage string, input *bufio.Reader, size int64)
 	}
 }
 
-func (c *APIClient) getPresignedURL(stage string) (*PresignedResponse, error) {
+func (c *APIClient) getPresignedURL(stage *StageLocation) (*PresignedResponse, error) {
 	var headers string
 	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD %s", stage)
 	resp, err := c.QuerySingle(presignUploadSQL, nil)
@@ -402,7 +464,7 @@ func (c *APIClient) getPresignedURL(stage string) (*PresignedResponse, error) {
 	return result, nil
 }
 
-func (c *APIClient) uploadToStageByPresignURL(stage string, input *bufio.Reader, size int64) error {
+func (c *APIClient) uploadToStageByPresignURL(stage *StageLocation, input *bufio.Reader, size int64) error {
 	presigned, err := c.getPresignedURL(stage)
 	if err != nil {
 		return errors.Wrap(err, "failed to get presigned url")
@@ -435,10 +497,10 @@ func (c *APIClient) uploadToStageByPresignURL(stage string, input *bufio.Reader,
 	return nil
 }
 
-func (c *APIClient) uploadToStageByAPI(stage string, input *bufio.Reader, size int64) error {
+func (c *APIClient) uploadToStageByAPI(stage *StageLocation, input *bufio.Reader, size int64) error {
 	body := new(bytes.Buffer)
 	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("upload", stage)
+	part, err := writer.CreateFormFile("upload", stage.Path)
 	if err != nil {
 		return errors.Wrap(err, "failed to create multipart writer form file")
 	}
@@ -466,7 +528,7 @@ func (c *APIClient) uploadToStageByAPI(stage string, input *bufio.Reader, size i
 	if len(c.host) > 0 {
 		req.Host = c.host
 	}
-	req.Header.Set("stage_name", stage)
+	req.Header.Set("stage_name", stage.Name)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	// TODO: configurable timeout
