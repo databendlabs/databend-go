@@ -3,7 +3,6 @@ package godatabend
 import (
 	"context"
 	"database/sql/driver"
-	"fmt"
 	"regexp"
 
 	ldriver "github.com/databendcloud/databend-go/lib/driver"
@@ -67,10 +66,5 @@ func (stmt *databendStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 func (stmt *databendStmt) commit(ctx context.Context) error {
 	logger.WithContext(stmt.dc.ctx).Infoln("Stmt Commit")
-	err := stmt.batch.UploadToStage()
-	if err != nil {
-		fmt.Printf("upload stage failed %v", err)
-	}
-
-	return stmt.batch.CopyInto()
+	return stmt.batch.BatchInsert()
 }

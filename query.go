@@ -49,9 +49,10 @@ type QueryProgress struct {
 }
 
 type QueryRequest struct {
-	SQL        string            `json:"sql"`
-	Pagination *PaginationConfig `json:"pagination,omitempty"`
-	Session    *SessionConfig    `json:"session,omitempty"`
+	SQL             string                 `json:"sql"`
+	Pagination      *PaginationConfig      `json:"pagination,omitempty"`
+	Session         *SessionConfig         `json:"session,omitempty"`
+	StageAttachment *StageAttachmentConfig `json:"stage_attachment,omitempty"`
 }
 
 type PaginationConfig struct {
@@ -64,4 +65,10 @@ type SessionConfig struct {
 	Database              string            `json:"database,omitempty"`
 	KeepServerSessionSecs uint64            `json:"keep_server_session_secs,omitempty"`
 	Settings              map[string]string `json:"settings,omitempty"`
+}
+
+type StageAttachmentConfig struct {
+	Location          string            `json:"location"`
+	FileFormatOptions map[string]string `json:"file_format_options,omitempty"`
+	CopyOptions       map[string]string `json:"copy_options,omitempty"`
 }

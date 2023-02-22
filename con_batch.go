@@ -1,14 +1,13 @@
 package godatabend
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"database/sql/driver"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 
 	"github.com/google/uuid"
@@ -26,8 +25,6 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver
 		return nil, errors.New("cannot get table name from query")
 	}
 	tableName := matches[1]
-	query = "INSERT INTO " + tableName
-
 	csvFileName := fmt.Sprintf("%s.csv", uuid.NewString())
 
 	csvFile, err := os.OpenFile(csvFileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
@@ -39,7 +36,6 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver
 	writer.Flush()
 
 	return &httpBatch{
-		query:       query,
 		ctx:         ctx,
 		conn:        dc,
 		tableSchema: tableName,
@@ -48,7 +44,6 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver
 }
 
 type httpBatch struct {
-	query       string
 	err         error
 	ctx         context.Context
 	conn        *DatabendConn
@@ -56,47 +51,22 @@ type httpBatch struct {
 	tableSchema string
 }
 
-func (b *httpBatch) CopyInto() error {
+func (b *httpBatch) BatchInsert() error {
 	defer func() {
 		err := os.RemoveAll(b.batchFile)
 		if err != nil {
 			b.conn.log("delete batch insert file failed: ", err)
 		}
 	}()
-	b.conn.log("upload to stage")
-	err := b.UploadToStage()
+	stagePath, err := b.UploadToStage()
 	if err != nil {
 		return errors.Wrap(err, "upload to stage failed")
 	}
-
-	// copy into db.table from @~/xx.csv
-	respCh := make(chan QueryResponse)
-	errCh := make(chan error)
-	go func() {
-		err := b.conn.rest.QuerySync(context.Background(), newCopyInto(b.tableSchema, b.batchFile), nil, respCh)
-		errCh <- err
-	}()
-
-	for {
-		select {
-		case err := <-errCh:
-			if err != nil {
-				return err
-			} else {
-				return nil
-			}
-		case resp := <-respCh:
-			bt, err := json.Marshal(resp.Data)
-			if err != nil {
-				return err
-			}
-			_, _ = io.Copy(io.Discard, bytes.NewReader(bt))
-		}
+	_, err = b.conn.rest.InsertWithStage(b.tableSchema, stagePath)
+	if err != nil {
+		return errors.Wrap(err, "insert with stage failed")
 	}
-}
-
-func newCopyInto(tableSchema, fileName string) string {
-	return fmt.Sprintf("COPY INTO %s FROM @%s files=('%s') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\\n' skip_header = 1);", tableSchema, "~", fileName)
+	return nil
 }
 
 func (b *httpBatch) AppendToFile(v []driver.Value) error {
@@ -121,8 +91,21 @@ func (b *httpBatch) AppendToFile(v []driver.Value) error {
 	return nil
 }
 
-func (b *httpBatch) UploadToStage() error {
-	return b.conn.rest.uploadToStage(b.batchFile)
+func (b *httpBatch) UploadToStage() (string, error) {
+	fi, err := os.Stat(b.batchFile)
+	if err != nil {
+		return "", errors.Wrap(err, "get batch file size failed")
+	}
+	size := fi.Size()
+
+	f, err := os.Open(b.batchFile)
+	if err != nil {
+		return "", errors.Wrap(err, "open batch file failed")
+	}
+	defer f.Close()
+	input := bufio.NewReader(f)
+	stagePath := fmt.Sprintf("@~/batch/%s", filepath.Base(b.batchFile))
+	return stagePath, b.conn.rest.UploadToStage(stagePath, input, size)
 }
 
 var _ ldriver.Batch = (*httpBatch)(nil)
