@@ -41,55 +41,19 @@ func (sl *StageLocation) String() string {
 	return fmt.Sprintf("@%s/%s", sl.Name, sl.Path)
 }
 
-type FileFormatOptions struct {
-	Type            string
-	FieldDelimiter  string
-	RecordDelimiter string
-	SkipHeader      int
-}
-
-func NewDefaultCSVFormatOptions() *FileFormatOptions {
-	return &FileFormatOptions{
-		Type:            "CSV",
-		FieldDelimiter:  ",",
-		RecordDelimiter: "\n",
-		SkipHeader:      0,
+func NewDefaultCSVFormatOptions() map[string]string {
+	return map[string]string{
+		"type":             "CSV",
+		"field_delimiter":  ",",
+		"record_delimiter": "\n",
+		"skip_header":      "0",
 	}
 }
 
-func (o *FileFormatOptions) ToMap() map[string]string {
-	opts := map[string]string{}
-	if o.Type != "" {
-		opts["type"] = o.Type
+func NewDefaultCopyOptions() map[string]string {
+	return map[string]string{
+		"purge": "true",
 	}
-	if o.FieldDelimiter != "" {
-		opts["field_delimiter"] = o.FieldDelimiter
-	}
-	if o.RecordDelimiter != "" {
-		opts["record_delimiter"] = o.RecordDelimiter
-	}
-	if o.SkipHeader > 0 {
-		opts["skip_header"] = fmt.Sprintf("%d", o.SkipHeader)
-	}
-	return opts
-}
-
-type CopyOptions struct {
-	Purge bool
-}
-
-func NewDefaultCopyOptions() *CopyOptions {
-	return &CopyOptions{
-		Purge: true,
-	}
-}
-
-func (o *CopyOptions) ToMap() map[string]string {
-	opts := map[string]string{}
-	if o.Purge {
-		opts["purge"] = "true"
-	}
-	return opts
 }
 
 type APIClient struct {
@@ -402,7 +366,7 @@ func (c *APIClient) QueryPage(nextURI string) (*QueryResponse, error) {
 	return &result, nil
 }
 
-func (c *APIClient) InsertWithStage(sql string, stage *StageLocation, fileFormatOptions *FileFormatOptions, copyOptions *CopyOptions) (*QueryResponse, error) {
+func (c *APIClient) InsertWithStage(sql string, stage *StageLocation, fileFormatOptions, copyOptions map[string]string) (*QueryResponse, error) {
 	if stage == nil {
 		return nil, errors.New("stage location required for insert with stage")
 	}
@@ -418,8 +382,8 @@ func (c *APIClient) InsertWithStage(sql string, stage *StageLocation, fileFormat
 		Session:    c.getSessionConfig(),
 		StageAttachment: &StageAttachmentConfig{
 			Location:          stage.String(),
-			FileFormatOptions: fileFormatOptions.ToMap(),
-			CopyOptions:       copyOptions.ToMap(),
+			FileFormatOptions: fileFormatOptions,
+			CopyOptions:       copyOptions,
 		},
 	}
 
