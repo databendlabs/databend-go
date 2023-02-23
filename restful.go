@@ -277,16 +277,19 @@ func (c *APIClient) waitForQuery(result *QueryResponse) (*QueryResponse, error) 
 	if result.Error != nil {
 		return nil, errors.Wrap(result.Error, "query failed")
 	}
+	var err error
 	for result.NextURI != "" {
-		ret, err := c.QueryPage(result.NextURI)
+		schema := result.Schema
+		data := result.Data
+		result, err = c.QueryPage(result.NextURI)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to query page")
 		}
-		if ret.Error != nil {
-			return nil, errors.Wrap(ret.Error, "query page failed")
+		if result.Error != nil {
+			return nil, errors.Wrap(result.Error, "query page failed")
 		}
-		result.Data = append(result.Data, ret.Data...)
-		result.NextURI = ret.NextURI
+		result.Schema = schema
+		result.Data = append(data, result.Data...)
 	}
 	return result, nil
 }
