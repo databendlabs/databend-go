@@ -27,20 +27,26 @@ type DataField struct {
 }
 
 type QueryResponse struct {
-	Data     [][]string  `json:"data"`
-	Error    *QueryError `json:"error"`
-	FinalURI string      `json:"final_uri"`
-	Id       string      `json:"id"`
-	NextURI  string      `json:"next_uri"`
-	Schema   []DataField `json:"schema"`
-	State    string      `json:"state"`
-	Stats    QueryStats  `json:"stats"`
-	StatsURI string      `json:"stats_uri"`
+	ID        string `json:"id"`
+	SessionID string `json:"session_id"`
+	// TODO: Session map[string]string `json:"session"`
+	Schema []DataField `json:"schema"`
+	Data   [][]string  `json:"data"`
+	State  string      `json:"state"`
+	Error  *QueryError `json:"error"`
+	Stats  QueryStats  `json:"stats"`
+	// TODO: Affect rows
+	StatsURI string `json:"stats_uri"`
+	FinalURI string `json:"final_uri"`
+	NextURI  string `json:"next_uri"`
+	KillURI  string `json:"kill_uri"`
 }
 
 type QueryStats struct {
-	RunningTimeMS float64       `json:"running_time_ms"`
-	ScanProgress  QueryProgress `json:"scan_progress"`
+	RunningTimeMS  float64       `json:"running_time_ms"`
+	ScanProgress   QueryProgress `json:"scan_progress"`
+	WriteProgress  QueryProgress `json:"write_progress"`
+	ResultProgress QueryProgress `json:"result_progress"`
 }
 
 type QueryProgress struct {
