@@ -13,6 +13,7 @@ import (
 
 var (
 	reflectTypeString      = reflect.TypeOf("")
+	reflectTypeBool        = reflect.TypeOf(true)
 	reflectTypeTime        = reflect.TypeOf(time.Time{})
 	reflectTypeEmptyStruct = reflect.TypeOf(struct{}{})
 	reflectTypeInt8        = reflect.TypeOf(int8(0))
@@ -240,6 +241,22 @@ func (p *stringParser) Type() reflect.Type {
 	return reflectTypeString
 }
 
+type booleanParser struct {
+	length int
+}
+
+func (p *booleanParser) Parse(s io.RuneScanner) (driver.Value, error) {
+	str, err := readUnquoted(s, p.length)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the string representation of boolean: %v", err)
+	}
+	return strconv.ParseBool(str)
+}
+
+func (p *booleanParser) Type() reflect.Type {
+	return reflectTypeBool
+}
+
 type dateTimeParser struct {
 	unquote   bool
 	format    string
@@ -462,10 +479,6 @@ type intParser struct {
 	bitSize int
 }
 
-type floatParser struct {
-	bitSize int
-}
-
 func (p *intParser) Parse(s io.RuneScanner) (driver.Value, error) {
 	repr, err := readNumber(s)
 	if err != nil {
@@ -533,6 +546,10 @@ func (p *intParser) Type() reflect.Type {
 			panic("unsupported bit size")
 		}
 	}
+}
+
+type floatParser struct {
+	bitSize int
 }
 
 func (p *floatParser) Parse(s io.RuneScanner) (driver.Value, error) {
@@ -646,6 +663,8 @@ func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParse
 
 		return newDateTimeParser(dateTime64Format, loc, 1, unquote)
 
+	case "Boolean":
+		return &booleanParser{}, nil
 	case "UInt8":
 		return &intParser{false, 8}, nil
 	case "UInt16":
