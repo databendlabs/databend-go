@@ -57,21 +57,21 @@ func NewDefaultCopyOptions() map[string]string {
 }
 
 type APIClient struct {
-	cli *http.Client
+	Cli *http.Client
 
-	apiEndpoint       string
-	host              string
-	tenant            string
-	warehouse         string
-	database          string
-	user              string
-	password          string
-	accessTokenLoader AccessTokenLoader
+	ApiEndpoint       string
+	Host              string
+	Tenant            string
+	Warehouse         string
+	Database          string
+	User              string
+	Password          string
+	AccessTokenLoader AccessTokenLoader
 
-	waitTimeSeconds      int64
-	maxRowsInBuffer      int64
-	maxRowsPerPage       int64
-	presignedURLDisabled bool
+	WaitTimeSeconds      int64
+	MaxRowsInBuffer      int64
+	MaxRowsPerPage       int64
+	PresignedURLDisabled bool
 }
 
 func NewAPIClientFromConfig(cfg *Config) *APIClient {
@@ -83,22 +83,22 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		apiScheme = "https"
 	}
 	return &APIClient{
-		cli: &http.Client{
+		Cli: &http.Client{
 			Timeout: cfg.Timeout,
 		},
-		apiEndpoint:       fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
-		host:              cfg.Host,
-		tenant:            cfg.Tenant,
-		warehouse:         cfg.Warehouse,
-		database:          cfg.Database,
-		user:              cfg.User,
-		password:          cfg.Password,
-		accessTokenLoader: initAccessTokenLoader(cfg),
+		ApiEndpoint:       fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
+		Host:              cfg.Host,
+		Tenant:            cfg.Tenant,
+		Warehouse:         cfg.Warehouse,
+		Database:          cfg.Database,
+		User:              cfg.User,
+		Password:          cfg.Password,
+		AccessTokenLoader: initAccessTokenLoader(cfg),
 
-		waitTimeSeconds:      cfg.WaitTimeSecs,
-		maxRowsInBuffer:      cfg.MaxRowsInBuffer,
-		maxRowsPerPage:       cfg.MaxRowsPerPage,
-		presignedURLDisabled: cfg.PresignedURLDisabled,
+		WaitTimeSeconds:      cfg.WaitTimeSecs,
+		MaxRowsInBuffer:      cfg.MaxRowsInBuffer,
+		MaxRowsPerPage:       cfg.MaxRowsPerPage,
+		PresignedURLDisabled: cfg.PresignedURLDisabled,
 	}
 }
 
@@ -139,11 +139,11 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 		headers.Set(accept, jsonContentType)
 		httpReq.Header = headers
 
-		if len(c.host) > 0 {
-			httpReq.Host = c.host
+		if len(c.Host) > 0 {
+			httpReq.Host = c.Host
 		}
 
-		httpResp, err := c.cli.Do(httpReq)
+		httpResp, err := c.Cli.Do(httpReq)
 		if err != nil {
 			return errors.Wrap(err, "failed to do http request")
 		}
@@ -157,7 +157,7 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 		if httpResp.StatusCode == http.StatusUnauthorized {
 			if c.authMethod() == AuthMethodAccessToken && i < maxRetries {
 				// retry with a rotated access token
-				c.accessTokenLoader.LoadAccessToken(context.Background(), true)
+				c.AccessTokenLoader.LoadAccessToken(context.Background(), true)
 				continue
 			}
 			return NewAPIError("authorization failed", httpResp.StatusCode, httpRespBody)
@@ -178,15 +178,15 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 }
 
 func (c *APIClient) makeURL(path string, args ...interface{}) string {
-	format := c.apiEndpoint + path
+	format := c.ApiEndpoint + path
 	return fmt.Sprintf(format, args...)
 }
 
 func (c *APIClient) authMethod() AuthMethod {
-	if c.user != "" {
+	if c.User != "" {
 		return AuthMethodUserPassword
 	}
-	if c.accessTokenLoader != nil {
+	if c.AccessTokenLoader != nil {
 		return AuthMethodAccessToken
 	}
 	return ""
@@ -195,18 +195,18 @@ func (c *APIClient) authMethod() AuthMethod {
 func (c *APIClient) makeHeaders() (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
-	if c.tenant != "" {
-		headers.Set(DatabendTenantHeader, c.tenant)
+	if c.Tenant != "" {
+		headers.Set(DatabendTenantHeader, c.Tenant)
 	}
-	if c.warehouse != "" {
-		headers.Set(DatabendWarehouseHeader, c.warehouse)
+	if c.Warehouse != "" {
+		headers.Set(DatabendWarehouseHeader, c.Warehouse)
 	}
 
 	switch c.authMethod() {
 	case AuthMethodUserPassword:
-		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.user, c.password)))
+		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.User, c.Password)))
 	case AuthMethodAccessToken:
-		accessToken, err := c.accessTokenLoader.LoadAccessToken(context.TODO(), false)
+		accessToken, err := c.AccessTokenLoader.LoadAccessToken(context.TODO(), false)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to load access token")
 		}
@@ -234,22 +234,22 @@ var databendInsecureTransport = &http.Transport{
 }
 
 func (c *APIClient) getPagenationConfig() *PaginationConfig {
-	if c.maxRowsPerPage == 0 && c.maxRowsInBuffer == 0 && c.waitTimeSeconds == 0 {
+	if c.MaxRowsPerPage == 0 && c.MaxRowsInBuffer == 0 && c.WaitTimeSeconds == 0 {
 		return nil
 	}
 	return &PaginationConfig{
-		MaxRowsPerPage:  c.maxRowsPerPage,
-		MaxRowsInBuffer: c.maxRowsInBuffer,
-		WaitTime:        c.waitTimeSeconds,
+		MaxRowsPerPage:  c.MaxRowsPerPage,
+		MaxRowsInBuffer: c.MaxRowsInBuffer,
+		WaitTime:        c.WaitTimeSeconds,
 	}
 }
 
 func (c *APIClient) getSessionConfig() *SessionConfig {
-	if c.database == "" {
+	if c.Database == "" {
 		return nil
 	}
 	return &SessionConfig{
-		Database: c.database,
+		Database: c.Database,
 	}
 }
 
@@ -273,7 +273,7 @@ func (c *APIClient) DoQuery(query string, args []driver.Value) (*QueryResponse, 
 	return &result, nil
 }
 
-func (c *APIClient) waitForQuery(result *QueryResponse) (*QueryResponse, error) {
+func (c *APIClient) WaitForQuery(result *QueryResponse) (*QueryResponse, error) {
 	if result.Error != nil {
 		return nil, errors.Wrap(result.Error, "query failed")
 	}
@@ -299,7 +299,7 @@ func (c *APIClient) QuerySingle(query string, args []driver.Value) (*QueryRespon
 	if err != nil {
 		return nil, err
 	}
-	return c.waitForQuery(result)
+	return c.WaitForQuery(result)
 }
 
 func buildQuery(query string, params []driver.Value) (string, error) {
@@ -396,18 +396,18 @@ func (c *APIClient) InsertWithStage(sql string, stage *StageLocation, fileFormat
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to insert with stage")
 	}
-	return c.waitForQuery(&result)
+	return c.WaitForQuery(&result)
 }
 
 func (c *APIClient) UploadToStage(stage *StageLocation, input *bufio.Reader, size int64) error {
-	if c.presignedURLDisabled {
-		return c.uploadToStageByAPI(stage, input, size)
+	if c.PresignedURLDisabled {
+		return c.UploadToStageByAPI(stage, input, size)
 	} else {
-		return c.uploadToStageByPresignURL(stage, input, size)
+		return c.UploadToStageByPresignURL(stage, input, size)
 	}
 }
 
-func (c *APIClient) getPresignedURL(stage *StageLocation) (*PresignedResponse, error) {
+func (c *APIClient) GetPresignedURL(stage *StageLocation) (*PresignedResponse, error) {
 	var headers string
 	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD %s", stage)
 	resp, err := c.QuerySingle(presignUploadSQL, nil)
@@ -431,8 +431,8 @@ func (c *APIClient) getPresignedURL(stage *StageLocation) (*PresignedResponse, e
 	return result, nil
 }
 
-func (c *APIClient) uploadToStageByPresignURL(stage *StageLocation, input *bufio.Reader, size int64) error {
-	presigned, err := c.getPresignedURL(stage)
+func (c *APIClient) UploadToStageByPresignURL(stage *StageLocation, input *bufio.Reader, size int64) error {
+	presigned, err := c.GetPresignedURL(stage)
 	if err != nil {
 		return errors.Wrap(err, "failed to get presigned url")
 	}
@@ -464,7 +464,7 @@ func (c *APIClient) uploadToStageByPresignURL(stage *StageLocation, input *bufio
 	return nil
 }
 
-func (c *APIClient) uploadToStageByAPI(stage *StageLocation, input *bufio.Reader, size int64) error {
+func (c *APIClient) UploadToStageByAPI(stage *StageLocation, input *bufio.Reader, size int64) error {
 	body := new(bytes.Buffer)
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("upload", stage.Path)
@@ -492,8 +492,8 @@ func (c *APIClient) uploadToStageByAPI(stage *StageLocation, input *bufio.Reader
 	if err != nil {
 		return errors.Wrap(err, "failed to make headers")
 	}
-	if len(c.host) > 0 {
-		req.Host = c.host
+	if len(c.Host) > 0 {
+		req.Host = c.Host
 	}
 	req.Header.Set("stage_name", stage.Name)
 	req.Header.Set("Content-Type", writer.FormDataContentType())

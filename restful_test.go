@@ -8,10 +8,10 @@ import (
 
 func TestMakeHeadersUserPassword(t *testing.T) {
 	c := APIClient{
-		user:     "root",
-		password: "root",
-		host:     "localhost:8000",
-		tenant:   "default",
+		User:     "root",
+		Password: "root",
+		Host:     "localhost:8000",
+		Tenant:   "default",
 	}
 	headers, err := c.makeHeaders()
 	assert.Nil(t, err)
@@ -21,10 +21,10 @@ func TestMakeHeadersUserPassword(t *testing.T) {
 
 func TestMakeHeadersAccessToken(t *testing.T) {
 	c := APIClient{
-		host:              "tn3ftqihs--bl.ch.aws-us-east-2.default.databend.com",
-		tenant:            "tn3ftqihs",
-		accessTokenLoader: NewStaticAccessTokenLoader("abc123"),
-		warehouse:         "small-abc",
+		Host:              "tn3ftqihs--bl.ch.aws-us-east-2.default.databend.com",
+		Tenant:            "tn3ftqihs",
+		AccessTokenLoader: NewStaticAccessTokenLoader("abc123"),
+		Warehouse:         "small-abc",
 	}
 	headers, err := c.makeHeaders()
 	assert.Nil(t, err)
