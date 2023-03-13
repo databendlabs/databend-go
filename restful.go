@@ -145,13 +145,13 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 
 		httpResp, err := c.Cli.Do(httpReq)
 		if err != nil {
-			return errors.Wrap(err, "failed to do http request")
+			return errors.Wrap(ErrDoRequest, err.Error())
 		}
 		defer httpResp.Body.Close()
 
 		httpRespBody, err := io.ReadAll(httpResp.Body)
 		if err != nil {
-			return errors.Wrap(err, "failed to read http response body")
+			return errors.Wrap(ErrReadResponse, err.Error())
 		}
 
 		if httpResp.StatusCode == http.StatusUnauthorized {
@@ -169,7 +169,7 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 
 		if resp != nil {
 			if err := json.Unmarshal(httpRespBody, &resp); err != nil {
-				return err
+				return errors.Wrap(err, "failed to unmarshal response body")
 			}
 		}
 		return nil
@@ -363,7 +363,23 @@ func (c *APIClient) QuerySync(query string, args []driver.Value, respCh chan Que
 
 func (c *APIClient) QueryPage(nextURI string) (*QueryResponse, error) {
 	var result QueryResponse
-	err := c.doRequest("GET", nextURI, nil, &result)
+	err := retry.Do(
+		func() error {
+			return c.doRequest("GET", nextURI, nil, &result)
+		},
+		retry.RetryIf(func(err error) bool {
+			if err == nil {
+				return false
+			}
+			if errors.Is(err, ErrDoRequest) || errors.Is(err, ErrReadResponse) || IsProxyErr(err) {
+				return true
+			}
+			return false
+		}),
+		retry.Delay(1*time.Second),
+		retry.Attempts(3),
+		retry.DelayType(retry.FixedDelay),
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query page")
 	}
