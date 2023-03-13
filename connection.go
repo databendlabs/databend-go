@@ -86,6 +86,7 @@ func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.
 		}),
 		retry.Delay(2*time.Second),
 		retry.Attempts(5),
+		retry.DelayType(retry.FixedDelay),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
