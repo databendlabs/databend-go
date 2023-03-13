@@ -333,7 +333,8 @@ func (c *APIClient) QuerySync(query string, args []driver.Value, respCh chan Que
 			return false
 		}),
 		retry.Delay(2*time.Second),
-		retry.Attempts(10),
+		retry.Attempts(5),
+		retry.DelayType(retry.FixedDelay),
 	)
 	if err != nil {
 		return errors.Wrap(err, "query sync failed")
