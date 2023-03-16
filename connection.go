@@ -24,20 +24,14 @@ const (
 )
 
 type DatabendConn struct {
-	ctx                context.Context
-	cfg                *Config
-	SQLState           string
-	cancel             context.CancelFunc
-	closed             int32
-	stmts              []*databendStmt
-	txCtx              context.Context
-	useDBLocation      bool
-	useGzipCompression bool
-	killQueryOnErr     bool
-	killQueryTimeout   time.Duration
-	logger             *log.Logger
-	rest               *APIClient
-	commit             func() error
+	ctx    context.Context
+	cfg    *Config
+	cancel context.CancelFunc
+	closed int32
+	stmts  []*databendStmt
+	logger *log.Logger
+	rest   *APIClient
+	commit func() error
 }
 
 func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.Value) (driver.Result, error) {
