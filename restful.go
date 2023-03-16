@@ -57,16 +57,17 @@ func NewDefaultCopyOptions() map[string]string {
 }
 
 type APIClient struct {
-	Cli *http.Client
+	cli *http.Client
 
-	ApiEndpoint       string
-	Host              string
-	Tenant            string
-	Warehouse         string
-	Database          string
-	User              string
-	Password          string
-	AccessTokenLoader AccessTokenLoader
+	apiEndpoint       string
+	host              string
+	tenant            string
+	warehouse         string
+	database          string
+	user              string
+	password          string
+	accessTokenLoader AccessTokenLoader
+	sessionSettings   map[string]string
 
 	WaitTimeSeconds      int64
 	MaxRowsInBuffer      int64
@@ -83,17 +84,18 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		apiScheme = "https"
 	}
 	return &APIClient{
-		Cli: &http.Client{
+		cli: &http.Client{
 			Timeout: cfg.Timeout,
 		},
-		ApiEndpoint:       fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
-		Host:              cfg.Host,
-		Tenant:            cfg.Tenant,
-		Warehouse:         cfg.Warehouse,
-		Database:          cfg.Database,
-		User:              cfg.User,
-		Password:          cfg.Password,
-		AccessTokenLoader: initAccessTokenLoader(cfg),
+		apiEndpoint:       fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
+		host:              cfg.Host,
+		tenant:            cfg.Tenant,
+		warehouse:         cfg.Warehouse,
+		database:          cfg.Database,
+		user:              cfg.User,
+		password:          cfg.Password,
+		accessTokenLoader: initAccessTokenLoader(cfg),
+		sessionSettings:   cfg.Params,
 
 		WaitTimeSeconds:      cfg.WaitTimeSecs,
 		MaxRowsInBuffer:      cfg.MaxRowsInBuffer,
@@ -139,11 +141,11 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 		headers.Set(accept, jsonContentType)
 		httpReq.Header = headers
 
-		if len(c.Host) > 0 {
-			httpReq.Host = c.Host
+		if len(c.host) > 0 {
+			httpReq.Host = c.host
 		}
 
-		httpResp, err := c.Cli.Do(httpReq)
+		httpResp, err := c.cli.Do(httpReq)
 		if err != nil {
 			return errors.Wrap(ErrDoRequest, err.Error())
 		}
@@ -157,7 +159,7 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 		if httpResp.StatusCode == http.StatusUnauthorized {
 			if c.authMethod() == AuthMethodAccessToken && i < maxRetries {
 				// retry with a rotated access token
-				c.AccessTokenLoader.LoadAccessToken(context.Background(), true)
+				c.accessTokenLoader.LoadAccessToken(context.Background(), true)
 				continue
 			}
 			return NewAPIError("authorization failed", httpResp.StatusCode, httpRespBody)
@@ -178,15 +180,15 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 }
 
 func (c *APIClient) makeURL(path string, args ...interface{}) string {
-	format := c.ApiEndpoint + path
+	format := c.apiEndpoint + path
 	return fmt.Sprintf(format, args...)
 }
 
 func (c *APIClient) authMethod() AuthMethod {
-	if c.User != "" {
+	if c.user != "" {
 		return AuthMethodUserPassword
 	}
-	if c.AccessTokenLoader != nil {
+	if c.accessTokenLoader != nil {
 		return AuthMethodAccessToken
 	}
 	return ""
@@ -195,18 +197,18 @@ func (c *APIClient) authMethod() AuthMethod {
 func (c *APIClient) makeHeaders() (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
-	if c.Tenant != "" {
-		headers.Set(DatabendTenantHeader, c.Tenant)
+	if c.tenant != "" {
+		headers.Set(DatabendTenantHeader, c.tenant)
 	}
-	if c.Warehouse != "" {
-		headers.Set(DatabendWarehouseHeader, c.Warehouse)
+	if c.warehouse != "" {
+		headers.Set(DatabendWarehouseHeader, c.warehouse)
 	}
 
 	switch c.authMethod() {
 	case AuthMethodUserPassword:
-		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.User, c.Password)))
+		headers.Set(Authorization, fmt.Sprintf("Basic %s", encode(c.user, c.password)))
 	case AuthMethodAccessToken:
-		accessToken, err := c.AccessTokenLoader.LoadAccessToken(context.TODO(), false)
+		accessToken, err := c.accessTokenLoader.LoadAccessToken(context.TODO(), false)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to load access token")
 		}
@@ -245,11 +247,9 @@ func (c *APIClient) getPagenationConfig() *PaginationConfig {
 }
 
 func (c *APIClient) getSessionConfig() *SessionConfig {
-	if c.Database == "" {
-		return nil
-	}
 	return &SessionConfig{
-		Database: c.Database,
+		Database: c.database,
+		Settings: c.sessionSettings,
 	}
 }
 
@@ -270,7 +270,29 @@ func (c *APIClient) DoQuery(query string, args []driver.Value) (*QueryResponse, 
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to do query request")
 	}
+	if result.Error != nil {
+		return nil, errors.Wrap(result.Error, "query error")
+	}
+	c.applySessionConfig(&result)
 	return &result, nil
+}
+
+func (c *APIClient) applySessionConfig(response *QueryResponse) {
+	if response.Session == nil {
+		return
+	}
+	if response.Session.Database != "" {
+		c.database = response.Session.Database
+		// DEBUG:
+		fmt.Printf("==> current database: %s", c.database)
+	}
+	if response.Session.Settings != nil {
+		for k, v := range response.Session.Settings {
+			c.sessionSettings[k] = v
+		}
+		// DEBUG:
+		fmt.Printf("==> current session config: %+v", c.sessionSettings)
+	}
 }
 
 func (c *APIClient) WaitForQuery(result *QueryResponse) (*QueryResponse, error) {
@@ -509,8 +531,8 @@ func (c *APIClient) UploadToStageByAPI(stage *StageLocation, input *bufio.Reader
 	if err != nil {
 		return errors.Wrap(err, "failed to make headers")
 	}
-	if len(c.Host) > 0 {
-		req.Host = c.Host
+	if len(c.host) > 0 {
+		req.Host = c.host
 	}
 	req.Header.Set("stage_name", stage.Name)
 	req.Header.Set("Content-Type", writer.FormDataContentType())

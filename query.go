@@ -27,14 +27,14 @@ type DataField struct {
 }
 
 type QueryResponse struct {
-	ID        string `json:"id"`
-	SessionID string `json:"session_id"`
-	// TODO: Session map[string]string `json:"session"`
-	Schema []DataField `json:"schema"`
-	Data   [][]string  `json:"data"`
-	State  string      `json:"state"`
-	Error  *QueryError `json:"error"`
-	Stats  QueryStats  `json:"stats"`
+	ID        string         `json:"id"`
+	SessionID string         `json:"session_id"`
+	Session   *SessionConfig `json:"session"`
+	Schema    []DataField    `json:"schema"`
+	Data      [][]string     `json:"data"`
+	State     string         `json:"state"`
+	Error     *QueryError    `json:"error"`
+	Stats     QueryStats     `json:"stats"`
 	// TODO: Affect rows
 	StatsURI string `json:"stats_uri"`
 	FinalURI string `json:"final_uri"`
@@ -55,9 +55,16 @@ type QueryProgress struct {
 }
 
 type QueryRequest struct {
-	SQL             string                 `json:"sql"`
-	Pagination      *PaginationConfig      `json:"pagination,omitempty"`
-	Session         *SessionConfig         `json:"session,omitempty"`
+	// We use client session instead of server session with session_id
+	// SessionID  string            `json:"session_id,omitempty"`
+
+	Session    *SessionConfig    `json:"session,omitempty"`
+	SQL        string            `json:"sql"`
+	Pagination *PaginationConfig `json:"pagination,omitempty"`
+
+	// Default to true
+	// StringFields  bool  `json:"string_fields,omitempty"`
+
 	StageAttachment *StageAttachmentConfig `json:"stage_attachment,omitempty"`
 }
 
@@ -68,9 +75,12 @@ type PaginationConfig struct {
 }
 
 type SessionConfig struct {
-	Database              string            `json:"database,omitempty"`
-	KeepServerSessionSecs uint64            `json:"keep_server_session_secs,omitempty"`
-	Settings              map[string]string `json:"settings,omitempty"`
+	Database string `json:"database,omitempty"`
+
+	// Since we use client session, this should not be used
+	// KeepServerSessionSecs uint64            `json:"keep_server_session_secs,omitempty"`
+
+	Settings map[string]string `json:"settings,omitempty"`
 }
 
 type StageAttachmentConfig struct {
