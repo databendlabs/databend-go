@@ -283,15 +283,11 @@ func (c *APIClient) applySessionConfig(response *QueryResponse) {
 	}
 	if response.Session.Database != "" {
 		c.database = response.Session.Database
-		// DEBUG:
-		fmt.Printf("==> current database: %s", c.database)
 	}
 	if response.Session.Settings != nil {
 		for k, v := range response.Session.Settings {
 			c.sessionSettings[k] = v
 		}
-		// DEBUG:
-		fmt.Printf("==> current session config: %+v", c.sessionSettings)
 	}
 }
 
