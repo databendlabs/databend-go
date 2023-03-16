@@ -8,5 +8,8 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+local-ci:
+	make -C tests docker-compose
+
 ci:
 	go test -v ./tests/...
