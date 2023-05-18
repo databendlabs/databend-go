@@ -86,17 +86,7 @@ func (s *DatabendTestSuite) TestDesc() {
 
 	result, err := scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{
-		{"i64", "BIGINT", "NO", "0", ""},
-		{"u64", "BIGINT UNSIGNED", "NO", "0", ""},
-		{"f64", "DOUBLE", "NO", "0", ""},
-		{"s", "VARCHAR", "NO", "\"\"", ""},
-		{"s2", "VARCHAR", "NO", "\"\"", ""},
-		{"a16", "ARRAY(INT16)", "NO", "[]", ""},
-		{"a8", "ARRAY(UINT8)", "NO", "[]", ""},
-		{"d", "DATE", "NO", "1970-01-01", ""},
-		{"t", "TIMESTAMP", "NO", "1970-01-01 00:00:00.000000", ""},
-	}, result)
+	s.r.Equal([][]interface{}{[]interface{}{"i64", "BIGINT", "NO", "0", ""}, []interface{}{"u64", "BIGINT UNSIGNED", "NO", "0", ""}, []interface{}{"f64", "DOUBLE", "NO", "0", ""}, []interface{}{"s", "VARCHAR", "NO", "\"\"", ""}, []interface{}{"s2", "VARCHAR", "NO", "\"\"", ""}, []interface{}{"a16", "ARRAY(INT16)", "NO", "[]", ""}, []interface{}{"a8", "ARRAY(UINT8)", "NO", "[]", ""}, []interface{}{"d", "DATE", "NO", "1970-01-01", ""}, []interface{}{"t", "TIMESTAMP", "NO", "1970-01-01 00:00:00.000000", ""}}, result)
 	rows.Close()
 }
 
