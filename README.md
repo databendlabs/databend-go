@@ -70,6 +70,41 @@ Once a connection has been obtained, users can issue sql statements for executio
 	_, err = conn.Exec("INSERT INTO data VALUES (1, 'test-1')")
 ```
 
+## Batch Insert
+If the create table SQL is `CREATE TABLE test (
+		i64 Int64,
+		u64 UInt64,
+		f64 Float64,
+		s   String,
+		s2  String,
+		a16 Array(Int16),
+		a8  Array(UInt8),
+		d   Date,
+		t   DateTime)`
+you can use the next code to batch insert data:
+
+```go
+conn, err := sql.Open("databend", dsn)
+	if err != nil {
+		fmt.Println(err)
+	}
+batch, err := conn.Prepare(fmt.Sprintf("INSERT INTO %s VALUES", "test"))
+for i := 0; i < 10; i++ {
+		_, err = batch.Exec(
+			"1234",
+			"2345",
+			"3.1415",
+			"test",
+			"test2",
+			"[4, 5, 6]",
+			"[1, 2, 3]",
+			"2021-01-01",
+			"2021-01-01 00:00:00",
+		)
+	}
+err = conn.Commit()
+```
+
 ## Querying Row/s
 Querying a single row can be achieved using the QueryRow method. This returns a *sql.Row, on which Scan can be invoked with pointers to variables into which the columns should be marshaled. 
 
