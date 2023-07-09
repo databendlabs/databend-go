@@ -4,7 +4,7 @@ Golang driver for [databend cloud](https://www.databend.com/)
 ## Installation
 
 ```
-go get https://github.com/databendcloud/databend-go
+go get github.com/databendcloud/databend-go
 ```
 
 ## Key features
