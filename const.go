@@ -5,4 +5,5 @@ const (
 	DatabendWarehouseHeader = "X-DATABEND-WAREHOUSE"
 	Authorization           = "Authorization"
 	WarehouseRoute          = "X-DATABEND-ROUTE"
+	UserAgent               = "User-Agent"
 )

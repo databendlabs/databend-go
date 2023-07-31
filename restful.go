@@ -197,6 +197,7 @@ func (c *APIClient) authMethod() AuthMethod {
 func (c *APIClient) makeHeaders() (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
+	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", version))
 	if c.tenant != "" {
 		headers.Set(DatabendTenantHeader, c.tenant)
 	}
