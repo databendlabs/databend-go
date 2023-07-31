@@ -12,7 +12,6 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -198,7 +197,7 @@ func (c *APIClient) authMethod() AuthMethod {
 func (c *APIClient) makeHeaders() (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
-	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", readVersionFile()))
+	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", version))
 	if c.tenant != "" {
 		headers.Set(DatabendTenantHeader, c.tenant)
 	}
@@ -559,17 +558,4 @@ func (c *APIClient) UploadToStageByAPI(stage *StageLocation, input *bufio.Reader
 	}
 
 	return nil
-}
-
-func readVersionFile() string {
-	// 读取 VERSION 文件
-	data, err := os.ReadFile("VERSION")
-	if err != nil {
-		return ""
-	}
-
-	version := string(data)
-	version = strings.TrimSpace(version)
-
-	return version
 }
