@@ -25,7 +25,7 @@ func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver
 	if len(matches) < 2 {
 		return nil, errors.New("cannot get table name from query")
 	}
-	csvFileName := fmt.Sprintf("%s.csv", uuid.NewString())
+	csvFileName := fmt.Sprintf("%s/%s.csv", os.TempDir(), uuid.NewString())
 
 	csvFile, err := os.OpenFile(csvFileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {
