@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -43,7 +42,8 @@ type DatabendTestSuite struct {
 func (s *DatabendTestSuite) SetupSuite() {
 	var err error
 
-	dsn := os.Getenv("TEST_DATABEND_DSN")
+	//dsn := os.Getenv("TEST_DATABEND_DSN")
+	dsn := "http://databend:databend@localhost:8000/default?sslmode=disable"
 	s.NotEmpty(dsn)
 
 	s.db, err = sql.Open("databend", dsn)
@@ -97,7 +97,7 @@ func (s *DatabendTestSuite) TestDesc() {
 
 	result, err := scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{[]interface{}{"i64", "BIGINT", "NO", "0", ""}, []interface{}{"u64", "BIGINT UNSIGNED", "NO", "0", ""}, []interface{}{"f64", "DOUBLE", "NO", "0", ""}, []interface{}{"s", "VARCHAR", "NO", "", ""}, []interface{}{"s2", "VARCHAR", "NO", "", ""}, []interface{}{"a16", "ARRAY(INT16)", "NO", "[]", ""}, []interface{}{"a8", "ARRAY(UINT8)", "NO", "[]", ""}, []interface{}{"d", "DATE", "NO", "", ""}, []interface{}{"t", "TIMESTAMP", "NO", "", ""}}, result)
+	s.r.Equal([][]interface{}{[]interface{}{"i64", "BIGINT", "YES", "NULL", ""}, []interface{}{"u64", "BIGINT UNSIGNED", "YES", "NULL", ""}, []interface{}{"f64", "DOUBLE", "YES", "NULL", ""}, []interface{}{"s", "VARCHAR", "YES", "NULL", ""}, []interface{}{"s2", "VARCHAR", "YES", "NULL", ""}, []interface{}{"a16", "ARRAY(INT16)", "YES", "NULL", ""}, []interface{}{"a8", "ARRAY(UINT8)", "YES", "NULL", ""}, []interface{}{"d", "DATE", "YES", "NULL", ""}, []interface{}{"t", "TIMESTAMP", "YES", "NULL", ""}}, result)
 	rows.Close()
 }
 
