@@ -208,10 +208,9 @@ func (dc *DatabendConn) Rollback() error {
 }
 
 func (dc *DatabendConn) Ping() error {
-	r, err := dc.Query("SELECT VERSION()", []driver.Value{})
+	_, err := dc.Query("SELECT VERSION()", []driver.Value{})
 	if err != nil {
 		return err
 	}
-	fmt.Println(r)
 	return nil
 }
