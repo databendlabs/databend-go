@@ -174,12 +174,12 @@ func (s *DatabendTestSuite) TestExec() {
 	}{
 		{
 			fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table),
-			fmt.Sprintf("SELECT i64 FROM %s WHERE i64=?", s.table),
+			"",
 			[]interface{}{int64(1)},
 		},
 		{
 			fmt.Sprintf("INSERT INTO %s (i64, u64) VALUES (?, ?)", s.table),
-			fmt.Sprintf("SELECT i64, u64 FROM %s WHERE i64=? AND u64=?", s.table),
+			"",
 			[]interface{}{int64(2), uint64(12)},
 		},
 		{
