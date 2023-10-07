@@ -130,7 +130,7 @@ func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (drive
 	return dc.prepare(query)
 }
 
-func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error) {
+func BuildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error) {
 	dc := &DatabendConn{
 		ctx:  ctx,
 		cfg:  &config,
@@ -204,5 +204,14 @@ func (dc *DatabendConn) Commit() (err error) {
 func (dc *DatabendConn) Rollback() error {
 	dc.commit = nil
 	dc.Close()
+	return nil
+}
+
+func (dc *DatabendConn) Ping() error {
+	r, err := dc.Query("SELECT VERSION()", []driver.Value{})
+	if err != nil {
+		return err
+	}
+	fmt.Println(r)
 	return nil
 }

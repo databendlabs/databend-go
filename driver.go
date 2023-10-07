@@ -28,7 +28,7 @@ func (d DatabendDriver) OpenWithConfig(
 	config Config) (
 	driver.Conn, error) {
 	logger.Info("OpenWithConfig")
-	dc, err := buildDatabendConn(ctx, config)
+	dc, err := BuildDatabendConn(ctx, config)
 	if err != nil {
 		return nil, err
 	}

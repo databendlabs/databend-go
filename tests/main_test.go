@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -33,9 +34,10 @@ func TestDatabendSuite(t *testing.T) {
 
 type DatabendTestSuite struct {
 	suite.Suite
-	db    *sql.DB
-	table string
-	r     *require.Assertions
+	db           *sql.DB
+	databendConn *dc.DatabendConn
+	table        string
+	r            *require.Assertions
 }
 
 func (s *DatabendTestSuite) SetupSuite() {
@@ -45,6 +47,10 @@ func (s *DatabendTestSuite) SetupSuite() {
 	s.NotEmpty(dsn)
 
 	s.db, err = sql.Open("databend", dsn)
+	s.Nil(err)
+	cfg, err := dc.ParseDSN(dsn)
+	s.Nil(err)
+	s.databendConn, err = dc.BuildDatabendConn(context.TODO(), *cfg)
 	s.Nil(err)
 
 	err = s.db.Ping()
@@ -77,6 +83,11 @@ func (s *DatabendTestSuite) TearDownTest() {
 
 	// t.Logf("teardown test with table %s", s.table)
 	_, err := s.db.Exec(fmt.Sprintf("DROP TABLE %s", s.table))
+	s.r.Nil(err)
+}
+
+func (s *DatabendTestSuite) TestPing() {
+	err := s.databendConn.Ping()
 	s.r.Nil(err)
 }
 

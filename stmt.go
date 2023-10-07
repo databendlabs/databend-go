@@ -3,14 +3,10 @@ package godatabend
 import (
 	"context"
 	"database/sql/driver"
-	"regexp"
+
+	"github.com/pkg/errors"
 
 	ldriver "github.com/databendcloud/databend-go/lib/driver"
-	"github.com/pkg/errors"
-)
-
-var (
-	splitInsertRe = regexp.MustCompile(`(?si)(.+\s*VALUES)\s*(\(.+\))`)
 )
 
 type databendStmt struct {
