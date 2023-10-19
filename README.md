@@ -84,12 +84,23 @@ If the create table SQL is `CREATE TABLE test (
 you can use the next code to batch insert data:
 
 ```go
-conn, err := sql.Open("databend", dsn)
+package main
+
+import (
+	"database/sql"
+	"fmt"
+
+	_ "github.com/databendcloud/databend-go"
+)
+
+func main() {
+	conn, err := sql.Open("databend", "http://databend:databend@localhost:8000/default?sslmode=disable")
+	tx, err := conn.Begin()
 	if err != nil {
 		fmt.Println(err)
 	}
-batch, err := conn.Prepare(fmt.Sprintf("INSERT INTO %s VALUES", "test"))
-for i := 0; i < 10; i++ {
+	batch, err := tx.Prepare(fmt.Sprintf("INSERT INTO %s VALUES", "test"))
+	for i := 0; i < 10; i++ {
 		_, err = batch.Exec(
 			"1234",
 			"2345",
@@ -102,18 +113,27 @@ for i := 0; i < 10; i++ {
 			"2021-01-01 00:00:00",
 		)
 	}
-err = conn.Commit()
+	err = tx.Commit()
+}
 ```
 
 ## Querying Row/s
 Querying a single row can be achieved using the QueryRow method. This returns a *sql.Row, on which Scan can be invoked with pointers to variables into which the columns should be marshaled. 
 
 ```go
-dsn, cfg, err := getDSN()
-	if err != nil {
-		log.Fatalf("failed to create DSN from Config: %v, err: %v", cfg, err)
-	}
-	conn, err := sql.Open("databend", dsn)
+package main
+
+import (
+	"database/sql"
+	"fmt"
+
+	_ "github.com/databendcloud/databend-go"
+)
+
+func main() {
+	// create table data (col1 uint8, col2 string);
+	// insert into data values(1,'col2');
+	conn, err := sql.Open("databend", "http://databend:databend@localhost:8000/default?sslmode=disable")
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -126,16 +146,25 @@ dsn, cfg, err := getDSN()
 		fmt.Println(err)
 	}
 	fmt.Println(col2)
+}
 ```
 
 Iterating multiple rows requires the Query method. This returns a *sql.Rows struct on which Next can be invoked to iterate through the rows. QueryContext equivalent allows passing of a context.
 
 ```go
-dsn, cfg, err := getDSN()
-	if err != nil {
-		log.Fatalf("failed to create DSN from Config: %v, err: %v", cfg, err)
-	}
-	conn, err := sql.Open("databend", dsn)
+package main
+
+import (
+	"database/sql"
+	"fmt"
+
+	_ "github.com/databendcloud/databend-go"
+)
+
+func main() {
+	// create table data (col1 uint8, col2 string);
+	// insert into data values(1,'col2');
+	conn, err := sql.Open("databend", "http://databend:databend@localhost:8000/default?sslmode=disable")
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -150,6 +179,7 @@ dsn, cfg, err := getDSN()
 		}
 		fmt.Println(col2)
 	}
+}
 ```
 
 ## Compatibility
