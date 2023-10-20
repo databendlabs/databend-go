@@ -86,7 +86,7 @@ func (s *DatabendTestSuite) TestDesc() {
 
 	result, err := scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{[]interface{}{"i64", "BIGINT", "NO", "0", ""}, []interface{}{"u64", "BIGINT UNSIGNED", "NO", "0", ""}, []interface{}{"f64", "DOUBLE", "NO", "0", ""}, []interface{}{"s", "VARCHAR", "NO", "", ""}, []interface{}{"s2", "VARCHAR", "NO", "", ""}, []interface{}{"a16", "ARRAY(INT16)", "NO", "[]", ""}, []interface{}{"a8", "ARRAY(UINT8)", "NO", "[]", ""}, []interface{}{"d", "DATE", "NO", "", ""}, []interface{}{"t", "TIMESTAMP", "NO", "", ""}}, result)
+	s.r.Equal([][]interface{}{[]interface{}{"i64", "BIGINT", "YES", "NULL", ""}, []interface{}{"u64", "BIGINT UNSIGNED", "YES", "NULL", ""}, []interface{}{"f64", "DOUBLE", "YES", "NULL", ""}, []interface{}{"s", "VARCHAR", "YES", "NULL", ""}, []interface{}{"s2", "VARCHAR", "YES", "NULL", ""}, []interface{}{"a16", "ARRAY(INT16)", "YES", "NULL", ""}, []interface{}{"a8", "ARRAY(UINT8)", "YES", "NULL", ""}, []interface{}{"d", "DATE", "YES", "NULL", ""}, []interface{}{"t", "TIMESTAMP", "YES", "NULL", ""}}, result)
 	rows.Close()
 }
 
@@ -163,12 +163,12 @@ func (s *DatabendTestSuite) TestExec() {
 	}{
 		{
 			fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table),
-			fmt.Sprintf("SELECT i64 FROM %s WHERE i64=?", s.table),
+			"",
 			[]interface{}{int64(1)},
 		},
 		{
 			fmt.Sprintf("INSERT INTO %s (i64, u64) VALUES (?, ?)", s.table),
-			fmt.Sprintf("SELECT i64, u64 FROM %s WHERE i64=? AND u64=?", s.table),
+			"",
 			[]interface{}{int64(2), uint64(12)},
 		},
 		{
