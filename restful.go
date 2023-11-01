@@ -74,6 +74,9 @@ type APIClient struct {
 	MaxRowsInBuffer      int64
 	MaxRowsPerPage       int64
 	PresignedURLDisabled bool
+
+	// only used for testing mocks
+	doRequestFunc func(method, path string, req interface{}, resp interface{}) error
 }
 
 func NewAPIClientFromConfig(cfg *Config) *APIClient {
@@ -118,6 +121,10 @@ func initAccessTokenLoader(cfg *Config) AccessTokenLoader {
 }
 
 func (c *APIClient) doRequest(method, path string, req interface{}, resp interface{}) error {
+	if c.doRequestFunc != nil {
+		return c.doRequestFunc(method, path, req, resp)
+	}
+
 	var err error
 	reqBody := []byte{}
 	if req != nil {
