@@ -49,6 +49,8 @@ type QueryStats struct {
 	ResultProgress QueryProgress `json:"result_progress"`
 }
 
+type QueryStatsTracker func(queryID string, stats *QueryStats)
+
 type QueryProgress struct {
 	Bytes uint64 `json:"bytes"`
 	Rows  uint64 `json:"rows"`

@@ -44,7 +44,7 @@ type Config struct {
 	SSLMode         string
 
 	// track the progress of query execution
-	ProgressTracker ProgressTracker
+	StatsTracker QueryStatsTracker
 
 	// used on the storage which does not support presigned url like HDFS, local fs
 	PresignedURLDisabled bool
