@@ -97,6 +97,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		password:          cfg.Password,
 		accessTokenLoader: initAccessTokenLoader(cfg),
 		sessionSettings:   cfg.Params,
+		statsTracker:      cfg.StatsTracker,
 
 		WaitTimeSeconds:      cfg.WaitTimeSecs,
 		MaxRowsInBuffer:      cfg.MaxRowsInBuffer,
