@@ -49,6 +49,10 @@ type QueryStats struct {
 	ResultProgress QueryProgress `json:"result_progress"`
 }
 
+// QueryStatsTracker is a function that will be called when query stats are updated,
+// it can be specified in the Config struct.
+type QueryStatsTracker func(queryID string, stats *QueryStats)
+
 type QueryProgress struct {
 	Bytes uint64 `json:"bytes"`
 	Rows  uint64 `json:"rows"`

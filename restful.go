@@ -68,11 +68,15 @@ type APIClient struct {
 	password          string
 	accessTokenLoader AccessTokenLoader
 	sessionSettings   map[string]string
+	statsTracker      QueryStatsTracker
 
 	WaitTimeSeconds      int64
 	MaxRowsInBuffer      int64
 	MaxRowsPerPage       int64
 	PresignedURLDisabled bool
+
+	// only used for testing mocks
+	doRequestFunc func(method, path string, req interface{}, resp interface{}) error
 }
 
 func NewAPIClientFromConfig(cfg *Config) *APIClient {
@@ -96,6 +100,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		password:          cfg.Password,
 		accessTokenLoader: initAccessTokenLoader(cfg),
 		sessionSettings:   cfg.Params,
+		statsTracker:      cfg.StatsTracker,
 
 		WaitTimeSeconds:      cfg.WaitTimeSecs,
 		MaxRowsInBuffer:      cfg.MaxRowsInBuffer,
@@ -116,6 +121,10 @@ func initAccessTokenLoader(cfg *Config) AccessTokenLoader {
 }
 
 func (c *APIClient) doRequest(method, path string, req interface{}, resp interface{}) error {
+	if c.doRequestFunc != nil {
+		return c.doRequestFunc(method, path, req, resp)
+	}
+
 	var err error
 	reqBody := []byte{}
 	if req != nil {
@@ -177,6 +186,13 @@ func (c *APIClient) doRequest(method, path string, req interface{}, resp interfa
 		return nil
 	}
 	return errors.Errorf("failed to do request after %d retries", maxRetries)
+}
+
+func (c *APIClient) trackStats(resp *QueryResponse) {
+	if c.statsTracker == nil {
+		return
+	}
+	c.statsTracker(resp.ID, &resp.Stats)
 }
 
 func (c *APIClient) makeURL(path string, args ...interface{}) string {
@@ -275,6 +291,7 @@ func (c *APIClient) DoQuery(query string, args []driver.Value) (*QueryResponse, 
 		return nil, errors.Wrap(result.Error, "query error")
 	}
 	c.applySessionConfig(&result)
+	c.trackStats(&result)
 	return &result, nil
 }
 
@@ -304,12 +321,14 @@ func (c *APIClient) WaitForQuery(result *QueryResponse) (*QueryResponse, error) 
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to query page")
 		}
+		c.trackStats(result)
 		if result.Error != nil {
 			return nil, errors.Wrap(result.Error, "query page failed")
 		}
 		result.Schema = schema
 		result.Data = append(data, result.Data...)
 	}
+	c.trackStats(result)
 	return result, nil
 }
 
@@ -318,6 +337,7 @@ func (c *APIClient) QuerySingle(query string, args []driver.Value) (*QueryRespon
 	if err != nil {
 		return nil, err
 	}
+	c.trackStats(result)
 	return c.WaitForQuery(result)
 }
 
@@ -402,6 +422,7 @@ func (c *APIClient) QueryPage(nextURI string) (*QueryResponse, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query page")
 	}
+	c.trackStats(&result)
 	return &result, nil
 }
 
@@ -432,6 +453,7 @@ func (c *APIClient) InsertWithStage(sql string, stage *StageLocation, fileFormat
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to insert with stage")
 	}
+	c.trackStats(&result)
 	return c.WaitForQuery(&result)
 }
 
