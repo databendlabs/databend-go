@@ -43,6 +43,10 @@ type Config struct {
 	TLSConfig       string
 	SSLMode         string
 
+	// track the progress of query execution
+	ProgressTracker ProgressTracker
+
+	// used on the storage which does not support presigned url like HDFS, local fs
 	PresignedURLDisabled bool
 }
 
