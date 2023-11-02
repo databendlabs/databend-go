@@ -22,7 +22,7 @@ func waitForQueryResult(dc *DatabendConn, result *QueryResponse) (*QueryResponse
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	// save schema & queryID
+	// save schema to use in the final response
 	schema := result.Schema
 	var err error
 	for result.NextURI != "" && len(result.Data) == 0 {
