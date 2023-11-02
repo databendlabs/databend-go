@@ -38,7 +38,7 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.V
 	respCh := make(chan QueryResponse)
 	errCh := make(chan error)
 	go func() {
-		err := dc.rest.QuerySync(query, args, respCh)
+		err := dc.rest.QuerySync(ctx, query, args, respCh)
 		errCh <- err
 	}()
 
@@ -64,7 +64,7 @@ func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.
 	var r0 *QueryResponse
 	err := retry.Do(
 		func() error {
-			r, err := dc.rest.DoQuery(query, args)
+			r, err := dc.rest.DoQuery(ctx, query, args)
 			if err != nil {
 				return err
 			}
