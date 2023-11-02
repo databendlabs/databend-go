@@ -139,6 +139,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 	if err != nil {
 		return errors.Wrap(err, "failed to create http request")
 	}
+	httpReq = httpReq.WithContext(ctx)
 
 	maxRetries := 2
 	for i := 1; i <= maxRetries; i++ {
