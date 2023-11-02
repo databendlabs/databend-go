@@ -1,6 +1,7 @@
 package godatabend
 
 import (
+	"context"
 	"database/sql/driver"
 	"encoding/json"
 	"testing"
@@ -57,7 +58,7 @@ func TestDoQuery(t *testing.T) {
 		doRequestFunc:     mockDoRequest,
 		statsTracker:      statsTracker,
 	}
-	_, err := c.DoQuery("SELECT 1", []driver.Value{})
+	_, err := c.DoQuery(context.Background(), "SELECT 1", []driver.Value{})
 	assert.NoError(t, err)
 	assert.Equal(t, gotQueryID, "mockid1")
 }

@@ -62,7 +62,7 @@ func (b *httpBatch) BatchInsert() error {
 	if err != nil {
 		return errors.Wrap(err, "upload to stage failed")
 	}
-	_, err = b.conn.rest.InsertWithStage(b.query, stage, nil, nil)
+	_, err = b.conn.rest.InsertWithStage(b.ctx, b.query, stage, nil, nil)
 	if err != nil {
 		return errors.Wrap(err, "insert with stage failed")
 	}
@@ -107,7 +107,7 @@ func (b *httpBatch) UploadToStage() (*StageLocation, error) {
 		Name: "~",
 		Path: fmt.Sprintf("batch/%d-%s", time.Now().Unix(), filepath.Base(b.batchFile)),
 	}
-	return stage, b.conn.rest.UploadToStage(stage, input, size)
+	return stage, b.conn.rest.UploadToStage(b.ctx, stage, input, size)
 }
 
 var _ ldriver.Batch = (*httpBatch)(nil)
