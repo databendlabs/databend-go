@@ -1,7 +1,9 @@
 package godatabend
 
 import (
+	"context"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -20,13 +22,19 @@ func waitForQueryResult(dc *DatabendConn, result *QueryResponse) (*QueryResponse
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	// save schema for final result
+	// save schema & queryID
 	schema := result.Schema
 	var err error
 	for result.NextURI != "" && len(result.Data) == 0 {
 		dc.log("wait for query result", result.NextURI)
 		result, err = dc.rest.QueryPage(dc.ctx, result.NextURI)
-		if err != nil {
+		if errors.Is(err, context.Canceled) {
+			// context might be canceled due to timeout or canceled. if it's canceled, we need call
+			// the kill url to tell the backend it's killed.
+			dc.log("query canceled", result.ID)
+			dc.rest.KillQuery(context.Background(), result.KillURI)
+			return nil, err
+		} else if err != nil {
 			return nil, err
 		}
 		if result.Error != nil {

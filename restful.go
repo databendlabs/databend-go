@@ -427,6 +427,12 @@ func (c *APIClient) QueryPage(ctx context.Context, nextURI string) (*QueryRespon
 	return &result, nil
 }
 
+func (c *APIClient) KillQuery(ctx context.Context, killURI string) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return c.doRequest(ctx, "POST", killURI, nil, nil)
+}
+
 func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *StageLocation, fileFormatOptions, copyOptions map[string]string) (*QueryResponse, error) {
 	if stage == nil {
 		return nil, errors.New("stage location required for insert with stage")
