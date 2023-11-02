@@ -16,7 +16,7 @@ func TestMakeHeadersUserPassword(t *testing.T) {
 		host:     "localhost:8000",
 		tenant:   "default",
 	}
-	headers, err := c.makeHeaders()
+	headers, err := c.makeHeaders(context.TODO())
 	assert.Nil(t, err)
 	assert.Equal(t, headers["Authorization"], []string{"Basic cm9vdDpyb290"})
 	assert.Equal(t, headers["X-Databend-Tenant"], []string{"default"})
@@ -29,7 +29,7 @@ func TestMakeHeadersAccessToken(t *testing.T) {
 		accessTokenLoader: NewStaticAccessTokenLoader("abc123"),
 		warehouse:         "small-abc",
 	}
-	headers, err := c.makeHeaders()
+	headers, err := c.makeHeaders(context.TODO())
 	assert.Nil(t, err)
 	assert.Equal(t, headers["Authorization"], []string{"Bearer abc123"})
 	assert.Equal(t, headers["X-Databend-Tenant"], []string{"tn3ftqihs"})

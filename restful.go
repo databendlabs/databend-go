@@ -26,6 +26,10 @@ const (
 	AuthMethodAccessToken  AuthMethod = "accessToken"
 )
 
+const (
+	ContextKeyQueryID = "X-Databend-Query-ID"
+)
+
 type PresignedResponse struct {
 	Method  string
 	Headers map[string]string
@@ -143,7 +147,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 
 	maxRetries := 2
 	for i := 1; i <= maxRetries; i++ {
-		headers, err := c.makeHeaders()
+		headers, err := c.makeHeaders(ctx)
 		if err != nil {
 			return errors.Wrap(err, "failed to make request headers")
 		}
@@ -211,7 +215,7 @@ func (c *APIClient) authMethod() AuthMethod {
 	return ""
 }
 
-func (c *APIClient) makeHeaders() (http.Header, error) {
+func (c *APIClient) makeHeaders(ctx context.Context) (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
 	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", version))
@@ -220,6 +224,10 @@ func (c *APIClient) makeHeaders() (http.Header, error) {
 	}
 	if c.warehouse != "" {
 		headers.Set(DatabendWarehouseHeader, c.warehouse)
+	}
+
+	if queryID, ok := ctx.Value(ContextKeyQueryID).(string); ok {
+		headers.Set(DatabendQueryIDHeader, queryID)
 	}
 
 	switch c.authMethod() {
@@ -553,7 +561,7 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 		return errors.Wrap(err, "failed to create http request")
 	}
 
-	req.Header, err = c.makeHeaders()
+	req.Header, err = c.makeHeaders(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to make headers")
 	}
