@@ -80,6 +80,7 @@ type PaginationConfig struct {
 
 type SessionConfig struct {
 	Database string `json:"database,omitempty"`
+	Role     string `json:"role,omitempty"`
 
 	// Since we use client session, this should not be used
 	// KeepServerSessionSecs uint64            `json:"keep_server_session_secs,omitempty"`

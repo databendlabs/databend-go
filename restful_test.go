@@ -15,11 +15,14 @@ func TestMakeHeadersUserPassword(t *testing.T) {
 		password: "root",
 		host:     "localhost:8000",
 		tenant:   "default",
+		role:     "role1",
 	}
 	headers, err := c.makeHeaders()
 	assert.Nil(t, err)
 	assert.Equal(t, headers["Authorization"], []string{"Basic cm9vdDpyb290"})
 	assert.Equal(t, headers["X-Databend-Tenant"], []string{"default"})
+	session := c.getSessionConfig()
+	assert.Equal(t, session.Role, "role1")
 }
 
 func TestMakeHeadersAccessToken(t *testing.T) {
