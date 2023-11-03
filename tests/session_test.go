@@ -34,7 +34,7 @@ func (s *DatabendTestSuite) TestChangeRole() {
 	r.Nil(err)
 	dsn := os.Getenv("TEST_DATABEND_DSN")
 	s.NotEmpty(dsn)
-	dsn = fmt.Sprintf("%s?role=test_role", dsn)
+	dsn = fmt.Sprintf("%s&role=test_role", dsn)
 	s.db, err = sql.Open("databend", dsn)
 	s.Nil(err)
 	err = s.db.QueryRow("select current_role()").Scan(&result)
