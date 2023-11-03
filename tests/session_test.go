@@ -22,8 +22,10 @@ func (s *DatabendTestSuite) TestChangeDatabase() {
 func (s *DatabendTestSuite) TestChangeRole() {
 	r := require.New(s.T())
 	var result string
-
-	_, err := s.db.Exec("create role if not exists test_role")
+	err := s.db.QueryRow("select version()").Scan(&result)
+	r.Nil(err)
+	println(result)
+	_, err = s.db.Exec("create role if not exists test_role")
 	r.Nil(err)
 	defer s.db.Exec("drop role if exists test_role")
 	_, err = s.db.Exec("set role 'test_role'")

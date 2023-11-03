@@ -295,6 +295,7 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 		return nil, errors.Wrap(result.Error, "query error")
 	}
 	c.applySessionConfig(&result)
+	println(fmt.Sprintf("sql: %s, role: %s", q, c.role))
 	c.trackStats(&result)
 	return &result, nil
 }
