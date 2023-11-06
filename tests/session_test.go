@@ -1,6 +1,11 @@
 package tests
 
-import "github.com/stretchr/testify/require"
+import (
+	"database/sql"
+	"fmt"
+	"github.com/stretchr/testify/require"
+	"os"
+)
 
 func (s *DatabendTestSuite) TestChangeDatabase() {
 	r := require.New(s.T())
@@ -17,6 +22,43 @@ func (s *DatabendTestSuite) TestChangeDatabase() {
 	err = s.db.QueryRow("select currentDatabase()").Scan(&result)
 	r.Nil(err)
 	r.Equal("default", result)
+}
+
+func (s *DatabendTestSuite) TestChangeRole() {
+	r := require.New(s.T())
+	var result string
+	err := s.db.QueryRow("select version()").Scan(&result)
+	r.Nil(err)
+	println(result)
+	_, err = s.db.Exec("create role if not exists test_role")
+	r.Nil(err)
+	dsn := os.Getenv("TEST_DATABEND_DSN")
+	s.NotEmpty(dsn)
+	dsn = fmt.Sprintf("%s&role=test_role", dsn)
+	s.db, err = sql.Open("databend", dsn)
+	s.Nil(err)
+
+	err = s.db.QueryRow("select current_role()").Scan(&result)
+	r.Nil(err)
+	r.Equal("test_role", result)
+
+	dsn = os.Getenv("TEST_DATABEND_DSN")
+	s.NotEmpty(dsn)
+	s.db, err = sql.Open("databend", dsn)
+	s.Nil(err)
+	//
+	//defer s.db.Exec("drop role if exists test_role")
+	//_, err = s.db.Exec("set role 'test_role'")
+	//r.Nil(err)
+	//
+	//_, err = s.db.Exec("create role if not exists test_role_2")
+	//r.Nil(err)
+	//defer s.db.Exec("drop role if exists test_role_2")
+	//_, err = s.db.Exec("set role 'test_role_2'")
+	//r.Nil(err)
+	//err = s.db.QueryRow("select current_role()").Scan(&result)
+	//r.Nil(err)
+	//r.Equal("test_role_2", result)
 }
 
 func (s *DatabendTestSuite) TestSessionConfig() {

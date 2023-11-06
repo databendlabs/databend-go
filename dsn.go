@@ -23,6 +23,8 @@ type Config struct {
 	Password  string // Password (requires User)
 	Database  string // Database name
 
+	Role string // Role is the databend role you want to use for the current connection
+
 	AccessToken       string
 	AccessTokenFile   string // path to file containing access token, it can be used to rotate access token
 	AccessTokenLoader AccessTokenLoader
@@ -83,6 +85,10 @@ func (cfg *Config) FormatDSN() string {
 	}
 	if cfg.Warehouse != "" {
 		query.Set("warehouse", cfg.Warehouse)
+	}
+
+	if len(cfg.Role) > 0 {
+		query.Set("role", cfg.Role)
 	}
 	if cfg.AccessToken != "" {
 		query.Set("access_token", cfg.AccessToken)
@@ -151,6 +157,8 @@ func (cfg *Config) AddParams(params map[string]string) (err error) {
 			cfg.Tenant = v
 		case "warehouse":
 			cfg.Warehouse = v
+		case "role":
+			cfg.Role = v
 		case "access_token":
 			cfg.AccessToken = v
 		case "access_token_file":

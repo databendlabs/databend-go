@@ -43,7 +43,6 @@ func (s *DatabendTestSuite) SetupSuite() {
 
 	dsn := os.Getenv("TEST_DATABEND_DSN")
 	s.NotEmpty(dsn)
-
 	s.db, err = sql.Open("databend", dsn)
 	s.Nil(err)
 

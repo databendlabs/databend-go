@@ -9,7 +9,7 @@ import (
 )
 
 func TestFormatDSN(t *testing.T) {
-	dsn := "databend+https://username:password@tn3ftqihs.ch.aws-us-east-2.default.databend.com/test?timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&warehouse=wh"
+	dsn := "databend+https://username:password@tn3ftqihs.ch.aws-us-east-2.default.databend.com/test?role=test_role&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&warehouse=wh"
 	cfg, err := ParseDSN(dsn)
 	require.Nil(t, err)
 
@@ -21,6 +21,7 @@ func TestFormatDSN(t *testing.T) {
 	assert.Equal(t, int64(10000), cfg.MaxRowsPerPage)
 	assert.Equal(t, int64(10), cfg.WaitTimeSecs)
 	assert.Equal(t, int64(5000000), cfg.MaxRowsInBuffer)
+	assert.Equal(t, "test_role", cfg.Role)
 
 	dsn1 := cfg.FormatDSN()
 	cfg1, err := ParseDSN(dsn1)
