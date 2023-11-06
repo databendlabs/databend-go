@@ -304,9 +304,11 @@ func (c *APIClient) applySessionConfig(response *QueryResponse) {
 		c.database = response.Session.Database
 	}
 	if response.Session.Settings != nil {
+		newSessionSettings := map[string]string{}
 		for k, v := range response.Session.Settings {
-			c.sessionSettings[k] = v
+			newSessionSettings[k] = v
 		}
+		c.sessionSettings = newSessionSettings
 	}
 }
 
