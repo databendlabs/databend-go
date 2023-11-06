@@ -52,13 +52,12 @@ func (s *DatabendTestSuite) TestChangeRole() {
 	//r.Nil(err)
 	//
 	//_, err = s.db.Exec("create role if not exists test_role_2")
-	//r.Nil(err)
-	//defer s.db.Exec("drop role if exists test_role_2")
-	//_, err = s.db.Exec("set role 'test_role_2'")
-	//r.Nil(err)
-	//err = s.db.QueryRow("select current_role()").Scan(&result)
-	//r.Nil(err)
-	//r.Equal("test_role_2", result)
+	defer s.db.Exec("drop role if exists test_role_2")
+	_, err = s.db.Exec("set role 'test_role_2'")
+	r.Nil(err)
+	err = s.db.QueryRow("select current_role()").Scan(&result)
+	r.Nil(err)
+	r.Equal("test_role_2", result)
 }
 
 func (s *DatabendTestSuite) TestSessionConfig() {
