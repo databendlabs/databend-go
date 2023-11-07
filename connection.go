@@ -88,7 +88,7 @@ func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.
 	if r0.Error != nil {
 		return nil, fmt.Errorf("query has error: %+v", r0.Error)
 	}
-	return newNextRows(dc, r0)
+	return newNextRows(ctx, dc, r0)
 }
 
 //func (dc *DatabendConn) Begin() (driver.Tx, error) {
@@ -166,7 +166,7 @@ func (dc *DatabendConn) Close() error {
 }
 
 func (dc *DatabendConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	return dc.exec(context.Background(), query, args...)
+	return dc.exec(dc.ctx, query, args...)
 }
 
 func (dc *DatabendConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
@@ -178,7 +178,7 @@ func (dc *DatabendConn) ExecContext(ctx context.Context, query string, args []dr
 }
 
 func (dc *DatabendConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-	return dc.query(context.Background(), query, args...)
+	return dc.query(dc.ctx, query, args...)
 }
 
 func (dc *DatabendConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {

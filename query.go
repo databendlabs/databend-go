@@ -72,6 +72,8 @@ type QueryRequest struct {
 	StageAttachment *StageAttachmentConfig `json:"stage_attachment,omitempty"`
 }
 
+type QueryIDGenerator func() string
+
 type PaginationConfig struct {
 	WaitTime        int64 `json:"wait_time_secs,omitempty"`
 	MaxRowsInBuffer int64 `json:"max_rows_in_buffer,omitempty"`

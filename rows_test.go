@@ -1,6 +1,7 @@
 package godatabend
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -8,7 +9,7 @@ import (
 )
 
 func TestTextRows(t *testing.T) {
-	rows, err := newNextRows(&DatabendConn{}, &QueryResponse{
+	rows, err := newNextRows(context.Background(), &DatabendConn{}, &QueryResponse{
 		Data: [][]string{{"1", "2", "3"}, {"3", "2", "1"}},
 		Schema: []DataField{
 			{Name: "age", Type: "Int32"},

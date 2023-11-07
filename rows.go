@@ -12,13 +12,14 @@ import (
 
 type nextRows struct {
 	dc       *DatabendConn
+	ctx      context.Context
 	respData *QueryResponse
 	columns  []string
 	types    []string
 	parsers  []DataParser
 }
 
-func waitForQueryResult(dc *DatabendConn, result *QueryResponse) (*QueryResponse, error) {
+func waitForQueryResult(ctx context.Context, dc *DatabendConn, result *QueryResponse) (*QueryResponse, error) {
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -27,7 +28,7 @@ func waitForQueryResult(dc *DatabendConn, result *QueryResponse) (*QueryResponse
 	var err error
 	for result.NextURI != "" && len(result.Data) == 0 {
 		dc.log("wait for query result", result.NextURI)
-		result, err = dc.rest.QueryPage(dc.ctx, result.NextURI)
+		result, err = dc.rest.QueryPage(ctx, result.NextURI)
 		if errors.Is(err, context.Canceled) {
 			// context might be canceled due to timeout or canceled. if it's canceled, we need call
 			// the kill url to tell the backend it's killed.
@@ -45,11 +46,11 @@ func waitForQueryResult(dc *DatabendConn, result *QueryResponse) (*QueryResponse
 	return result, nil
 }
 
-func newNextRows(dc *DatabendConn, resp *QueryResponse) (*nextRows, error) {
+func newNextRows(ctx context.Context, dc *DatabendConn, resp *QueryResponse) (*nextRows, error) {
 	var columns []string
 	var types []string
 
-	result, err := waitForQueryResult(dc, resp)
+	result, err := waitForQueryResult(ctx, dc, resp)
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +75,7 @@ func newNextRows(dc *DatabendConn, resp *QueryResponse) (*nextRows, error) {
 
 	rows := &nextRows{
 		dc:       dc,
+		ctx:      ctx,
 		respData: result,
 		columns:  columns,
 		types:    types,
@@ -99,7 +101,7 @@ func (r *nextRows) Close() error {
 
 func (r *nextRows) Next(dest []driver.Value) error {
 	if len(r.respData.Data) == 0 {
-		resp, err := waitForQueryResult(r.dc, r.respData)
+		resp, err := waitForQueryResult(r.ctx, r.dc, r.respData)
 		if err != nil {
 			return err
 		}
