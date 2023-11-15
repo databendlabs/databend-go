@@ -71,6 +71,7 @@ type APIClient struct {
 	user              string
 	password          string
 	role              string
+	secondaryRoles    []string
 	accessTokenLoader AccessTokenLoader
 	sessionSettings   map[string]string
 	statsTracker      QueryStatsTracker
@@ -276,9 +277,10 @@ func (c *APIClient) getPagenationConfig() *PaginationConfig {
 
 func (c *APIClient) getSessionConfig() *SessionConfig {
 	return &SessionConfig{
-		Database: c.database,
-		Role:     c.role,
-		Settings: c.sessionSettings,
+		Database:       c.database,
+		Role:           c.role,
+		SecondaryRoles: c.secondaryRoles,
+		Settings:       c.sessionSettings,
 	}
 }
 
@@ -316,6 +318,9 @@ func (c *APIClient) applySessionConfig(response *QueryResponse) {
 	}
 	if len(response.Session.Role) > 0 {
 		c.role = response.Session.Role
+	}
+	if len(response.Session.SecondaryRoles) > 0 {
+		c.secondaryRoles = response.Session.SecondaryRoles
 	}
 	if response.Session.Settings != nil {
 		newSessionSettings := map[string]string{}

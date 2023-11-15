@@ -12,11 +12,12 @@ import (
 
 func TestMakeHeadersUserPassword(t *testing.T) {
 	c := APIClient{
-		user:     "root",
-		password: "root",
-		host:     "localhost:8000",
-		tenant:   "default",
-		role:     "role1",
+		user:           "root",
+		password:       "root",
+		host:           "localhost:8000",
+		tenant:         "default",
+		role:           "role1",
+		secondaryRoles: []string{"role2"},
 	}
 	headers, err := c.makeHeaders(context.TODO())
 	assert.Nil(t, err)
@@ -24,6 +25,7 @@ func TestMakeHeadersUserPassword(t *testing.T) {
 	assert.Equal(t, headers["X-Databend-Tenant"], []string{"default"})
 	session := c.getSessionConfig()
 	assert.Equal(t, session.Role, "role1")
+	assert.Equal(t, session.SecondaryRoles, []string{"role2"})
 }
 
 func TestMakeHeadersQueryID(t *testing.T) {
