@@ -99,6 +99,9 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 	// so you could limit the privileges by setting a role with limited privileges.
 	// however this can be overridden by executing `SET SECONDARY ROLES ALL` in the
 	// query.
+	// secondaryRoles now have two viable values:
+	// - nil: means enabling ALL the granted roles of the user
+	// - []string{}: means enabling NONE of the granted roles
 	var secondaryRoles *[]string
 	if len(cfg.Role) > 0 {
 		secondaryRoles = &[]string{}
