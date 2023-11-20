@@ -274,8 +274,8 @@ func (c *APIClient) getPagenationConfig() *PaginationConfig {
 	}
 }
 
-func (c *APIClient) getSessionConfig() *SessionConfig {
-	return &SessionConfig{
+func (c *APIClient) getSessionConfig() *SessionState {
+	return &SessionState{
 		Database: c.database,
 		Role:     c.role,
 		Settings: c.sessionSettings,

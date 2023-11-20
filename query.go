@@ -27,14 +27,14 @@ type DataField struct {
 }
 
 type QueryResponse struct {
-	ID        string         `json:"id"`
-	SessionID string         `json:"session_id"`
-	Session   *SessionConfig `json:"session"`
-	Schema    []DataField    `json:"schema"`
-	Data      [][]string     `json:"data"`
-	State     string         `json:"state"`
-	Error     *QueryError    `json:"error"`
-	Stats     QueryStats     `json:"stats"`
+	ID        string        `json:"id"`
+	SessionID string        `json:"session_id"`
+	Session   *SessionState `json:"session"`
+	Schema    []DataField   `json:"schema"`
+	Data      [][]string    `json:"data"`
+	State     string        `json:"state"`
+	Error     *QueryError   `json:"error"`
+	Stats     QueryStats    `json:"stats"`
 	// TODO: Affect rows
 	StatsURI string `json:"stats_uri"`
 	FinalURI string `json:"final_uri"`
@@ -62,7 +62,7 @@ type QueryRequest struct {
 	// We use client session instead of server session with session_id
 	// SessionID  string            `json:"session_id,omitempty"`
 
-	Session    *SessionConfig    `json:"session,omitempty"`
+	Session    *SessionState     `json:"session,omitempty"`
 	SQL        string            `json:"sql"`
 	Pagination *PaginationConfig `json:"pagination,omitempty"`
 
@@ -80,9 +80,10 @@ type PaginationConfig struct {
 	MaxRowsPerPage  int64 `json:"max_rows_per_page,omitempty"`
 }
 
-type SessionConfig struct {
-	Database string `json:"database,omitempty"`
-	Role     string `json:"role,omitempty"`
+type SessionState struct {
+	Database       string    `json:"database,omitempty"`
+	Role           string    `json:"role,omitempty"`
+	SecondaryRoles *[]string `json:"secondary_roles,omitempty"`
 
 	// Since we use client session, this should not be used
 	// KeepServerSessionSecs uint64            `json:"keep_server_session_secs,omitempty"`
