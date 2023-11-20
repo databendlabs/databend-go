@@ -63,17 +63,19 @@ func NewDefaultCopyOptions() map[string]string {
 type APIClient struct {
 	cli *http.Client
 
-	apiEndpoint       string
-	host              string
-	tenant            string
-	warehouse         string
-	database          string
-	user              string
-	password          string
-	role              string
-	accessTokenLoader AccessTokenLoader
-	sessionSettings   map[string]string
+	apiEndpoint     string
+	host            string
+	tenant          string
+	warehouse       string
+	database        string
+	user            string
+	password        string
+	role            string
+	secondaryRoles  *[]string
+	sessionSettings map[string]string
+
 	statsTracker      QueryStatsTracker
+	accessTokenLoader AccessTokenLoader
 
 	WaitTimeSeconds      int64
 	MaxRowsInBuffer      int64
@@ -274,11 +276,12 @@ func (c *APIClient) getPagenationConfig() *PaginationConfig {
 	}
 }
 
-func (c *APIClient) getSessionConfig() *SessionState {
+func (c *APIClient) getSessionState() *SessionState {
 	return &SessionState{
-		Database: c.database,
-		Role:     c.role,
-		Settings: c.sessionSettings,
+		Database:       c.database,
+		Role:           c.role,
+		SecondaryRoles: c.secondaryRoles,
+		Settings:       c.sessionSettings,
 	}
 }
 
@@ -290,7 +293,7 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	request := QueryRequest{
 		SQL:        q,
 		Pagination: c.getPagenationConfig(),
-		Session:    c.getSessionConfig(),
+		Session:    c.getSessionState(),
 	}
 
 	path := "/v1/query"
@@ -302,12 +305,12 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	if result.Error != nil {
 		return nil, errors.Wrap(result.Error, "query error")
 	}
-	c.applySessionConfig(&result)
+	c.applySessionState(&result)
 	c.trackStats(&result)
 	return &result, nil
 }
 
-func (c *APIClient) applySessionConfig(response *QueryResponse) {
+func (c *APIClient) applySessionState(response *QueryResponse) {
 	if response.Session == nil {
 		return
 	}
@@ -317,6 +320,7 @@ func (c *APIClient) applySessionConfig(response *QueryResponse) {
 	if len(response.Session.Role) > 0 {
 		c.role = response.Session.Role
 	}
+	c.secondaryRoles = response.Session.SecondaryRoles
 	if response.Session.Settings != nil {
 		newSessionSettings := map[string]string{}
 		for k, v := range response.Session.Settings {
@@ -462,7 +466,7 @@ func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *Stag
 	request := QueryRequest{
 		SQL:        sql,
 		Pagination: c.getPagenationConfig(),
-		Session:    c.getSessionConfig(),
+		Session:    c.getSessionState(),
 		StageAttachment: &StageAttachmentConfig{
 			Location:          stage.String(),
 			FileFormatOptions: fileFormatOptions,

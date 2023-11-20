@@ -22,7 +22,7 @@ func TestMakeHeadersUserPassword(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, headers["Authorization"], []string{"Basic cm9vdDpyb290"})
 	assert.Equal(t, headers["X-Databend-Tenant"], []string{"default"})
-	session := c.getSessionConfig()
+	session := c.getSessionState()
 	assert.Equal(t, session.Role, "role1")
 }
 
