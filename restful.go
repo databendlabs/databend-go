@@ -94,6 +94,16 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 	default:
 		apiScheme = "https"
 	}
+
+	// if role is set in config, we'd prefer to limit it as the only effective role,
+	// so you could limit the privileges by setting a role with limited privileges.
+	// however this can be overridden by executing `SET SECONDARY ROLES ALL` in the
+	// query.
+	var secondaryRoles *[]string
+	if len(cfg.Role) > 0 {
+		secondaryRoles = &[]string{}
+	}
+
 	return &APIClient{
 		cli: &http.Client{
 			Timeout: cfg.Timeout,
@@ -106,6 +116,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		user:              cfg.User,
 		password:          cfg.Password,
 		role:              cfg.Role,
+		secondaryRoles:    secondaryRoles,
 		accessTokenLoader: initAccessTokenLoader(cfg),
 		sessionSettings:   cfg.Params,
 		statsTracker:      cfg.StatsTracker,
