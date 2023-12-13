@@ -3,7 +3,6 @@ package tests
 import (
 	"database/sql"
 	"fmt"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -41,7 +40,8 @@ type DatabendTestSuite struct {
 func (s *DatabendTestSuite) SetupSuite() {
 	var err error
 
-	dsn := os.Getenv("TEST_DATABEND_DSN")
+	//dsn := os.Getenv("TEST_DATABEND_DSN")
+	dsn := "databend://databend:databend@localhost:8000/default?sslmode=disable"
 	s.NotEmpty(dsn)
 	s.db, err = sql.Open("databend", dsn)
 	s.Nil(err)
@@ -207,6 +207,17 @@ func (s *DatabendTestSuite) TestExec() {
 func (s *DatabendTestSuite) TestServerError() {
 	_, err := s.db.Query("SELECT 1 FROM '???'")
 	s.Contains(err.Error(), "error")
+}
+
+func (s *DatabendTestSuite) TestQueryNull() {
+	rows, err := s.db.Query("SELECT NULL")
+	s.r.Nil(err)
+
+	result, err := scanValues(rows)
+	s.r.Nil(err)
+	s.r.Equal([][]interface{}{[]interface{}{"NULL"}}, result)
+
+	s.r.NoError(rows.Close())
 }
 
 func scanValues(rows *sql.Rows) (interface{}, error) {

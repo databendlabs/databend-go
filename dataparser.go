@@ -611,6 +611,8 @@ func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParse
 		return &nothingParser{}, nil
 	case "Nullable":
 		return &stringParser{unquote: unquote}, nil
+	case "NULL":
+		return &stringParser{unquote: unquote}, nil
 	case "Date":
 		loc := time.UTC
 		if opt != nil && opt.Location != nil {
