@@ -13,14 +13,17 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-
-	ldriver "github.com/databendcloud/databend-go/lib/driver"
 )
 
 // \x60 represents a backtick
 var httpInsertRe = regexp.MustCompile(`(?i)^INSERT INTO\s+\x60?([\w.^\(]+)\x60?\s*(\([^\)]*\))? VALUES`)
 
-func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (ldriver.Batch, error) {
+type Batch interface {
+	AppendToFile(v []driver.Value) error
+	BatchInsert() error
+}
+
+func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (Batch, error) {
 	matches := httpInsertRe.FindStringSubmatch(query)
 	if len(matches) < 2 {
 		return nil, errors.New("cannot get table name from query")
@@ -109,5 +112,3 @@ func (b *httpBatch) UploadToStage() (*StageLocation, error) {
 	}
 	return stage, b.conn.rest.UploadToStage(b.ctx, stage, input, size)
 }
-
-var _ ldriver.Batch = (*httpBatch)(nil)

@@ -9,27 +9,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      databend:
-        image: datafuselabs/databend
-        env:
-          QUERY_DEFAULT_USER: databend
-          QUERY_DEFAULT_PASSWORD: databend
-          MINIO_ENABLED: true
-        # options: >-
-        #   --health-cmd "curl -fs http://localhost:8000/v1/health || exit 1"
-        #   --health-interval 10s
-        #   --health-timeout 5s
-        #   --health-retries 5
-        ports:
-          - 8000:8000
-          - 9000:9000
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: "1.18"
 
@@ -37,15 +22,8 @@ jobs:
         run: |
           make test
 
-      - name: Verify Service Running
-        run: |
-          cid=$(docker ps -a | grep databend | cut -d' ' -f1)
-          docker logs ${cid}
-          curl -v http://localhost:8000/v1/health
-
-      - name: Test
+      - name: Integration Test
         env:
-          # TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?idle_timeout=1h&presigned_url_disabled=1&sslmode=disable"
           TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?sslmode=disable"
         run: |
-          make ci
+          make integration

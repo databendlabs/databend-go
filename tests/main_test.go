@@ -3,6 +3,7 @@ package tests
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/test-go/testify/suite"
 
-	dc "github.com/databendcloud/databend-go"
+	dc "github.com/datafuselabs/databend-go"
 )
 
 const (
@@ -40,8 +41,7 @@ type DatabendTestSuite struct {
 func (s *DatabendTestSuite) SetupSuite() {
 	var err error
 
-	//dsn := os.Getenv("TEST_DATABEND_DSN")
-	dsn := "databend://databend:databend@localhost:8000/default?sslmode=disable"
+	dsn := os.Getenv("TEST_DATABEND_DSN")
 	s.NotEmpty(dsn)
 	s.db, err = sql.Open("databend", dsn)
 	s.Nil(err)
@@ -85,7 +85,7 @@ func (s *DatabendTestSuite) TestDesc() {
 
 	result, err := scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{[]interface{}{"i64", "BIGINT", "YES", "NULL", ""}, []interface{}{"u64", "BIGINT UNSIGNED", "YES", "NULL", ""}, []interface{}{"f64", "DOUBLE", "YES", "NULL", ""}, []interface{}{"s", "VARCHAR", "YES", "NULL", ""}, []interface{}{"s2", "VARCHAR", "YES", "NULL", ""}, []interface{}{"a16", "ARRAY(INT16)", "YES", "NULL", ""}, []interface{}{"a8", "ARRAY(UINT8)", "YES", "NULL", ""}, []interface{}{"d", "DATE", "YES", "NULL", ""}, []interface{}{"t", "TIMESTAMP", "YES", "NULL", ""}}, result)
+	s.r.Equal([][]interface{}{{"i64", "BIGINT", "YES", "NULL", ""}, {"u64", "BIGINT UNSIGNED", "YES", "NULL", ""}, {"f64", "DOUBLE", "YES", "NULL", ""}, {"s", "VARCHAR", "YES", "NULL", ""}, {"s2", "VARCHAR", "YES", "NULL", ""}, {"a16", "ARRAY(INT16)", "YES", "NULL", ""}, {"a8", "ARRAY(UINT8)", "YES", "NULL", ""}, {"d", "DATE", "YES", "NULL", ""}, {"t", "TIMESTAMP", "YES", "NULL", ""}}, result)
 	rows.Close()
 }
 
@@ -215,7 +215,7 @@ func (s *DatabendTestSuite) TestQueryNull() {
 
 	result, err := scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{[]interface{}{"NULL"}}, result)
+	s.r.Equal([][]interface{}{{"NULL"}}, result)
 
 	s.r.NoError(rows.Close())
 }

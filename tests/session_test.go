@@ -54,6 +54,7 @@ func (s *DatabendTestSuite) TestChangeRole() {
 	//
 
 	_, err = s.db.Exec("create role if not exists test_role_2")
+	r.Nil(err)
 	//defer s.db.Exec("drop role if exists test_role_2")
 	_, err = s.db.Exec("set role 'test_role_2'")
 	r.Nil(err)

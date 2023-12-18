@@ -3,6 +3,7 @@ services:
   minio:
     image: docker.io/minio/minio
     command: server /data
+    network_mode: "host"
     volumes:
       - ./data:/data
   databend:
@@ -11,24 +12,15 @@ services:
       - QUERY_DEFAULT_USER=databend
       - QUERY_DEFAULT_PASSWORD=databend
       - QUERY_STORAGE_TYPE=s3
-      - AWS_S3_ENDPOINT=http://minio:9000
+      - AWS_S3_ENDPOINT=http://localhost:9000
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
+    network_mode: "host"
     depends_on:
       - minio
     healthcheck:
       test: "curl -f localhost:8080/v1/health || exit 1"
-  test:
-    image: golang
-    command: go test -v -timeout 30m ./tests/...
-    working_dir: /workdir
-    environment:
-      - TEST_DATABEND_DSN=databend://databend:databend@databend:8000/default?sslmode=disable
-    volumes:
-      - ../:/workdir
-      - build_data:/go
-    depends_on:
-      - databend
-
-volumes:
-  build_data:
+      interval: 2s
+      retries: 10
+      start_period: 2s
+      timeout: 1s
