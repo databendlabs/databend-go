@@ -5,7 +5,6 @@ import (
 	"database/sql/driver"
 	"regexp"
 
-	ldriver "github.com/databendcloud/databend-go/lib/driver"
 	"github.com/pkg/errors"
 )
 
@@ -22,7 +21,7 @@ type databendStmt struct {
 	batchMode bool
 	args      [][]driver.Value
 	query     string
-	batch     ldriver.Batch
+	batch     Batch
 }
 
 func (stmt *databendStmt) Close() error {

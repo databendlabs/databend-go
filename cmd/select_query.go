@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
-	dc "github.com/databendcloud/databend-go"
+	dc "github.com/datafuselabs/databend-go"
 )
 
 // getDSN constructs a DSN based on the test connection parameters

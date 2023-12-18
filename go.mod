@@ -1,4 +1,4 @@
-module github.com/databendcloud/databend-go
+module github.com/datafuselabs/databend-go
 
 go 1.18
 

@@ -4,7 +4,7 @@ Golang driver for [databend cloud](https://www.databend.com/)
 ## Installation
 
 ```
-go get github.com/databendcloud/databend-go
+go get github.com/datafuselabs/databend-go
 ```
 
 ## Key features
@@ -20,7 +20,7 @@ Connection can be achieved either via a DSN string with the format `https://user
 ```go
 import (
   "database/sql"
-  _ "github.com/databendcloud/databend-go"
+  _ "github.com/datafuselabs/databend-go"
 )
 
 func ConnectDSN() error {
@@ -61,9 +61,8 @@ Once a connection has been obtained, users can issue sql statements for executio
 	_, err = conn.Exec(`
     CREATE TABLE IF NOT EXISTS  data(
         Col1 TINYINT,
-        Col2 VARCHAR 
-    ) 
-    `)
+        Col2 VARCHAR
+    )`)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -90,7 +89,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	_ "github.com/databendcloud/databend-go"
+	_ "github.com/datafuselabs/databend-go"
 )
 
 func main() {
@@ -127,7 +126,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	_ "github.com/databendcloud/databend-go"
+	_ "github.com/datafuselabs/databend-go"
 )
 
 func main() {
@@ -158,7 +157,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	_ "github.com/databendcloud/databend-go"
+	_ "github.com/datafuselabs/databend-go"
 )
 
 func main() {
