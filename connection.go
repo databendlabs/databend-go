@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/avast/retry-go"
+	"github.com/google/uuid"
 )
 
 const (
@@ -37,6 +38,8 @@ type DatabendConn struct {
 func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.Value) (driver.Result, error) {
 	respCh := make(chan QueryResponse)
 	errCh := make(chan error)
+
+	ctx = checkQueryID(ctx)
 	go func() {
 		err := dc.rest.QuerySync(ctx, query, args, respCh)
 		errCh <- err
@@ -62,6 +65,7 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.V
 
 func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.Value) (driver.Rows, error) {
 	var r0 *QueryResponse
+	ctx = checkQueryID(ctx)
 	err := retry.Do(
 		func() error {
 			r, err := dc.rest.DoQuery(ctx, query, args)
@@ -205,4 +209,14 @@ func (dc *DatabendConn) Rollback() error {
 	dc.commit = nil
 	dc.Close()
 	return nil
+}
+
+// checkQueryID checks if query_id exists in context, if not, generate a new one
+func checkQueryID(ctx context.Context) context.Context {
+	if _, ok := ctx.Value(ContextKeyQueryID).(string); ok {
+		return ctx
+	}
+	queryId := uuid.NewString()
+	ctx = context.WithValue(ctx, ContextKeyQueryID, queryId)
+	return ctx
 }
