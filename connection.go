@@ -112,6 +112,7 @@ func (dc *DatabendConn) Prepare(query string) (driver.Stmt, error) {
 }
 
 func (dc *DatabendConn) prepare(query string) (*databendStmt, error) {
+	dc.ctx = checkQueryID(dc.ctx)
 	logger.WithContext(dc.ctx).Infoln("Prepare")
 	if dc.rest == nil {
 		return nil, driver.ErrBadConn
@@ -121,8 +122,6 @@ func (dc *DatabendConn) prepare(query string) (*databendStmt, error) {
 		return nil, err
 	}
 	dc.commit = batch.BatchInsert
-	dc.ctx = checkQueryID(dc.ctx)
-
 	stmt := &databendStmt{
 		dc:    dc,
 		query: query,
