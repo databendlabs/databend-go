@@ -143,6 +143,7 @@ func initAccessTokenLoader(cfg *Config) AccessTokenLoader {
 }
 
 func (c *APIClient) doRequest(ctx context.Context, method, path string, req interface{}, resp interface{}) error {
+	ctx = checkQueryID(ctx)
 	if c.doRequestFunc != nil {
 		return c.doRequestFunc(method, path, req, resp)
 	}

@@ -61,7 +61,7 @@ func (b *httpBatch) BatchInsert() error {
 			b.conn.log("delete batch insert file failed: ", err)
 		}
 	}()
-	stage, err := b.UploadToStage()
+	stage, err := b.UploadToStage(context.Background())
 	if err != nil {
 		return errors.Wrap(err, "upload to stage failed")
 	}
@@ -93,7 +93,7 @@ func (b *httpBatch) AppendToFile(v []driver.Value) error {
 	return nil
 }
 
-func (b *httpBatch) UploadToStage() (*StageLocation, error) {
+func (b *httpBatch) UploadToStage(ctx context.Context) (*StageLocation, error) {
 	fi, err := os.Stat(b.batchFile)
 	if err != nil {
 		return nil, errors.Wrap(err, "get batch file size failed")
@@ -110,5 +110,5 @@ func (b *httpBatch) UploadToStage() (*StageLocation, error) {
 		Name: "~",
 		Path: fmt.Sprintf("batch/%d-%s", time.Now().Unix(), filepath.Base(b.batchFile)),
 	}
-	return stage, b.conn.rest.UploadToStage(b.ctx, stage, input, size)
+	return stage, b.conn.rest.UploadToStage(ctx, stage, input, size)
 }
