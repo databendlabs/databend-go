@@ -121,6 +121,7 @@ func (dc *DatabendConn) prepare(query string) (*databendStmt, error) {
 		return nil, err
 	}
 	dc.commit = batch.BatchInsert
+	dc.ctx = checkQueryID(dc.ctx)
 
 	stmt := &databendStmt{
 		dc:    dc,
