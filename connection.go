@@ -39,7 +39,6 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.V
 	respCh := make(chan QueryResponse)
 	errCh := make(chan error)
 
-	ctx = checkQueryID(ctx)
 	go func() {
 		err := dc.rest.QuerySync(ctx, query, args, respCh)
 		errCh <- err
@@ -65,7 +64,6 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.V
 
 func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.Value) (driver.Rows, error) {
 	var r0 *QueryResponse
-	ctx = checkQueryID(ctx)
 	err := retry.Do(
 		func() error {
 			r, err := dc.rest.DoQuery(ctx, query, args)
@@ -111,13 +109,12 @@ func (dc *DatabendConn) Prepare(query string) (driver.Stmt, error) {
 	return dc.PrepareContext(context.Background(), query)
 }
 
-func (dc *DatabendConn) prepare(query string) (*databendStmt, error) {
-	dc.ctx = checkQueryID(dc.ctx)
+func (dc *DatabendConn) prepare(ctx context.Context, query string) (*databendStmt, error) {
 	logger.WithContext(dc.ctx).Infoln("Prepare")
 	if dc.rest == nil {
 		return nil, driver.ErrBadConn
 	}
-	batch, err := dc.prepareBatch(dc.ctx, query)
+	batch, err := dc.prepareBatch(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +128,7 @@ func (dc *DatabendConn) prepare(query string) (*databendStmt, error) {
 }
 
 func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
-	return dc.prepare(query)
+	return dc.prepare(ctx, query)
 }
 
 func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error) {
