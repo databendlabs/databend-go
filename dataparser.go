@@ -687,7 +687,7 @@ func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParse
 		return &floatParser{32}, nil
 	case "Float64":
 		return &floatParser{64}, nil
-	case "Decimal", "String", "Enum8", "Enum16", "UUID", "IPv4", "IPv6", "VariantObject":
+	case "Decimal", "String", "Enum8", "Enum16", "UUID", "IPv4", "IPv6", "Variant", "VariantObject":
 		return &stringParser{unquote: unquote}, nil
 	case "FixedString":
 		if len(t.Args) != 1 {

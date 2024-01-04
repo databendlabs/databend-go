@@ -49,11 +49,11 @@ func (s *DatabendTestSuite) SetupSuite() {
 	err = s.db.Ping()
 	s.Nil(err)
 
-	var version string
-	err = s.db.QueryRow("select version()").Scan(&version)
+	rows, err := s.db.Query("select version()")
 	s.Nil(err)
+	result, err := scanValues(rows)
 
-	s.T().Logf("connected to databend: %s\n", version)
+	s.T().Logf("connected to databend: %s\n", result)
 }
 
 func (s *DatabendTestSuite) TearDownSuite() {
@@ -76,6 +76,13 @@ func (s *DatabendTestSuite) TearDownTest() {
 
 	// t.Logf("teardown test with table %s", s.table)
 	_, err := s.db.Exec(fmt.Sprintf("DROP TABLE %s", s.table))
+	s.r.Nil(err)
+}
+
+// For load balance test
+func (s *DatabendTestSuite) TestCycleExec() {
+	rows, err := s.db.Query("SELECT number from numbers(200) order by number")
+	_, err = scanValues(rows)
 	s.r.Nil(err)
 }
 
@@ -132,21 +139,21 @@ func (s *DatabendTestSuite) TestDDL() {
 	ddls := []string{
 		`DROP TABLE IF EXISTS data`,
 		`CREATE TABLE data (
-			i64 Int64,
-			u64 UInt64,
-			f64 Float64,
-			s   String,
-			s2  String,
-			a16 Array(Int16),
-			a8  Array(UInt8),
-			d   Date,
-			t   DateTime)
-	`,
+				i64 Int64,
+				u64 UInt64,
+				f64 Float64,
+				s   String,
+				s2  String,
+				a16 Array(Int16),
+				a8  Array(UInt8),
+				d   Date,
+				t   DateTime)
+		`,
 		`INSERT INTO data VALUES
-		(-1, 1, 1.0, '1', '1', [1], [10], '2011-03-06', '2011-03-06 06:20:00'),
-		(-2, 2, 2.0, '2', '2', [2], [20], '2012-05-31', '2012-05-31 11:20:00'),
-		(-3, 3, 3.0, '3', '2', [3], [30], '2016-04-04', '2016-04-04 11:30:00')
-	`,
+			(-1, 1, 1.0, '1', '1', [1], [10], '2011-03-06', '2011-03-06 06:20:00'),
+			(-2, 2, 2.0, '2', '2', [2], [20], '2012-05-31', '2012-05-31 11:20:00'),
+			(-3, 3, 3.0, '3', '2', [3], [30], '2016-04-04', '2016-04-04 11:30:00')
+		`,
 	}
 	for _, ddl := range ddls {
 		_, err := s.db.Exec(ddl)
