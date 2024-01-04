@@ -38,6 +38,7 @@ type DatabendConn struct {
 func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.Value) (driver.Result, error) {
 	respCh := make(chan QueryResponse)
 	errCh := make(chan error)
+	ctx = checkQueryID(ctx)
 
 	go func() {
 		err := dc.rest.QuerySync(ctx, query, args, respCh)
@@ -64,6 +65,7 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.V
 
 func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.Value) (driver.Rows, error) {
 	var r0 *QueryResponse
+	ctx = checkQueryID(ctx)
 	err := retry.Do(
 		func() error {
 			r, err := dc.rest.DoQuery(ctx, query, args)
@@ -106,7 +108,7 @@ func (dc *DatabendConn) cleanup() {
 }
 
 func (dc *DatabendConn) Prepare(query string) (driver.Stmt, error) {
-	return dc.PrepareContext(context.Background(), query)
+	return dc.PrepareContext(dc.ctx, query)
 }
 
 func (dc *DatabendConn) prepare(ctx context.Context, query string) (*databendStmt, error) {
@@ -128,6 +130,7 @@ func (dc *DatabendConn) prepare(ctx context.Context, query string) (*databendStm
 }
 
 func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+	ctx = checkQueryID(ctx)
 	return dc.prepare(ctx, query)
 }
 
