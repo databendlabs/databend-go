@@ -26,8 +26,10 @@ const (
 	AuthMethodAccessToken  AuthMethod = "accessToken"
 )
 
+type ContextKey string
+
 const (
-	ContextKeyQueryID = "X-Databend-Query-ID"
+	ContextKeyQueryID ContextKey = "X-Databend-Query-ID"
 )
 
 type PresignedResponse struct {

@@ -52,6 +52,7 @@ func (s *DatabendTestSuite) SetupSuite() {
 	rows, err := s.db.Query("select version()")
 	s.Nil(err)
 	result, err := scanValues(rows)
+	s.Nil(err)
 
 	s.T().Logf("connected to databend: %s\n", result)
 }
@@ -82,6 +83,7 @@ func (s *DatabendTestSuite) TearDownTest() {
 // For load balance test
 func (s *DatabendTestSuite) TestCycleExec() {
 	rows, err := s.db.Query("SELECT number from numbers(200) order by number")
+	s.r.Nil(err)
 	_, err = scanValues(rows)
 	s.r.Nil(err)
 }
