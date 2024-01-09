@@ -107,6 +107,14 @@ func (dc *DatabendConn) cleanup() {
 	dc.cfg = nil
 }
 
+func (dc *DatabendConn) Ping(ctx context.Context) error {
+	_, err := dc.exec(ctx, "SELECT 1")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (dc *DatabendConn) Prepare(query string) (driver.Stmt, error) {
 	return dc.PrepareContext(dc.ctx, query)
 }
@@ -169,20 +177,12 @@ func (dc *DatabendConn) Close() error {
 	return nil
 }
 
-func (dc *DatabendConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	return dc.exec(dc.ctx, query, args...)
-}
-
 func (dc *DatabendConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	values := make([]driver.Value, len(args))
 	for i, arg := range args {
 		values[i] = arg.Value
 	}
 	return dc.exec(ctx, query, values...)
-}
-
-func (dc *DatabendConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-	return dc.query(dc.ctx, query, args...)
 }
 
 func (dc *DatabendConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
