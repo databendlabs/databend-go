@@ -2,6 +2,7 @@ package tests
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -25,6 +26,7 @@ const (
 		a8  Array(UInt8),
 		d   Date,
 		t   DateTime)`
+	createTable2 = `create table %s (a string);`
 )
 
 func TestDatabendSuite(t *testing.T) {
@@ -33,9 +35,10 @@ func TestDatabendSuite(t *testing.T) {
 
 type DatabendTestSuite struct {
 	suite.Suite
-	db    *sql.DB
-	table string
-	r     *require.Assertions
+	db     *sql.DB
+	table  string
+	table2 string
+	r      *require.Assertions
 }
 
 func (s *DatabendTestSuite) SetupSuite() {
@@ -67,8 +70,11 @@ func (s *DatabendTestSuite) SetupTest() {
 
 	s.table = fmt.Sprintf("test_%s_%d", t.Name(), time.Now().Unix())
 	// t.Logf("setup test with table %s", s.table)
+	s.table2 = fmt.Sprintf("test_%s_%d", t.Name(), time.Now().Unix()+1)
 
 	_, err := s.db.Exec(fmt.Sprintf(createTable, s.table))
+	s.r.Nil(err)
+	_, err = s.db.Exec(fmt.Sprintf(createTable2, s.table2))
 	s.r.Nil(err)
 }
 
@@ -78,6 +84,8 @@ func (s *DatabendTestSuite) TearDownTest() {
 	// t.Logf("teardown test with table %s", s.table)
 	_, err := s.db.Exec(fmt.Sprintf("DROP TABLE %s", s.table))
 	s.r.Nil(err)
+	_, err = s.db.Exec(fmt.Sprintf("DROP TABLE %s", s.table2))
+	s.r.Nil(err)
 }
 
 // For load balance test
@@ -86,6 +94,20 @@ func (s *DatabendTestSuite) TestCycleExec() {
 	s.r.Nil(err)
 	_, err = scanValues(rows)
 	s.r.Nil(err)
+}
+
+func (s *DatabendTestSuite) TestQuoteStringQuery() {
+	m := make(map[string]string, 0)
+	m["message"] = "this is action 'with quote string'"
+	x, err := json.Marshal(m)
+	_, err = s.db.Exec(fmt.Sprintf("insert into %s values(?)", s.table2), string(x))
+	s.r.Nil(err)
+	rows, err := s.db.Query(fmt.Sprintf("select * from %s", s.table2))
+	for rows.Next() {
+		var t string
+		rows.Scan(&t)
+		s.r.Equal(string(x), t)
+	}
 }
 
 func (s *DatabendTestSuite) TestDesc() {
