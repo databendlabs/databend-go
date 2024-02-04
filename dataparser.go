@@ -66,9 +66,9 @@ loop:
 				return "", fmt.Errorf("incorrect escaping in string: %v", err)
 			}
 			r = escaped
-		case '\'':
-			_ = s.UnreadRune()
-			break loop
+			//case '\'':
+			//	_ = s.UnreadRune()
+			//	break loop
 		}
 
 		builder.WriteRune(r)
