@@ -30,6 +30,8 @@ type ContextKey string
 
 const (
 	ContextKeyQueryID ContextKey = "X-Databend-Query-ID"
+	EMPTY_FIELD_AS    string     = "empty_field_as"
+	PURGE             string     = "purge"
 )
 
 type PresignedResponse struct {
@@ -56,9 +58,10 @@ func NewDefaultCSVFormatOptions() map[string]string {
 	}
 }
 
-func NewDefaultCopyOptions() map[string]string {
+func (c *APIClient) NewDefaultCopyOptions() map[string]string {
 	return map[string]string{
-		"purge": "true",
+		PURGE:          "true",
+		EMPTY_FIELD_AS: c.EmptyFieldAs,
 	}
 }
 
@@ -83,6 +86,7 @@ type APIClient struct {
 	MaxRowsInBuffer      int64
 	MaxRowsPerPage       int64
 	PresignedURLDisabled bool
+	EmptyFieldAs         string
 
 	// only used for testing mocks
 	doRequestFunc func(method, path string, req interface{}, resp interface{}) error
@@ -130,6 +134,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		MaxRowsInBuffer:      cfg.MaxRowsInBuffer,
 		MaxRowsPerPage:       cfg.MaxRowsPerPage,
 		PresignedURLDisabled: cfg.PresignedURLDisabled,
+		EmptyFieldAs:         cfg.EmptyFieldAs,
 	}
 }
 
@@ -477,7 +482,7 @@ func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *Stag
 		fileFormatOptions = NewDefaultCSVFormatOptions()
 	}
 	if copyOptions == nil {
-		copyOptions = NewDefaultCopyOptions()
+		copyOptions = c.NewDefaultCopyOptions()
 	}
 	request := QueryRequest{
 		SQL:        sql,
