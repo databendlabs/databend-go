@@ -9,7 +9,7 @@ import (
 )
 
 func TestFormatDSN(t *testing.T) {
-	dsn := "databend+https://username:password@tn3ftqihs.ch.aws-us-east-2.default.databend.com/test?role=test_role&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&warehouse=wh"
+	dsn := "databend+https://username:password@tn3ftqihs.ch.aws-us-east-2.default.databend.com/test?role=test_role&empty_field_as=string&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&warehouse=wh"
 	cfg, err := ParseDSN(dsn)
 	require.Nil(t, err)
 

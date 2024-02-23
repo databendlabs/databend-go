@@ -50,6 +50,12 @@ type Config struct {
 
 	// used on the storage which does not support presigned url like HDFS, local fs
 	PresignedURLDisabled bool
+
+	// Specifies the value that should be used when encountering empty fields, including both ,, and ,"",, in the CSV data being loaded into the table.
+	// https://docs.databend.com/sql/sql-reference/file-format-options#empty_field_as
+	// default is `string`
+	// databend version should >= v1.2.345-nightly
+	EmptyFieldAs string
 }
 
 // NewConfig creates a new config with default values
@@ -126,6 +132,11 @@ func (cfg *Config) FormatDSN() string {
 	if cfg.PresignedURLDisabled {
 		query.Set("presigned_url_disabled", "1")
 	}
+	if cfg.EmptyFieldAs != "" {
+		query.Set("empty_field_as", cfg.EmptyFieldAs)
+	} else {
+		query.Set("empty_field_as", "string")
+	}
 
 	u.RawQuery = query.Encode()
 	return u.String()
@@ -151,6 +162,8 @@ func (cfg *Config) AddParams(params map[string]string) (err error) {
 			cfg.Params[k] = v
 		case "presigned_url_disabled":
 			cfg.PresignedURLDisabled, err = strconv.ParseBool(v)
+		case "empty_field_as":
+			cfg.EmptyFieldAs = v
 		case "tls_config":
 			cfg.TLSConfig = v
 		case "tenant":
