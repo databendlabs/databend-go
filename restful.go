@@ -49,19 +49,19 @@ func (sl *StageLocation) String() string {
 	return fmt.Sprintf("@%s/%s", sl.Name, sl.Path)
 }
 
-func NewDefaultCSVFormatOptions() map[string]string {
+func (c *APIClient) NewDefaultCSVFormatOptions() map[string]string {
 	return map[string]string{
 		"type":             "CSV",
 		"field_delimiter":  ",",
 		"record_delimiter": "\n",
 		"skip_header":      "0",
+		EMPTY_FIELD_AS:     c.EmptyFieldAs,
 	}
 }
 
 func (c *APIClient) NewDefaultCopyOptions() map[string]string {
 	return map[string]string{
-		PURGE:          "true",
-		EMPTY_FIELD_AS: c.EmptyFieldAs,
+		PURGE: "true",
 	}
 }
 
@@ -479,7 +479,7 @@ func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *Stag
 		return nil, errors.New("stage location required for insert with stage")
 	}
 	if fileFormatOptions == nil {
-		fileFormatOptions = NewDefaultCSVFormatOptions()
+		fileFormatOptions = c.NewDefaultCSVFormatOptions()
 	}
 	if copyOptions == nil {
 		copyOptions = c.NewDefaultCopyOptions()
