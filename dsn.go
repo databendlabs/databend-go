@@ -143,6 +143,7 @@ func (cfg *Config) FormatDSN() string {
 }
 
 func (cfg *Config) AddParams(params map[string]string) (err error) {
+	cfg.makeDefaultConfigValue()
 	for k, v := range params {
 		switch k {
 		case "timeout":
@@ -186,6 +187,12 @@ func (cfg *Config) AddParams(params map[string]string) (err error) {
 	}
 
 	return
+}
+
+func (cfg *Config) makeDefaultConfigValue() {
+	if cfg.EmptyFieldAs == "" {
+		cfg.EmptyFieldAs = "string"
+	}
 }
 
 // ParseDSN parses the DSN string to a Config

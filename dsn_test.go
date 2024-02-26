@@ -9,7 +9,7 @@ import (
 )
 
 func TestFormatDSN(t *testing.T) {
-	dsn := "databend+https://username:password@tn3ftqihs.ch.aws-us-east-2.default.databend.com/test?role=test_role&empty_field_as=string&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&warehouse=wh"
+	dsn := "databend+https://username:password@tn3ftqihs.ch.aws-us-east-2.default.databend.com/test?role=test_role&empty_field_as=null&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&warehouse=wh"
 	cfg, err := ParseDSN(dsn)
 	require.Nil(t, err)
 
@@ -34,6 +34,7 @@ func TestParseDSN(t *testing.T) {
 		dsn := "databend+http://app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&access_token_file=/tmp/file1"
 
 		cfg, err := ParseDSN(dsn)
+		assert.Equal(t, "string", cfg.EmptyFieldAs)
 		require.Nil(t, err)
 		assert.Equal(t, "/tmp/file1", cfg.AccessTokenFile)
 	})
