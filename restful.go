@@ -68,16 +68,14 @@ func (c *APIClient) NewDefaultCopyOptions() map[string]string {
 type APIClient struct {
 	cli *http.Client
 
-	apiEndpoint     string
-	host            string
-	tenant          string
-	warehouse       string
-	database        string
-	user            string
-	password        string
-	role            string
-	secondaryRoles  *[]string
-	sessionSettings map[string]string
+	apiEndpoint  string
+	host         string
+	tenant       string
+	warehouse    string
+	database     string
+	user         string
+	password     string
+	sessionState *SessionState
 
 	statsTracker      QueryStatsTracker
 	accessTokenLoader AccessTokenLoader
@@ -117,17 +115,20 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		cli: &http.Client{
 			Timeout: cfg.Timeout,
 		},
-		apiEndpoint:       fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
-		host:              cfg.Host,
-		tenant:            cfg.Tenant,
-		warehouse:         cfg.Warehouse,
-		database:          cfg.Database,
-		user:              cfg.User,
-		password:          cfg.Password,
-		role:              cfg.Role,
-		secondaryRoles:    secondaryRoles,
+		apiEndpoint: fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
+		host:        cfg.Host,
+		tenant:      cfg.Tenant,
+		warehouse:   cfg.Warehouse,
+		user:        cfg.User,
+		password:    cfg.Password,
+		sessionState: &SessionState{
+			Database:       cfg.Database,
+			Role:           cfg.Role,
+			SecondaryRoles: secondaryRoles,
+			Settings:       cfg.Params,
+		},
+
 		accessTokenLoader: initAccessTokenLoader(cfg),
-		sessionSettings:   cfg.Params,
 		statsTracker:      cfg.StatsTracker,
 
 		WaitTimeSeconds:      cfg.WaitTimeSecs,
@@ -298,12 +299,7 @@ func (c *APIClient) getPagenationConfig() *PaginationConfig {
 }
 
 func (c *APIClient) getSessionState() *SessionState {
-	return &SessionState{
-		Database:       c.database,
-		Role:           c.role,
-		SecondaryRoles: c.secondaryRoles,
-		Settings:       c.sessionSettings,
-	}
+	return c.sessionState
 }
 
 func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
@@ -335,20 +331,7 @@ func (c *APIClient) applySessionState(response *QueryResponse) {
 	if response.Session == nil {
 		return
 	}
-	if response.Session.Database != "" {
-		c.database = response.Session.Database
-	}
-	if len(response.Session.Role) > 0 {
-		c.role = response.Session.Role
-	}
-	c.secondaryRoles = response.Session.SecondaryRoles
-	if response.Session.Settings != nil {
-		newSessionSettings := map[string]string{}
-		for k, v := range response.Session.Settings {
-			newSessionSettings[k] = v
-		}
-		c.sessionSettings = newSessionSettings
-	}
+	c.sessionState = response.Session
 }
 
 func (c *APIClient) WaitForQuery(ctx context.Context, result *QueryResponse) (*QueryResponse, error) {
@@ -465,6 +448,7 @@ func (c *APIClient) QueryPage(ctx context.Context, nextURI string) (*QueryRespon
 		return nil, errors.Wrap(err, "failed to query page")
 	}
 	c.trackStats(&result)
+	c.applySessionState(&result)
 	return &result, nil
 }
 

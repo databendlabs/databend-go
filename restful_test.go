@@ -12,11 +12,11 @@ import (
 
 func TestMakeHeadersUserPassword(t *testing.T) {
 	c := APIClient{
-		user:     "root",
-		password: "root",
-		host:     "localhost:8000",
-		tenant:   "default",
-		role:     "role1",
+		user:         "root",
+		password:     "root",
+		host:         "localhost:8000",
+		tenant:       "default",
+		sessionState: &SessionState{Role: "role1"},
 	}
 	headers, err := c.makeHeaders(context.TODO())
 	assert.Nil(t, err)
@@ -28,11 +28,11 @@ func TestMakeHeadersUserPassword(t *testing.T) {
 
 func TestMakeHeadersQueryID(t *testing.T) {
 	c := APIClient{
-		user:     "root",
-		password: "root",
-		host:     "localhost:8000",
-		tenant:   "default",
-		role:     "role1",
+		user:         "root",
+		password:     "root",
+		host:         "localhost:8000",
+		tenant:       "default",
+		sessionState: &SessionState{Role: "role1"},
 	}
 	queryId := uuid.NewString()
 	ctx := context.WithValue(context.Background(), ContextKeyQueryID, queryId)
