@@ -260,6 +260,46 @@ func (s *DatabendTestSuite) TestQueryNull() {
 	s.r.NoError(rows.Close())
 }
 
+func (s *DatabendTestSuite) TestTransactionCommit() {
+	tx, err := s.db.Begin()
+	s.r.Nil(err)
+
+	_, err = tx.Exec(fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table), int64(1))
+	s.r.Nil(err)
+
+	err = tx.Commit()
+	s.r.Nil(err)
+
+	rows, err := s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
+	s.r.Nil(err)
+
+	result, err := scanValues(rows)
+	s.r.Nil(err)
+	s.r.Equal([][]interface{}{{int64(1), nil, nil, nil, nil, nil, nil, nil, nil}}, result)
+
+	s.r.NoError(rows.Close())
+}
+
+func (s *DatabendTestSuite) TestTransactionRollback() {
+	tx, err := s.db.Begin()
+	s.r.Nil(err)
+
+	_, err = tx.Exec(fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table), int64(1))
+	s.r.Nil(err)
+
+	err = tx.Rollback()
+	s.r.Nil(err)
+
+	rows, err := s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
+	s.r.Nil(err)
+
+	result, err := scanValues(rows)
+	s.r.Nil(err)
+	s.r.Empty(result)
+
+	s.r.NoError(rows.Close())
+}
+
 func scanValues(rows *sql.Rows) (interface{}, error) {
 	var err error
 	var result [][]interface{}
