@@ -296,10 +296,10 @@ func (s *DatabendTestSuite) TestTransactionRollback() {
 	err = tx.Rollback()
 	s.r.Nil(err)
 
-	rows, err := s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
+	rows, err = s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
 	s.r.Nil(err)
 
-	result, err := scanValues(rows)
+	result, err = scanValues(rows)
 	s.r.Nil(err)
 	s.r.Empty(result)
 
