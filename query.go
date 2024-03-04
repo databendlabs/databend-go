@@ -91,9 +91,9 @@ type SessionState struct {
 	Settings map[string]string `json:"settings,omitempty"`
 
 	// txn
-	TxnState       string   `json:"txn_state,omitempty"`
-	LastServerInfo string   `json:"last_server_info,omitempty"`
-	LastQueryIds   []string `json:"last_query_ids,omitempty"`
+	TxnState       string     `json:"txn_state,omitempty"`
+	LastServerInfo ServerInfo `json:"last_server_info,omitempty"`
+	LastQueryIds   []string   `json:"last_query_ids,omitempty"`
 }
 
 type StageAttachmentConfig struct {
