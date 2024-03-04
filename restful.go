@@ -288,7 +288,6 @@ var databendInsecureTransport = &http.Transport{
 }
 
 func (c *APIClient) getPagenationConfig() *PaginationConfig {
-	fmt.Println(c.MaxRowsPerPage, c.MaxRowsInBuffer, c.WaitTimeSeconds)
 	if c.MaxRowsPerPage == 0 && c.MaxRowsInBuffer == 0 && c.WaitTimeSeconds == 0 {
 		return nil
 	}

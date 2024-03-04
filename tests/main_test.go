@@ -30,11 +30,12 @@ const (
 )
 
 var (
-	dsn = "http://databend:databend@localhost:8000presigned_url_disabled=true"
+	dsn = "http://databend:databend@localhost:8000?presigned_url_disabled=true"
 )
 
 func init() {
 	dsn = os.Getenv("TEST_DATABEND_DSN")
+	//dsn = "http://databend:databend@localhost:8000?presigned_url_disabled=true"
 }
 
 func TestDatabendSuite(t *testing.T) {
@@ -87,6 +88,7 @@ func (s *DatabendTestSuite) SetupTest() {
 
 func (s *DatabendTestSuite) TearDownTest() {
 	// t := s.T()
+	s.SetupSuite()
 
 	// t.Logf("teardown test with table %s", s.table)
 	_, err := s.db.Exec(fmt.Sprintf("DROP TABLE %s", s.table))
