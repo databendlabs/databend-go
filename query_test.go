@@ -17,7 +17,7 @@ func Test_SessionState(t *testing.T) {
 	}
 	buf, err := json.Marshal(ss)
 	require.NoError(t, err)
-	assert.Equal(t, `{"database":"db1"}`, string(buf))
+	assert.Equal(t, "{\"database\":\"db1\",\"last_server_info\":{\"id\":\"\",\"start_time\":\"\"}}", string(buf))
 
 	buf = []byte(`{"database":"db1", "secondary_roles": []}`)
 	err = json.Unmarshal(buf, ss)
