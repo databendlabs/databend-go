@@ -29,6 +29,14 @@ const (
 	createTable2 = `create table %s (a string);`
 )
 
+var (
+	dsn = "http://databend:databend@localhost:8000presigned_url_disabled=true"
+)
+
+func init() {
+	dsn = os.Getenv("TEST_DATABEND_DSN")
+}
+
 func TestDatabendSuite(t *testing.T) {
 	suite.Run(t, new(DatabendTestSuite))
 }
@@ -44,7 +52,6 @@ type DatabendTestSuite struct {
 func (s *DatabendTestSuite) SetupSuite() {
 	var err error
 
-	dsn := os.Getenv("TEST_DATABEND_DSN")
 	s.NotEmpty(dsn)
 	s.db, err = sql.Open("databend", dsn)
 	s.Nil(err)

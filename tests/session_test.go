@@ -9,6 +9,7 @@ import (
 )
 
 func (s *DatabendTestSuite) TestChangeDatabase() {
+	s.SetupSuite()
 	r := require.New(s.T())
 	var result string
 
