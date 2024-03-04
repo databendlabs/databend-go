@@ -25,7 +25,6 @@ func (tx *databendTx) Commit() (err error) {
 	if err != nil {
 		return
 	}
-	tx.dc = nil
 	return
 }
 
@@ -37,6 +36,5 @@ func (tx *databendTx) Rollback() (err error) {
 	if err != nil {
 		return
 	}
-	tx.dc = nil
 	return
 }
