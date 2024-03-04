@@ -286,6 +286,12 @@ func (s *DatabendTestSuite) TestTransactionRollback() {
 
 	_, err = tx.Exec(fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table), int64(1))
 	s.r.Nil(err)
+	rows, err := s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
+	s.r.Nil(err)
+
+	result, err := scanValues(rows)
+	s.r.Nil(err)
+	s.r.Equal([][]interface{}{[]interface{}{"1", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"}}, result)
 
 	err = tx.Rollback()
 	s.r.Nil(err)
