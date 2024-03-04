@@ -220,7 +220,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 }
 
 func (c *APIClient) trackStats(resp *QueryResponse) {
-	if c.statsTracker == nil {
+	if c.statsTracker == nil || resp == nil {
 		return
 	}
 	c.statsTracker(resp.ID, &resp.Stats)
@@ -314,21 +314,23 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	}
 
 	path := "/v1/query"
-	var result QueryResponse
-	err = c.doRequest(ctx, "POST", path, request, &result)
+	var resp QueryResponse
+	err = c.doRequest(ctx, "POST", path, request, &resp)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to do query request")
 	}
-	if result.Error != nil {
-		return nil, errors.Wrap(result.Error, "query error")
+	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
+	// e.g. transaction state need to be updated if commit fail
+	c.applySessionState(&resp)
+	c.trackStats(&resp)
+	if resp.Error != nil {
+		return nil, errors.Wrap(resp.Error, "query error")
 	}
-	c.applySessionState(&result)
-	c.trackStats(&result)
-	return &result, nil
+	return &resp, nil
 }
 
 func (c *APIClient) applySessionState(response *QueryResponse) {
-	if response.Session == nil {
+	if response == nil || response.Session == nil {
 		return
 	}
 	c.sessionState = response.Session
@@ -346,7 +348,6 @@ func (c *APIClient) WaitForQuery(ctx context.Context, result *QueryResponse) (*Q
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to query page")
 		}
-		c.trackStats(result)
 		if result.Error != nil {
 			return nil, errors.Wrap(result.Error, "query page failed")
 		}
@@ -444,11 +445,13 @@ func (c *APIClient) QueryPage(ctx context.Context, nextURI string) (*QueryRespon
 		retry.Attempts(3),
 		retry.DelayType(retry.FixedDelay),
 	)
+	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
+	// e.g. transaction state need to be updated if commit fail
+	c.applySessionState(&result)
+	c.trackStats(&result)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query page")
 	}
-	c.trackStats(&result)
-	c.applySessionState(&result)
 	return &result, nil
 }
 
