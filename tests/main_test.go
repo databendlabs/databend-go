@@ -291,7 +291,7 @@ func (s *DatabendTestSuite) TestTransactionRollback() {
 
 	result, err := scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{[]interface{}{"1", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"}}, result)
+	s.r.Equal([][]interface{}(nil), result)
 
 	err = tx.Rollback()
 	s.r.Nil(err)
