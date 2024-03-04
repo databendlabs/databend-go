@@ -275,7 +275,7 @@ func (s *DatabendTestSuite) TestTransactionCommit() {
 
 	result, err := scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{{int64(1), nil, nil, nil, nil, nil, nil, nil, nil}}, result)
+	s.r.Equal([][]interface{}{[]interface{}{"1", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"}}, result)
 
 	s.r.NoError(rows.Close())
 }
