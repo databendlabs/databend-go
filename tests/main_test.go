@@ -29,6 +29,15 @@ const (
 	createTable2 = `create table %s (a string);`
 )
 
+var (
+	dsn = "http://databend:databend@localhost:8000?presigned_url_disabled=true"
+)
+
+func init() {
+	dsn = os.Getenv("TEST_DATABEND_DSN")
+	//dsn = "http://databend:databend@localhost:8000?presigned_url_disabled=true"
+}
+
 func TestDatabendSuite(t *testing.T) {
 	suite.Run(t, new(DatabendTestSuite))
 }
@@ -44,7 +53,6 @@ type DatabendTestSuite struct {
 func (s *DatabendTestSuite) SetupSuite() {
 	var err error
 
-	dsn := os.Getenv("TEST_DATABEND_DSN")
 	s.NotEmpty(dsn)
 	s.db, err = sql.Open("databend", dsn)
 	s.Nil(err)
@@ -80,6 +88,7 @@ func (s *DatabendTestSuite) SetupTest() {
 
 func (s *DatabendTestSuite) TearDownTest() {
 	// t := s.T()
+	s.SetupSuite()
 
 	// t.Logf("teardown test with table %s", s.table)
 	_, err := s.db.Exec(fmt.Sprintf("DROP TABLE %s", s.table))
@@ -247,6 +256,52 @@ func (s *DatabendTestSuite) TestQueryNull() {
 	result, err := scanValues(rows)
 	s.r.Nil(err)
 	s.r.Equal([][]interface{}{{"NULL"}}, result)
+
+	s.r.NoError(rows.Close())
+}
+
+func (s *DatabendTestSuite) TestTransactionCommit() {
+	tx, err := s.db.Begin()
+	s.r.Nil(err)
+
+	_, err = tx.Exec(fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table), int64(1))
+	s.r.Nil(err)
+
+	err = tx.Commit()
+	s.r.Nil(err)
+
+	rows, err := s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
+	s.r.Nil(err)
+
+	result, err := scanValues(rows)
+	s.r.Nil(err)
+	s.r.Equal([][]interface{}{[]interface{}{"1", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"}}, result)
+
+	s.r.NoError(rows.Close())
+}
+
+func (s *DatabendTestSuite) TestTransactionRollback() {
+	tx, err := s.db.Begin()
+	s.r.Nil(err)
+
+	_, err = tx.Exec(fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table), int64(1))
+	s.r.Nil(err)
+	rows, err := s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
+	s.r.Nil(err)
+
+	result, err := scanValues(rows)
+	s.r.Nil(err)
+	s.r.Equal([][]interface{}(nil), result)
+
+	err = tx.Rollback()
+	s.r.Nil(err)
+
+	rows, err = s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
+	s.r.Nil(err)
+
+	result, err = scanValues(rows)
+	s.r.Nil(err)
+	s.r.Empty(result)
 
 	s.r.NoError(rows.Close())
 }

@@ -25,14 +25,15 @@ const (
 )
 
 type DatabendConn struct {
-	ctx    context.Context
-	cfg    *Config
-	cancel context.CancelFunc
-	closed int32
-	stmts  []*databendStmt
-	logger *log.Logger
-	rest   *APIClient
-	commit func() error
+	ctx         context.Context
+	cfg         *Config
+	cancel      context.CancelFunc
+	closed      int32
+	stmts       []*databendStmt
+	logger      *log.Logger
+	rest        *APIClient
+	batchMode   bool
+	batchInsert func() error
 }
 
 func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.Value) (driver.Result, error) {
@@ -95,11 +96,23 @@ func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.
 	return newNextRows(ctx, dc, r0)
 }
 
-//func (dc *DatabendConn) Begin() (driver.Tx, error) {
-//	return dc.BeginTx(dc.ctx, driver.TxOptions{})
-//}
+func (dc *DatabendConn) Begin() (driver.Tx, error) {
 
-func (dc *DatabendConn) Begin() (driver.Tx, error) { return dc, nil }
+	return dc.BeginTx(dc.ctx, driver.TxOptions{})
+}
+
+func (dc *DatabendConn) BeginTx(
+	ctx context.Context,
+	opts driver.TxOptions) (
+	driver.Tx, error) {
+	if dc.rest == nil {
+		return nil, driver.ErrBadConn
+	}
+	if _, err := dc.exec(ctx, "BEGIN"); err != nil {
+		return nil, err
+	}
+	return &databendTx{dc}, nil
+}
 
 func (dc *DatabendConn) cleanup() {
 	// must flush log buffer while the process is running.
@@ -128,7 +141,8 @@ func (dc *DatabendConn) prepare(ctx context.Context, query string) (*databendStm
 	if err != nil {
 		return nil, err
 	}
-	dc.commit = batch.BatchInsert
+	dc.batchInsert = batch.BatchInsert
+	dc.batchMode = true
 	stmt := &databendStmt{
 		dc:    dc,
 		query: query,
@@ -193,22 +207,15 @@ func (dc *DatabendConn) QueryContext(ctx context.Context, query string, args []d
 	return dc.query(ctx, query, values...)
 }
 
-// Commit applies prepared statement if it exists
-func (dc *DatabendConn) Commit() (err error) {
-	if dc.commit == nil {
+// ExecuteBatch applies batch prepared statement if it exists
+func (dc *DatabendConn) ExecuteBatch() (err error) {
+	if dc.batchInsert == nil {
 		return nil
 	}
 	defer func() {
-		dc.commit = nil
+		dc.batchInsert = nil
 	}()
-	return dc.commit()
-}
-
-// Rollback cleans prepared statement
-func (dc *DatabendConn) Rollback() error {
-	dc.commit = nil
-	dc.Close()
-	return nil
+	return dc.batchInsert()
 }
 
 // checkQueryID checks if query_id exists in context, if not, generate a new one

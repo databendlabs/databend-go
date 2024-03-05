@@ -89,10 +89,20 @@ type SessionState struct {
 	// KeepServerSessionSecs uint64            `json:"keep_server_session_secs,omitempty"`
 
 	Settings map[string]string `json:"settings,omitempty"`
+
+	// txn
+	TxnState       string     `json:"txn_state,omitempty"`
+	LastServerInfo ServerInfo `json:"last_server_info,omitempty"`
+	LastQueryIds   []string   `json:"last_query_ids,omitempty"`
 }
 
 type StageAttachmentConfig struct {
 	Location          string            `json:"location"`
 	FileFormatOptions map[string]string `json:"file_format_options,omitempty"`
 	CopyOptions       map[string]string `json:"copy_options,omitempty"`
+}
+
+type ServerInfo struct {
+	Id        string `json:"id"`
+	StartTime string `json:"start_time"`
 }
