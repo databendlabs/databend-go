@@ -21,9 +21,12 @@ func (tx *databendTx) Commit() (err error) {
 			return
 		}
 	}
-	_, err = tx.dc.exec(tx.dc.ctx, "COMMIT")
-	if err != nil {
-		return
+	// complicity with old server version
+	if tx.dc.rest.sessionState.TxnState != "" {
+		_, err = tx.dc.exec(tx.dc.ctx, "COMMIT")
+		if err != nil {
+			return
+		}
 	}
 	return
 }
