@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"mime/multipart"
 	"net"
@@ -29,9 +30,8 @@ const (
 type ContextKey string
 
 const (
-	ContextKeyQueryID ContextKey = "X-Databend-Query-ID"
-	EMPTY_FIELD_AS    string     = "empty_field_as"
-	PURGE             string     = "purge"
+	EMPTY_FIELD_AS string = "empty_field_as"
+	PURGE          string = "purge"
 )
 
 type PresignedResponse struct {
@@ -66,7 +66,10 @@ func (c *APIClient) NewDefaultCopyOptions() map[string]string {
 }
 
 type APIClient struct {
-	cli *http.Client
+	SessionID string
+	QuerySeq  int64
+	cli       *http.Client
+	rows      *nextRows
 
 	apiEndpoint  string
 	host         string
@@ -88,6 +91,17 @@ type APIClient struct {
 
 	// only used for testing mocks
 	doRequestFunc func(method, path string, req interface{}, resp interface{}) error
+}
+
+func (c *APIClient) NextQuery() {
+	if c.rows != nil {
+		_ = c.rows.Close()
+	}
+	c.QuerySeq += 1
+}
+
+func (c *APIClient) GetQueryID() string {
+	return fmt.Sprintf("%s.%d", c.SessionID, c.QuerySeq)
 }
 
 func NewAPIClientFromConfig(cfg *Config) *APIClient {
@@ -112,6 +126,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 	}
 
 	return &APIClient{
+		SessionID: uuid.NewString(),
 		cli: &http.Client{
 			Timeout: cfg.Timeout,
 		},
@@ -173,7 +188,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 
 	maxRetries := 2
 	for i := 1; i <= maxRetries; i++ {
-		headers, err := c.makeHeaders(ctx)
+		headers, err := c.makeHeaders()
 		if err != nil {
 			return errors.Wrap(err, "failed to make request headers")
 		}
@@ -189,7 +204,9 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 		if err != nil {
 			return errors.Wrap(ErrDoRequest, err.Error())
 		}
-		defer httpResp.Body.Close()
+		defer func() {
+			_ = httpResp.Body.Close()
+		}()
 
 		httpRespBody, err := io.ReadAll(httpResp.Body)
 		if err != nil {
@@ -199,7 +216,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 		if httpResp.StatusCode == http.StatusUnauthorized {
 			if c.authMethod() == AuthMethodAccessToken && i < maxRetries {
 				// retry with a rotated access token
-				c.accessTokenLoader.LoadAccessToken(context.Background(), true)
+				_, _ = c.accessTokenLoader.LoadAccessToken(context.Background(), true)
 				continue
 			}
 			return NewAPIError("authorization failed", httpResp.StatusCode, httpRespBody)
@@ -241,7 +258,7 @@ func (c *APIClient) authMethod() AuthMethod {
 	return ""
 }
 
-func (c *APIClient) makeHeaders(ctx context.Context) (http.Header, error) {
+func (c *APIClient) makeHeaders() (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
 	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", version))
@@ -252,9 +269,7 @@ func (c *APIClient) makeHeaders(ctx context.Context) (http.Header, error) {
 		headers.Set(DatabendWarehouseHeader, c.warehouse)
 	}
 
-	if queryID, ok := ctx.Value(ContextKeyQueryID).(string); ok {
-		headers.Set(DatabendQueryIDHeader, queryID)
-	}
+	headers.Set(DatabendQueryIDHeader, c.GetQueryID())
 
 	switch c.authMethod() {
 	case AuthMethodUserPassword:
@@ -323,9 +338,6 @@ func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Val
 	// e.g. transaction state need to be updated if commit fail
 	c.applySessionState(&resp)
 	c.trackStats(&resp)
-	if resp.Error != nil {
-		return nil, errors.Wrap(resp.Error, "query error")
-	}
 	return &resp, nil
 }
 
@@ -359,6 +371,7 @@ func (c *APIClient) WaitForQuery(ctx context.Context, result *QueryResponse) (*Q
 }
 
 func (c *APIClient) QuerySingle(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
+	c.NextQuery()
 	result, err := c.DoQuery(ctx, query, args)
 	if err != nil {
 		return nil, err
@@ -404,12 +417,6 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 	if err != nil {
 		return errors.Wrap(err, "query sync failed")
 	}
-	if r0.Error != nil {
-		return errors.Wrap(r0.Error, "query has error")
-	}
-	if err != nil {
-		return err
-	}
 	respCh <- *r0
 	nextUri := r0.NextURI
 	for len(nextUri) != 0 {
@@ -422,6 +429,9 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 		}
 		nextUri = p.NextURI
 		respCh <- *p
+	}
+	if r0.Error != nil {
+		return errors.Wrap(r0.Error, "query has error")
 	}
 	return nil
 }
@@ -462,6 +472,7 @@ func (c *APIClient) KillQuery(ctx context.Context, killURI string) error {
 }
 
 func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *StageLocation, fileFormatOptions, copyOptions map[string]string) (*QueryResponse, error) {
+	c.NextQuery()
 	if stage == nil {
 		return nil, errors.New("stage location required for insert with stage")
 	}
@@ -494,7 +505,7 @@ func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *Stag
 
 func (c *APIClient) UploadToStage(ctx context.Context, stage *StageLocation, input *bufio.Reader, size int64) error {
 	if c.PresignedURLDisabled {
-		return c.UploadToStageByAPI(ctx, stage, input, size)
+		return c.UploadToStageByAPI(stage, input)
 	} else {
 		return c.UploadToStageByPresignURL(ctx, stage, input, size)
 	}
@@ -546,7 +557,9 @@ func (c *APIClient) UploadToStageByPresignURL(ctx context.Context, stage *StageL
 	if err != nil {
 		return errors.Wrap(err, "failed to upload to stage by presigned url")
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
@@ -557,7 +570,7 @@ func (c *APIClient) UploadToStageByPresignURL(ctx context.Context, stage *StageL
 	return nil
 }
 
-func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation, input *bufio.Reader, size int64) error {
+func (c *APIClient) UploadToStageByAPI(stage *StageLocation, input *bufio.Reader) error {
 	body := new(bytes.Buffer)
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("upload", stage.Path)
@@ -581,7 +594,7 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 		return errors.Wrap(err, "failed to create http request")
 	}
 
-	req.Header, err = c.makeHeaders(ctx)
+	req.Header, err = c.makeHeaders()
 	if err != nil {
 		return errors.Wrap(err, "failed to make headers")
 	}
@@ -599,7 +612,9 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 	if err != nil {
 		return errors.Wrap(err, "failed http do request")
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

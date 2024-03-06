@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,27 +17,12 @@ func TestMakeHeadersUserPassword(t *testing.T) {
 		tenant:       "default",
 		sessionState: &SessionState{Role: "role1"},
 	}
-	headers, err := c.makeHeaders(context.TODO())
+	headers, err := c.makeHeaders()
 	assert.Nil(t, err)
 	assert.Equal(t, headers["Authorization"], []string{"Basic cm9vdDpyb290"})
 	assert.Equal(t, headers["X-Databend-Tenant"], []string{"default"})
 	session := c.getSessionState()
 	assert.Equal(t, session.Role, "role1")
-}
-
-func TestMakeHeadersQueryID(t *testing.T) {
-	c := APIClient{
-		user:         "root",
-		password:     "root",
-		host:         "localhost:8000",
-		tenant:       "default",
-		sessionState: &SessionState{Role: "role1"},
-	}
-	queryId := uuid.NewString()
-	ctx := context.WithValue(context.Background(), ContextKeyQueryID, queryId)
-	headers, err := c.makeHeaders(ctx)
-	assert.Nil(t, err)
-	assert.Equal(t, headers["X-Databend-Query-Id"], []string{queryId})
 }
 
 func TestMakeHeadersAccessToken(t *testing.T) {
@@ -48,7 +32,7 @@ func TestMakeHeadersAccessToken(t *testing.T) {
 		accessTokenLoader: NewStaticAccessTokenLoader("abc123"),
 		warehouse:         "small-abc",
 	}
-	headers, err := c.makeHeaders(context.TODO())
+	headers, err := c.makeHeaders()
 	assert.Nil(t, err)
 	assert.Equal(t, headers["Authorization"], []string{"Bearer abc123"})
 	assert.Equal(t, headers["X-Databend-Tenant"], []string{"tn3ftqihs"})
@@ -78,7 +62,7 @@ func TestDoQuery(t *testing.T) {
 		statsTracker:      statsTracker,
 	}
 	queryId := "mockid1"
-	ctx := context.WithValue(context.Background(), ContextKeyQueryID, queryId)
+	ctx := context.Background()
 	resp, err := c.DoQuery(ctx, "SELECT 1", []driver.Value{})
 	assert.NoError(t, err)
 	assert.Equal(t, gotQueryID, "mockid1")

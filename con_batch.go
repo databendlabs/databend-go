@@ -94,7 +94,6 @@ func (b *httpBatch) AppendToFile(v []driver.Value) error {
 }
 
 func (b *httpBatch) UploadToStage(ctx context.Context) (*StageLocation, error) {
-	ctx = checkQueryID(ctx)
 	fi, err := os.Stat(b.batchFile)
 	if err != nil {
 		return nil, errors.Wrap(err, "get batch file size failed")
