@@ -1,0 +1,61 @@
+package tests
+
+import (
+	"database/sql"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestTnx(t *testing.T) {
+	selectT := "SELECT * FROM t ORDER BY c;"
+	db1, err := sql.Open("databend", dsn)
+	assert.NoError(t, err)
+	db2, err := sql.Open("databend", dsn)
+	assert.NoError(t, err)
+
+	// test commit
+	_, err = db1.Exec("CREATE OR REPLACE TABLE t(c int);")
+	assert.NoError(t, err)
+	tx1, err := db1.Begin()
+	assert.NoError(t, err)
+	_, err = tx1.Exec("INSERT INTO t(c) VALUES(1);")
+	assert.NoError(t, err)
+	rows, err := tx1.Query(selectT)
+	assert.NoError(t, err)
+	assert.Equal(t, true, rows.Next())
+
+	rows2, err := db2.Query(selectT)
+	assert.NoError(t, err)
+	assert.False(t, rows2.Next())
+
+	tx2, err := db2.Begin()
+	assert.NoError(t, err)
+
+	_, err = tx2.Exec("INSERT INTO t(c) VALUES(2);")
+	assert.NoError(t, err)
+	rows2, err = tx2.Query(selectT)
+	assert.NoError(t, err)
+	assert.True(t, rows2.Next())
+
+	rows1, err := tx1.Query(selectT)
+	assert.NoError(t, err)
+	assert.True(t, rows1.Next())
+
+	err = tx2.Commit()
+	assert.NoError(t, err)
+	err = tx1.Commit()
+	assert.Error(t, err)
+
+	// will fail because tx1 has been committed
+	rows1, err = db1.Query(selectT)
+	assert.NoError(t, err)
+	rows2, err = db2.Query(selectT)
+	assert.NoError(t, err)
+	res1, err := scanValues(rows1)
+	res2, err := scanValues(rows2)
+	assert.Equal(t, [][]interface{}{{2}}, res1)
+	assert.Equal(t, [][]interface{}{{2}}, res2)
+
+	// test rollback
+}
