@@ -8,9 +8,11 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"sync/atomic"
 )
 
 type nextRows struct {
+	isClosed int32
 	dc       *DatabendConn
 	ctx      context.Context
 	respData *QueryResponse
@@ -89,17 +91,24 @@ func (r *nextRows) Columns() []string {
 }
 
 func (r *nextRows) Close() error {
-	if len(r.respData.NextURI) != 0 {
-		_, err := r.dc.rest.QueryPage(r.dc.ctx, r.respData.NextURI)
-		if err != nil {
-			return err
+	if atomic.CompareAndSwapInt32(&r.isClosed, 0, 1) {
+		if len(r.respData.NextURI) != 0 {
+			_, err := r.dc.rest.QueryPage(r.dc.ctx, r.respData.FinalURI)
+			if err != nil {
+				return err
+			}
 		}
+		r.dc.cancel = nil
+		return nil
+	} else {
+		return errors.New("rows already closed")
 	}
-	r.dc.cancel = nil
-	return nil
 }
 
 func (r *nextRows) Next(dest []driver.Value) error {
+	if atomic.LoadInt32(&r.isClosed) == 1 {
+		return errors.New("rows already closed")
+	}
 	if len(r.respData.Data) == 0 {
 		resp, err := waitForQueryResult(r.ctx, r.dc, r.respData)
 		if err != nil {
