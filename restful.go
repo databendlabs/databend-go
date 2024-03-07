@@ -334,9 +334,6 @@ func (c *APIClient) applySessionState(response *QueryResponse) {
 		return
 	}
 	c.sessionState = response.Session
-	if c.sessionState.TxnState == "Fail" {
-		c.sessionState.TxnState = "AutoCommit"
-	}
 }
 
 func (c *APIClient) WaitForQuery(ctx context.Context, result *QueryResponse) (*QueryResponse, error) {
