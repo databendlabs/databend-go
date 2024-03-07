@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -33,8 +34,8 @@ var (
 )
 
 func init() {
-	//dsn = os.Getenv("TEST_DATABEND_DSN")
-	dsn = "http://databend:databend@localhost:8000?presigned_url_disabled=true"
+	dsn = os.Getenv("TEST_DATABEND_DSN")
+	//dsn = "http://databend:databend@localhost:8000?presigned_url_disabled=true"
 }
 
 func TestDatabendSuite(t *testing.T) {
