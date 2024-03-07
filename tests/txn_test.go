@@ -54,8 +54,8 @@ func TestTnx(t *testing.T) {
 	assert.NoError(t, err)
 	res1, err := scanValues(rows1)
 	res2, err := scanValues(rows2)
-	assert.Equal(t, [][]interface{}{{2}}, res1)
-	assert.Equal(t, [][]interface{}{{2}}, res2)
+	assert.Equal(t, [][]interface{}{{"2"}}, res1)
+	assert.Equal(t, [][]interface{}{{"2"}}, res2)
 
 	// test rollback
 }
