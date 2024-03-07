@@ -48,9 +48,7 @@ func TestTnx(t *testing.T) {
 	assert.NoError(t, err)
 	err = tx1.Commit()
 	assert.Error(t, err)
-	println("commit error:", err.Error())
 
-	// will fail because tx1 has been committed
 	rows1, err = db1.Query(selectT)
 	assert.NoError(t, err)
 	if rows1 != nil {
@@ -65,4 +63,22 @@ func TestTnx(t *testing.T) {
 	}
 
 	// test rollback
+	db1.Exec("DROP table  t;")
+	_, err = db1.Exec("CREATE OR REPLACE TABLE t(c int);")
+	assert.NoError(t, err)
+	tx1, err = db1.Begin()
+	assert.NoError(t, err)
+	_, err = tx1.Exec("INSERT INTO t(c) VALUES(1);")
+	assert.NoError(t, err)
+	rows, err = tx1.Query(selectT)
+	assert.NoError(t, err)
+	assert.True(t, rows.Next())
+	rows.Close()
+	tx1.Rollback()
+	rows1, err = db1.Query(selectT)
+	assert.NoError(t, err)
+	if rows1 != nil {
+		assert.False(t, rows1.Next())
+	}
+
 }
