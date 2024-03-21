@@ -363,7 +363,9 @@ func (c *APIClient) WaitForQuery(ctx context.Context, result *QueryResponse) (*Q
 		if result.Error != nil {
 			return nil, errors.Wrap(result.Error, "query page failed")
 		}
-		result.Schema = schema
+		if len(result.Schema) == 0 {
+			result.Schema = schema
+		}
 		result.Data = append(data, result.Data...)
 	}
 	c.trackStats(result)
