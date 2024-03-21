@@ -44,7 +44,9 @@ func waitForQueryResult(ctx context.Context, dc *DatabendConn, result *QueryResp
 			return nil, result.Error
 		}
 	}
-	result.Schema = schema
+	if len(result.Schema) == 0 {
+		result.Schema = schema
+	}
 	return result, nil
 }
 
