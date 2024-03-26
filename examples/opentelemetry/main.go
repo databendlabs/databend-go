@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"go.opentelemetry.io/otel/baggage"
 	"log"
 	"os"
 	"os/signal"
@@ -72,7 +73,7 @@ func initProvider() (func(context.Context) error, error) {
 	otel.SetTracerProvider(tracerProvider)
 
 	// set global propagator to tracecontext (the default is no-op).
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
 	// Shutdown will flush any remaining spans and shut down the exporter.
 	return tracerProvider.Shutdown, nil
@@ -103,7 +104,8 @@ func main() {
 		attribute.String("attrB", "raspberry"),
 		attribute.String("attrC", "vanilla"),
 	}
-
+	bag, _ := baggage.Parse("username=donuts")
+	ctx = baggage.ContextWithBaggage(ctx, bag)
 	// work begins
 	ctx, span := tracer.Start(
 		ctx,
@@ -111,6 +113,13 @@ func main() {
 		trace.WithAttributes(commonAttrs...))
 	defer span.End()
 	for i := 0; i < 10; i++ {
+		bg := baggage.FromContext(ctx)
+		val, _ := baggage.NewMember("iteration", fmt.Sprintf("%d", i))
+		bg, err = bg.SetMember(val)
+		if err != nil {
+			return
+		}
+		ctx = baggage.ContextWithBaggage(ctx, bg)
 		c1, iSpan := tracer.Start(ctx, fmt.Sprintf("Sample-%d", i))
 		log.Printf("Doing really hard work (%d / 10)\n", i+1)
 		conn, err := sql.Open("databend", "http://databend:databend@localhost:8000/default?sslmode=disable&enable_otel=true")
