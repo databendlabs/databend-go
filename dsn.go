@@ -55,7 +55,8 @@ type Config struct {
 	// https://docs.databend.com/sql/sql-reference/file-format-options#empty_field_as
 	// default is `string`
 	// databend version should >= v1.2.345-nightly
-	EmptyFieldAs string
+	EmptyFieldAs        string
+	EnableOpenTelemetry bool
 }
 
 // NewConfig creates a new config with default values
@@ -129,6 +130,9 @@ func (cfg *Config) FormatDSN() string {
 	if cfg.SSLMode != "" {
 		query.Set("sslmode", cfg.SSLMode)
 	}
+	if cfg.EnableOpenTelemetry {
+		query.Set("enable_otel", "true")
+	}
 	if cfg.PresignedURLDisabled {
 		query.Set("presigned_url_disabled", "1")
 	}
@@ -179,6 +183,8 @@ func (cfg *Config) AddParams(params map[string]string) (err error) {
 			cfg.AccessTokenFile = v
 		case "sslmode":
 			cfg.SSLMode = v
+		case "enable_otel":
+			cfg.EnableOpenTelemetry, err = strconv.ParseBool(v)
 		case "default_format", "query", "database":
 			return fmt.Errorf("unknown option '%s'", k)
 		default:
