@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"io"
 	"mime/multipart"
 	"net"
@@ -104,6 +105,16 @@ func (c *APIClient) GetQueryID() string {
 	return fmt.Sprintf("%s.%d", c.SessionID, c.QuerySeq)
 }
 
+func NewAPIHttpClientFromConfig(cfg *Config) *http.Client {
+	cli := &http.Client{
+		Timeout: cfg.Timeout,
+	}
+	if cfg.EnableOpenTelemetry {
+		cli.Transport = otelhttp.NewTransport(http.DefaultTransport)
+	}
+	return cli
+}
+
 func NewAPIClientFromConfig(cfg *Config) *APIClient {
 	var apiScheme string
 	switch cfg.SSLMode {
@@ -126,10 +137,8 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 	}
 
 	return &APIClient{
-		SessionID: uuid.NewString(),
-		cli: &http.Client{
-			Timeout: cfg.Timeout,
-		},
+		SessionID:   uuid.NewString(),
+		cli:         NewAPIHttpClientFromConfig(cfg),
 		apiEndpoint: fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
 		host:        cfg.Host,
 		tenant:      cfg.Tenant,
