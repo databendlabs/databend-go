@@ -11,57 +11,56 @@ import (
 	"sync/atomic"
 )
 
+type resultSchema struct {
+	columns []string
+	types   []string
+	parsers []DataParser
+}
+
 type nextRows struct {
-	isClosed int32
-	dc       *DatabendConn
-	ctx      context.Context
-	respData *QueryResponse
-	columns  []string
-	types    []string
-	parsers  []DataParser
+	resultSchema
+	isClosed   int32
+	isCanceled bool
+	dc         *DatabendConn
+	ctx        context.Context
+	respData   *QueryResponse
 }
 
-func waitForQueryResult(ctx context.Context, dc *DatabendConn, result *QueryResponse) (*QueryResponse, error) {
-	if result.Error != nil {
-		return nil, result.Error
+func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse) (*QueryResponse, error) {
+	if response.Error != nil {
+		return nil, response.Error
 	}
-	// save schema to use in the final response
-	schema := result.Schema
 	var err error
-	for result.NextURI != "" && len(result.Data) == 0 {
-		dc.log("wait for query result", result.NextURI)
-		result, err = dc.rest.QueryPage(ctx, result.NextURI)
-		if errors.Is(err, context.Canceled) {
-			// context might be canceled due to timeout or canceled. if it's canceled, we need call
-			// the kill url to tell the backend it's killed.
-			dc.log("query canceled", result.ID)
-			dc.rest.KillQuery(context.Background(), result.KillURI)
-			return nil, err
-		} else if err != nil {
+	for !response.ReadFinished() && len(response.Data) == 0 && response.Error == nil {
+		response, err = dc.rest.PollQuery(ctx, response.NextURI)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				// context might be canceled due to timeout or canceled. if it's canceled, we need call
+				// the kill url to tell the backend it's killed.
+				dc.log("query canceled", response.ID)
+				_ = dc.rest.KillQuery(context.Background(), response)
+			} else {
+				_ = dc.rest.CloseQuery(ctx, response)
+			}
 			return nil, err
 		}
-		if result.Error != nil {
-			return nil, result.Error
+		if response.Error != nil {
+			_ = dc.rest.CloseQuery(ctx, response)
+			return nil, fmt.Errorf("query error: %+v", response.Error)
 		}
 	}
-	if len(result.Schema) == 0 {
-		result.Schema = schema
-	}
-	return result, nil
+	return response, nil
 }
 
-func newNextRows(ctx context.Context, dc *DatabendConn, resp *QueryResponse) (*nextRows, error) {
+func parse_schema(fields *[]DataField) (*resultSchema, error) {
 	var columns []string
 	var types []string
 
-	result, err := waitForQueryResult(ctx, dc, resp)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, field := range result.Schema {
-		columns = append(columns, field.Name)
-		types = append(types, field.Type)
+	if fields != nil {
+		for _, field := range *fields {
+			columns = append(columns, field.Name)
+			types = append(types, field.Type)
+		}
 	}
 
 	parsers := make([]DataParser, len(types))
@@ -77,13 +76,25 @@ func newNextRows(ctx context.Context, dc *DatabendConn, resp *QueryResponse) (*n
 		}
 	}
 
+	schema := &resultSchema{
+		columns: columns,
+		types:   types,
+		parsers: parsers,
+	}
+	return schema, nil
+}
+
+func newNextRows(ctx context.Context, dc *DatabendConn, resp *QueryResponse) (*nextRows, error) {
+	schema, err := parse_schema(resp.Schema)
+	if err != nil {
+		return nil, err
+	}
+
 	rows := &nextRows{
-		dc:       dc,
-		ctx:      ctx,
-		respData: result,
-		columns:  columns,
-		types:    types,
-		parsers:  parsers,
+		dc:           dc,
+		ctx:          ctx,
+		respData:     resp,
+		resultSchema: *schema,
 	}
 	return rows, nil
 }
@@ -92,34 +103,52 @@ func (r *nextRows) Columns() []string {
 	return r.columns
 }
 
+// Close will only be called by sql.Rows once.
+// But we can doClose internally as soon as EOF.
+//
+// Not return error for now.
+//
+// Note it will also be Called by framework when:
+//  1. Canceling query/txn Context.
+//  2. Next return error other than io.EOF.
 func (r *nextRows) Close() error {
+	return r.doClose()
+}
+
+func (r *nextRows) doClose() error {
 	if atomic.CompareAndSwapInt32(&r.isClosed, 0, 1) {
-		if len(r.respData.NextURI) != 0 {
-			_, err := r.dc.rest.QueryPage(r.dc.ctx, r.respData.FinalURI)
+		if r.respData != nil && len(r.respData.FinalURI) != 0 {
+			err := r.dc.rest.CloseQuery(r.dc.ctx, r.respData)
 			if err != nil {
 				return err
 			}
+			r.respData = nil
 		}
 		r.dc.cancel = nil
 		return nil
 	} else {
-		return errors.New("rows already closed")
+		// Rows should be safe to close multi times
+		return nil
 	}
 }
 
 func (r *nextRows) Next(dest []driver.Value) error {
-	if atomic.LoadInt32(&r.isClosed) == 1 {
-		return errors.New("rows already closed")
+	if atomic.LoadInt32(&r.isClosed) == 1 || r.respData == nil {
+		// If user already called Rows.Close(), Rows.Next() will not get here.
+		// Get here only because we doClose() internally,
+		// only when call Rows.Next() again after it return false.
+		return io.EOF
 	}
 	if len(r.respData.Data) == 0 {
-		resp, err := waitForQueryResult(r.ctx, r.dc, r.respData)
+		var err error
+		r.respData, err = waitForData(r.ctx, r.dc, r.respData)
 		if err != nil {
 			return err
 		}
-		r.respData = resp
 	}
 
 	if len(r.respData.Data) == 0 {
+		_ = r.doClose()
 		return io.EOF
 	}
 
@@ -130,7 +159,7 @@ func (r *nextRows) Next(dest []driver.Value) error {
 		reader := strings.NewReader(lineData[j])
 		v, err := r.parsers[j].Parse(reader)
 		if err != nil {
-			r.dc.log("parse error ", err)
+			r.dc.log("fail to parse field", j, ", error: ", err)
 			return err
 		}
 		dest[j] = v

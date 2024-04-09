@@ -1,7 +1,9 @@
 package godatabend
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 type QueryError struct {
@@ -27,19 +29,22 @@ type DataField struct {
 }
 
 type QueryResponse struct {
-	ID        string        `json:"id"`
-	SessionID string        `json:"session_id"`
-	Session   *SessionState `json:"session"`
-	Schema    []DataField   `json:"schema"`
-	Data      [][]string    `json:"data"`
-	State     string        `json:"state"`
-	Error     *QueryError   `json:"error"`
-	Stats     QueryStats    `json:"stats"`
+	ID      string           `json:"id"`
+	Session *json.RawMessage `json:"session"`
+	Schema  *[]DataField     `json:"schema"`
+	Data    [][]string       `json:"data"`
+	State   string           `json:"state"`
+	Error   *QueryError      `json:"error"`
+	Stats   *QueryStats      `json:"stats"`
 	// TODO: Affect rows
 	StatsURI string `json:"stats_uri"`
 	FinalURI string `json:"final_uri"`
 	NextURI  string `json:"next_uri"`
 	KillURI  string `json:"kill_uri"`
+}
+
+func (r *QueryResponse) ReadFinished() bool {
+	return r.NextURI == "" || strings.Contains(r.NextURI, "/final")
 }
 
 type QueryStats struct {
@@ -62,7 +67,7 @@ type QueryRequest struct {
 	// We use client session instead of server session with session_id
 	// SessionID  string            `json:"session_id,omitempty"`
 
-	Session    *SessionState     `json:"session,omitempty"`
+	Session    *json.RawMessage  `json:"session,omitempty"`
 	SQL        string            `json:"sql"`
 	Pagination *PaginationConfig `json:"pagination,omitempty"`
 
@@ -91,9 +96,7 @@ type SessionState struct {
 	Settings map[string]string `json:"settings,omitempty"`
 
 	// txn
-	TxnState       string     `json:"txn_state,omitempty"`
-	LastServerInfo ServerInfo `json:"last_server_info,omitempty"`
-	LastQueryIds   []string   `json:"last_query_ids,omitempty"`
+	TxnState string `json:"txn_state,omitempty"`
 }
 
 type StageAttachmentConfig struct {

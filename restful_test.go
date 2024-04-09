@@ -42,9 +42,10 @@ func TestMakeHeadersAccessToken(t *testing.T) {
 func TestDoQuery(t *testing.T) {
 	var result QueryResponse
 	result.ID = "mockid1"
+	result.Stats = new(QueryStats)
 	mockDoRequest := func(method, path string, req interface{}, resp interface{}) error {
 		buf, _ := json.Marshal(result)
-		json.Unmarshal(buf, resp)
+		_ = json.Unmarshal(buf, resp)
 		return nil
 	}
 
@@ -63,7 +64,7 @@ func TestDoQuery(t *testing.T) {
 	}
 	queryId := "mockid1"
 	ctx := context.Background()
-	resp, err := c.DoQuery(ctx, "SELECT 1", []driver.Value{})
+	resp, err := c.StartQuery(ctx, "SELECT 1", []driver.Value{})
 	assert.NoError(t, err)
 	assert.Equal(t, gotQueryID, "mockid1")
 	assert.Equal(t, resp.ID, queryId)

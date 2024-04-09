@@ -11,7 +11,7 @@ import (
 func TestTextRows(t *testing.T) {
 	rows, err := newNextRows(context.Background(), &DatabendConn{}, &QueryResponse{
 		Data: [][]string{{"1", "2", "3"}, {"3", "2", "1"}},
-		Schema: []DataField{
+		Schema: &[]DataField{
 			{Name: "age", Type: "Int32"},
 			{Name: "height", Type: "Int64"},
 			{Name: "score", Type: "String"},
