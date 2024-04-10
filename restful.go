@@ -29,6 +29,15 @@ const (
 )
 
 type ContextKey string
+type RequestType int
+
+// request type
+const (
+	Query RequestType = iota
+	Page
+	Final
+	Kill
+)
 
 const (
 	EMPTY_FIELD_AS string = "empty_field_as"
@@ -72,14 +81,16 @@ type APIClient struct {
 	cli       *http.Client
 	rows      *nextRows
 
-	apiEndpoint  string
-	host         string
-	tenant       string
-	warehouse    string
-	database     string
-	user         string
-	password     string
-	sessionState *SessionState
+	apiEndpoint string
+	host        string
+	tenant      string
+	warehouse   string
+	database    string
+	user        string
+	password    string
+
+	sessionStateRaw *json.RawMessage
+	sessionState    *SessionState
 
 	statsTracker      QueryStatsTracker
 	accessTokenLoader AccessTokenLoader
@@ -136,21 +147,26 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		secondaryRoles = &[]string{}
 	}
 
+	var sessionState = SessionState{
+		Database:       cfg.Database,
+		Role:           cfg.Role,
+		SecondaryRoles: secondaryRoles,
+		Settings:       cfg.Params,
+	}
+	sessionStateRawJson, _ := json.Marshal(sessionState)
+	sessionStateRaw := json.RawMessage(sessionStateRawJson)
+
 	return &APIClient{
-		SessionID:   uuid.NewString(),
-		cli:         NewAPIHttpClientFromConfig(cfg),
-		apiEndpoint: fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
-		host:        cfg.Host,
-		tenant:      cfg.Tenant,
-		warehouse:   cfg.Warehouse,
-		user:        cfg.User,
-		password:    cfg.Password,
-		sessionState: &SessionState{
-			Database:       cfg.Database,
-			Role:           cfg.Role,
-			SecondaryRoles: secondaryRoles,
-			Settings:       cfg.Params,
-		},
+		SessionID:       uuid.NewString(),
+		cli:             NewAPIHttpClientFromConfig(cfg),
+		apiEndpoint:     fmt.Sprintf("%s://%s", apiScheme, cfg.Host),
+		host:            cfg.Host,
+		tenant:          cfg.Tenant,
+		warehouse:       cfg.Warehouse,
+		user:            cfg.User,
+		password:        cfg.Password,
+		sessionState:    &sessionState,
+		sessionStateRaw: &sessionStateRaw,
 
 		accessTokenLoader: initAccessTokenLoader(cfg),
 		statsTracker:      cfg.StatsTracker,
@@ -230,14 +246,19 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 			}
 			return NewAPIError("authorization failed", httpResp.StatusCode, httpRespBody)
 		} else if httpResp.StatusCode >= 500 {
-			return NewAPIError("please retry again later.", httpResp.StatusCode, httpRespBody)
+			return NewAPIError("please retry again later", httpResp.StatusCode, httpRespBody)
 		} else if httpResp.StatusCode >= 400 {
-			return NewAPIError("please check your arguments.", httpResp.StatusCode, httpRespBody)
+			return NewAPIError("please check your arguments", httpResp.StatusCode, httpRespBody)
+		} else if httpResp.StatusCode != 200 {
+			return NewAPIError("unexpected HTTP StatusCode", httpResp.StatusCode, httpRespBody)
 		}
 
 		if resp != nil {
-			if err := json.Unmarshal(httpRespBody, &resp); err != nil {
-				return errors.Wrap(err, "failed to unmarshal response body")
+			contentType := httpResp.Header.Get("Content-Type")
+			if strings.HasPrefix(contentType, "application/json") {
+				if err := json.Unmarshal(httpRespBody, &resp); err != nil {
+					return errors.Wrap(err, "failed to unmarshal response body")
+				}
 			}
 		}
 		return nil
@@ -246,10 +267,10 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 }
 
 func (c *APIClient) trackStats(resp *QueryResponse) {
-	if c.statsTracker == nil || resp == nil {
+	if c.statsTracker == nil || resp == nil || resp.Stats == nil {
 		return
 	}
-	c.statsTracker(resp.ID, &resp.Stats)
+	c.statsTracker(resp.ID, resp.Stats)
 }
 
 func (c *APIClient) makeURL(path string, args ...interface{}) string {
@@ -322,73 +343,35 @@ func (c *APIClient) getPagenationConfig() *PaginationConfig {
 	}
 }
 
-func (c *APIClient) getSessionState() *SessionState {
-	return c.sessionState
+func (c *APIClient) getSessionStateRaw() *json.RawMessage {
+	return c.sessionStateRaw
 }
 
-func (c *APIClient) DoQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
-	q, err := buildQuery(query, args)
-	if err != nil {
-		return nil, err
-	}
-	request := QueryRequest{
-		SQL:        q,
-		Pagination: c.getPagenationConfig(),
-		Session:    c.getSessionState(),
-	}
-
-	path := "/v1/query"
-	var resp QueryResponse
-	err = c.doRequest(ctx, "POST", path, request, &resp)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to do query request")
-	}
-	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
-	// e.g. transaction state need to be updated if commit fail
-	c.applySessionState(&resp)
-	c.trackStats(&resp)
-	return &resp, nil
+func (c *APIClient) getSessionState() *SessionState {
+	return c.sessionState
 }
 
 func (c *APIClient) applySessionState(response *QueryResponse) {
 	if response == nil || response.Session == nil {
 		return
 	}
-	c.sessionState = response.Session
+	c.sessionStateRaw = response.Session
+	_ = json.Unmarshal(*response.Session, c.sessionState)
 }
 
-func (c *APIClient) WaitForQuery(ctx context.Context, result *QueryResponse) (*QueryResponse, error) {
-	if result.Error != nil {
-		return nil, errors.Wrap(result.Error, "query failed")
-	}
-	var err error
-	for result.NextURI != "" {
-		schema := result.Schema
-		data := result.Data
-		result, err = c.QueryPage(ctx, result.NextURI)
+func (c *APIClient) PollUntilQueryEnd(ctx context.Context, resp *QueryResponse) (*QueryResponse, error) {
+	for !resp.ReadFinished() {
+		data := resp.Data
+		resp, err := c.PollQuery(ctx, resp.NextURI)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to query page")
+			return nil, err
 		}
-		if result.Error != nil {
-			return nil, errors.Wrap(result.Error, "query page failed")
+		if resp.Error != nil {
+			return nil, errors.Wrap(resp.Error, "query page has error")
 		}
-		if len(result.Schema) == 0 {
-			result.Schema = schema
-		}
-		result.Data = append(data, result.Data...)
+		resp.Data = append(data, resp.Data...)
 	}
-	c.trackStats(result)
-	return result, nil
-}
-
-func (c *APIClient) QuerySingle(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
-	c.NextQuery()
-	result, err := c.DoQuery(ctx, query, args)
-	if err != nil {
-		return nil, err
-	}
-	c.trackStats(result)
-	return c.WaitForQuery(ctx, result)
+	return resp, nil
 }
 
 func buildQuery(query string, params []driver.Value) (string, error) {
@@ -402,69 +385,92 @@ func buildQuery(query string, params []driver.Value) (string, error) {
 	return query, nil
 }
 
-func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.Value, respCh chan QueryResponse) error {
-	// fmt.Printf("query sync %s", query)
-	var r0 *QueryResponse
-	err := retry.Do(
-		func() error {
-			r, err := c.DoQuery(ctx, query, args)
-			if err != nil {
-				return err
-			}
-			r0 = r
-			return nil
-		},
-		// other err no need to retry
-		retry.RetryIf(func(err error) bool {
-			if err != nil && (IsProxyErr(err) || strings.Contains(err.Error(), ProvisionWarehouseTimeout)) {
-				return true
-			}
-			return false
-		}),
-		retry.Delay(2*time.Second),
-		retry.Attempts(5),
-		retry.DelayType(retry.FixedDelay),
-	)
+func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
+	resp, err := c.StartQuery(ctx, query, args)
 	if err != nil {
-		return errors.Wrap(err, "query sync failed")
+		return nil, err
 	}
-	respCh <- *r0
-	nextUri := r0.NextURI
-	for len(nextUri) != 0 {
-		p, err := c.QueryPage(ctx, nextUri)
-		if err != nil {
-			return err
-		}
-		if p.Error != nil {
-			return errors.Wrap(p.Error, "query page has error")
-		}
-		nextUri = p.NextURI
-		respCh <- *p
+	defer func() {
+		_ = c.CloseQuery(ctx, resp)
+	}()
+	if resp.Error != nil {
+		return nil, fmt.Errorf("query error: %+v", resp.Error)
 	}
-	if r0.Error != nil {
-		return errors.Wrap(r0.Error, "query has error")
-	}
-	return nil
+	return c.PollUntilQueryEnd(ctx, resp)
 }
 
-func (c *APIClient) QueryPage(ctx context.Context, nextURI string) (*QueryResponse, error) {
-	var result QueryResponse
-	err := retry.Do(
+func (c *APIClient) DoRetry(f retry.RetryableFunc, t RequestType) error {
+	var delay time.Duration = 1
+	var attempts uint = 3
+	if t == Query {
+		delay = 2
+		attempts = 5
+	}
+	return retry.Do(
 		func() error {
-			return c.doRequest(ctx, "GET", nextURI, nil, &result)
+			return f()
 		},
 		retry.RetryIf(func(err error) bool {
 			if err == nil {
 				return false
 			}
+			if errors.Is(err, context.Canceled) {
+				return false
+			}
 			if errors.Is(err, ErrDoRequest) || errors.Is(err, ErrReadResponse) || IsProxyErr(err) {
+				return true
+			}
+			if t == Query && strings.Contains(err.Error(), ProvisionWarehouseTimeout) {
 				return true
 			}
 			return false
 		}),
-		retry.Delay(1*time.Second),
-		retry.Attempts(3),
+		retry.Delay(delay*time.Second),
+		retry.Attempts(attempts),
 		retry.DelayType(retry.FixedDelay),
+	)
+}
+
+func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest) (*QueryResponse, error) {
+	c.NextQuery()
+	// fmt.Printf("start query %v %v\n", c.GetQueryID(), request.SQL)
+
+	path := "/v1/query"
+	var resp QueryResponse
+	err := c.DoRetry(func() error {
+		return c.doRequest(ctx, "POST", path, request, &resp)
+	}, Query,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to do query request")
+	}
+	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
+	// e.g. transaction state need to be updated if commit fail
+	c.applySessionState(&resp)
+	c.trackStats(&resp)
+	return &resp, nil
+}
+
+func (c *APIClient) StartQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
+	q, err := buildQuery(query, args)
+	if err != nil {
+		return nil, err
+	}
+	request := QueryRequest{
+		SQL:        q,
+		Pagination: c.getPagenationConfig(),
+		Session:    c.getSessionStateRaw(),
+	}
+	return c.startQueryRequest(ctx, &request)
+}
+
+func (c *APIClient) PollQuery(ctx context.Context, nextURI string) (*QueryResponse, error) {
+	var result QueryResponse
+	err := c.DoRetry(
+		func() error {
+			return c.doRequest(ctx, "GET", nextURI, nil, &result)
+		},
+		Page,
 	)
 	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
 	// e.g. transaction state need to be updated if commit fail
@@ -476,14 +482,31 @@ func (c *APIClient) QueryPage(ctx context.Context, nextURI string) (*QueryRespon
 	return &result, nil
 }
 
-func (c *APIClient) KillQuery(ctx context.Context, killURI string) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	return c.doRequest(ctx, "POST", killURI, nil, nil)
+func (c *APIClient) KillQuery(ctx context.Context, response *QueryResponse) error {
+	if response != nil && response.KillURI != "" {
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		_ = c.DoRetry(func() error {
+			return c.doRequest(ctx, "GET", response.KillURI, nil, nil)
+		}, Kill,
+		)
+	}
+	return nil
+}
+
+func (c *APIClient) CloseQuery(ctx context.Context, response *QueryResponse) error {
+	if response != nil && response.FinalURI != "" {
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		_ = c.DoRetry(func() error {
+			return c.doRequest(ctx, "GET", response.FinalURI, nil, nil)
+		}, Final,
+		)
+	}
+	return nil
 }
 
 func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *StageLocation, fileFormatOptions, copyOptions map[string]string) (*QueryResponse, error) {
-	c.NextQuery()
 	if stage == nil {
 		return nil, errors.New("stage location required for insert with stage")
 	}
@@ -496,22 +519,24 @@ func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *Stag
 	request := QueryRequest{
 		SQL:        sql,
 		Pagination: c.getPagenationConfig(),
-		Session:    c.getSessionState(),
+		Session:    c.getSessionStateRaw(),
 		StageAttachment: &StageAttachmentConfig{
 			Location:          stage.String(),
 			FileFormatOptions: fileFormatOptions,
 			CopyOptions:       copyOptions,
 		},
 	}
-
-	path := "/v1/query"
-	var result QueryResponse
-	err := c.doRequest(ctx, "POST", path, request, &result)
+	resp, err := c.startQueryRequest(ctx, &request)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to insert with stage")
+		return nil, err
 	}
-	c.trackStats(&result)
-	return c.WaitForQuery(ctx, &result)
+	defer func() {
+		_ = c.CloseQuery(ctx, resp)
+	}()
+	if resp.Error != nil {
+		return nil, errors.Wrap(resp.Error, "query error:")
+	}
+	return c.PollUntilQueryEnd(ctx, resp)
 }
 
 func (c *APIClient) UploadToStage(ctx context.Context, stage *StageLocation, input *bufio.Reader, size int64) error {
@@ -525,7 +550,7 @@ func (c *APIClient) UploadToStage(ctx context.Context, stage *StageLocation, inp
 func (c *APIClient) GetPresignedURL(ctx context.Context, stage *StageLocation) (*PresignedResponse, error) {
 	var headers string
 	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD %s", stage)
-	resp, err := c.QuerySingle(ctx, presignUploadSQL, nil)
+	resp, err := c.QuerySync(ctx, presignUploadSQL, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query presign url")
 	}

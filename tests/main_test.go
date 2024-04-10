@@ -35,6 +35,10 @@ var (
 
 func init() {
 	dsn = os.Getenv("TEST_DATABEND_DSN")
+	// databend default
+	// dsn = "http://root:@localhost:8000?presigned_url_disabled=true"
+
+	// add user databend by uncommenting corresponding [[query.users]] section scripts/ci/deploy/config/databend-query-node-1.toml
 	//dsn = "http://databend:databend@localhost:8000?presigned_url_disabled=true"
 }
 
@@ -69,7 +73,7 @@ func (s *DatabendTestSuite) SetupSuite() {
 }
 
 func (s *DatabendTestSuite) TearDownSuite() {
-	s.db.Close()
+	_ = s.db.Close()
 }
 
 func (s *DatabendTestSuite) SetupTest() {
@@ -114,7 +118,7 @@ func (s *DatabendTestSuite) TestQuoteStringQuery() {
 	rows, err := s.db.Query(fmt.Sprintf("select * from %s", s.table2))
 	for rows.Next() {
 		var t string
-		rows.Scan(&t)
+		_ = rows.Scan(&t)
 		s.r.Equal(string(x), t)
 	}
 }
@@ -126,7 +130,7 @@ func (s *DatabendTestSuite) TestDesc() {
 	result, err := scanValues(rows)
 	s.r.Nil(err)
 	s.r.Equal([][]interface{}{{"i64", "BIGINT", "YES", "NULL", ""}, {"u64", "BIGINT UNSIGNED", "YES", "NULL", ""}, {"f64", "DOUBLE", "YES", "NULL", ""}, {"s", "VARCHAR", "YES", "NULL", ""}, {"s2", "VARCHAR", "YES", "NULL", ""}, {"a16", "ARRAY(INT16)", "YES", "NULL", ""}, {"a8", "ARRAY(UINT8)", "YES", "NULL", ""}, {"d", "DATE", "YES", "NULL", ""}, {"t", "TIMESTAMP", "YES", "NULL", ""}}, result)
-	rows.Close()
+	_ = rows.Close()
 }
 
 func (s *DatabendTestSuite) TestBasicSelect() {
@@ -275,7 +279,7 @@ func (s *DatabendTestSuite) TestTransactionCommit() {
 
 	result, err := scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{[]interface{}{"1", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"}}, result)
+	s.r.Equal([][]interface{}{{"1", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"}}, result)
 
 	s.r.NoError(rows.Close())
 }

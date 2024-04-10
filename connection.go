@@ -1,19 +1,12 @@
 package godatabend
 
 import (
-	"bytes"
 	"context"
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"os"
-	"strings"
 	"sync/atomic"
-	"time"
-
-	"github.com/avast/retry-go"
 )
 
 const (
@@ -28,7 +21,6 @@ type DatabendConn struct {
 	cfg         *Config
 	cancel      context.CancelFunc
 	closed      int32
-	stmts       []*databendStmt
 	logger      *log.Logger
 	rest        *APIClient
 	batchMode   bool
@@ -36,74 +28,41 @@ type DatabendConn struct {
 }
 
 func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.Value) (driver.Result, error) {
-	respCh := make(chan QueryResponse)
-	errCh := make(chan error)
-	dc.rest.NextQuery()
-
-	go func() {
-		err := dc.rest.QuerySync(ctx, query, args, respCh)
-		errCh <- err
-	}()
-
-	for {
-		select {
-		case err := <-errCh:
-			if err != nil {
-				return emptyResult, err
-			} else {
-				return emptyResult, nil
-			}
-		case resp := <-respCh:
-			b, err := json.Marshal(resp.Data)
-			if err != nil {
-				return emptyResult, err
-			}
-			_, _ = io.Copy(io.Discard, bytes.NewReader(b))
-		}
+	_, err := dc.rest.QuerySync(ctx, query, args)
+	if err != nil {
+		return emptyResult, err
 	}
+	return emptyResult, nil
 }
 
-func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.Value) (driver.Rows, error) {
-	var r0 *QueryResponse
-	dc.rest.NextQuery()
-
-	err := retry.Do(
-		func() error {
-			r, err := dc.rest.DoQuery(ctx, query, args)
-			if err != nil {
-				return err
-			}
-			r0 = r
-			return nil
-		},
-		// other err no need to retry
-		retry.RetryIf(func(err error) bool {
-			if err != nil && (IsProxyErr(err) || strings.Contains(err.Error(), ProvisionWarehouseTimeout)) {
-				return true
-			}
-			return false
-		}),
-		retry.Delay(2*time.Second),
-		retry.Attempts(5),
-		retry.DelayType(retry.FixedDelay),
-	)
+func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.Value) (rows driver.Rows, err error) {
+	r0, err := dc.rest.StartQuery(ctx, query, args)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
+	defer func() {
+		if err != nil {
+			_ = dc.rest.CloseQuery(ctx, r0)
+		}
+	}()
+
 	if r0.Error != nil {
-		return nil, fmt.Errorf("query has error: %+v", r0.Error)
+		return nil, fmt.Errorf("query error: %+v", r0.Error)
 	}
-	return newNextRows(ctx, dc, r0)
+	response, err := waitForData(ctx, dc, r0)
+	if err != nil {
+		return nil, err
+	}
+	return newNextRows(ctx, dc, response)
 }
 
 func (dc *DatabendConn) Begin() (driver.Tx, error) {
-
 	return dc.BeginTx(dc.ctx, driver.TxOptions{})
 }
 
 func (dc *DatabendConn) BeginTx(
 	ctx context.Context,
-	opts driver.TxOptions) (
+	_ driver.TxOptions) (
 	driver.Tx, error) {
 	if dc.rest == nil {
 		return nil, driver.ErrBadConn

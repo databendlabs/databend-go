@@ -3,8 +3,6 @@ package tests
 import (
 	"database/sql"
 	"fmt"
-	"os"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,17 +32,16 @@ func (s *DatabendTestSuite) TestChangeRole() {
 	println(result)
 	_, err = s.db.Exec("create role if not exists test_role")
 	r.Nil(err)
-	dsn := os.Getenv("TEST_DATABEND_DSN")
+
 	s.NotEmpty(dsn)
-	dsn = fmt.Sprintf("%s&role=test_role", dsn)
-	s.db, err = sql.Open("databend", dsn)
+	dsn_with_role := fmt.Sprintf("%s&role=test_role", dsn)
+	s.db, err = sql.Open("databend", dsn_with_role)
 	s.Nil(err)
 
 	err = s.db.QueryRow("select current_role()").Scan(&result)
 	r.Nil(err)
 	r.Equal("test_role", result)
 
-	dsn = os.Getenv("TEST_DATABEND_DSN")
 	s.NotEmpty(dsn)
 	s.db, err = sql.Open("databend", dsn)
 	s.Nil(err)
