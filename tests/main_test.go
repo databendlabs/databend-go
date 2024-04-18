@@ -144,6 +144,23 @@ func (s *DatabendTestSuite) TestBasicSelect() {
 	s.r.Equal(int64(0), affected)
 }
 
+func (s *DatabendTestSuite) TestSelectMultiPage() {
+	// by default, each page size is 10000 rows
+	// So we need a large result set to test the multi pages case.
+	n := 46000
+	query := fmt.Sprintf("SELECT number from numbers(%d) order by number", n)
+	rows, err := s.db.Query(query)
+	s.r.Nil(err)
+
+	v := -1
+	for i := 0; i < n; i++ {
+		s.r.True(rows.Next())
+		rows.Scan(&v)
+		s.r.Equal(v, i)
+	}
+	s.r.False(rows.Next())
+}
+
 func (s *DatabendTestSuite) TestBatchInsert() {
 	r := require.New(s.T())
 
