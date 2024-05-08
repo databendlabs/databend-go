@@ -221,3 +221,4 @@ The following table outlines the mapping between Databend types and Go types:
 ## Compatibility
 
 - If databend version >= v0.9.0 or later, you need to use databend-go version >= v0.3.0.
+- If databend version < 1.2.371, you need to use databend-go version < 0.5.7 and if your databend version >= 1.2.371, you need the databend-go version >=0.5.7. Because from [1.2.371](https://github.com/datafuselabs/databend/releases/tag/v1.2.371), databend support transaction and databend-go has some brake changes. 
