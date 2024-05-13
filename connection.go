@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"sync/atomic"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -28,6 +30,7 @@ type DatabendConn struct {
 }
 
 func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.Value) (driver.Result, error) {
+	ctx = checkQueryID(ctx)
 	_, err := dc.rest.QuerySync(ctx, query, args)
 	if err != nil {
 		return emptyResult, err
@@ -36,6 +39,7 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.V
 }
 
 func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.Value) (rows driver.Rows, err error) {
+	ctx = checkQueryID(ctx)
 	r0, err := dc.rest.StartQuery(ctx, query, args)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
@@ -111,6 +115,7 @@ func (dc *DatabendConn) prepare(ctx context.Context, query string) (*databendStm
 }
 
 func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+	ctx = checkQueryID(ctx)
 	return dc.prepare(ctx, query)
 }
 
@@ -174,4 +179,14 @@ func (dc *DatabendConn) ExecuteBatch() (err error) {
 		dc.batchInsert = nil
 	}()
 	return dc.batchInsert()
+}
+
+// checkQueryID checks if query_id exists in context, if not, generate a new one
+func checkQueryID(ctx context.Context) context.Context {
+	if _, ok := ctx.Value(ContextKeyQueryID).(string); ok {
+		return ctx
+	}
+	queryId := uuid.NewString()
+	ctx = context.WithValue(ctx, ContextKeyQueryID, queryId)
+	return ctx
 }
