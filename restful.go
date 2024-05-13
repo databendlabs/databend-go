@@ -8,14 +8,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"io"
 	"mime/multipart"
 	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/avast/retry-go"
 	"github.com/pkg/errors"
@@ -40,8 +41,9 @@ const (
 )
 
 const (
-	EMPTY_FIELD_AS string = "empty_field_as"
-	PURGE          string = "purge"
+	ContextKeyQueryID ContextKey = "X-DATABEND-QUERY-ID"
+	EMPTY_FIELD_AS    string     = "empty_field_as"
+	PURGE             string     = "purge"
 )
 
 type PresignedResponse struct {
@@ -213,7 +215,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 
 	maxRetries := 2
 	for i := 1; i <= maxRetries; i++ {
-		headers, err := c.makeHeaders()
+		headers, err := c.makeHeaders(ctx)
 		if err != nil {
 			return errors.Wrap(err, "failed to make request headers")
 		}
@@ -288,7 +290,7 @@ func (c *APIClient) authMethod() AuthMethod {
 	return ""
 }
 
-func (c *APIClient) makeHeaders() (http.Header, error) {
+func (c *APIClient) makeHeaders(ctx context.Context) (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
 	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", version))
@@ -299,7 +301,11 @@ func (c *APIClient) makeHeaders() (http.Header, error) {
 		headers.Set(DatabendWarehouseHeader, c.warehouse)
 	}
 
-	headers.Set(DatabendQueryIDHeader, c.GetQueryID())
+	if queryID, ok := ctx.Value(ContextKeyQueryID).(string); ok {
+		headers.Set(DatabendQueryIDHeader, queryID)
+	} else {
+		headers.Set(DatabendQueryIDHeader, c.GetQueryID())
+	}
 
 	switch c.authMethod() {
 	case AuthMethodUserPassword:
@@ -541,7 +547,7 @@ func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *Stag
 
 func (c *APIClient) UploadToStage(ctx context.Context, stage *StageLocation, input *bufio.Reader, size int64) error {
 	if c.PresignedURLDisabled {
-		return c.UploadToStageByAPI(stage, input)
+		return c.UploadToStageByAPI(ctx, stage, input)
 	} else {
 		return c.UploadToStageByPresignURL(ctx, stage, input, size)
 	}
@@ -606,7 +612,7 @@ func (c *APIClient) UploadToStageByPresignURL(ctx context.Context, stage *StageL
 	return nil
 }
 
-func (c *APIClient) UploadToStageByAPI(stage *StageLocation, input *bufio.Reader) error {
+func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation, input *bufio.Reader) error {
 	body := new(bytes.Buffer)
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("upload", stage.Path)
@@ -630,7 +636,7 @@ func (c *APIClient) UploadToStageByAPI(stage *StageLocation, input *bufio.Reader
 		return errors.Wrap(err, "failed to create http request")
 	}
 
-	req.Header, err = c.makeHeaders()
+	req.Header, err = c.makeHeaders(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to make headers")
 	}
