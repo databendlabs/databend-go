@@ -41,9 +41,10 @@ const (
 )
 
 const (
-	ContextKeyQueryID ContextKey = "X-DATABEND-QUERY-ID"
-	EMPTY_FIELD_AS    string     = "empty_field_as"
-	PURGE             string     = "purge"
+	ContextKeyQueryID  ContextKey = "X-DATABEND-QUERY-ID"
+	ContextUserAgentID ContextKey = "USER-AGENT"
+	EMPTY_FIELD_AS     string     = "empty_field_as"
+	PURGE              string     = "purge"
 )
 
 type PresignedResponse struct {
@@ -293,6 +294,12 @@ func (c *APIClient) authMethod() AuthMethod {
 func (c *APIClient) makeHeaders(ctx context.Context) (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
+	if userAgent, ok := ctx.Value(ContextUserAgentID).(string); ok {
+		headers.Set(UserAgent, fmt.Sprintf("%s/databend-go/%s", version, userAgent))
+	} else {
+		headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", version))
+
+	}
 	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", version))
 	if c.tenant != "" {
 		headers.Set(DatabendTenantHeader, c.tenant)
