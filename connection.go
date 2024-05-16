@@ -183,10 +183,9 @@ func (dc *DatabendConn) ExecuteBatch() (err error) {
 
 // checkQueryID checks if query_id exists in context, if not, generate a new one
 func checkQueryID(ctx context.Context) context.Context {
-	if _, ok := ctx.Value(ContextKeyQueryID).(string); ok {
-		return ctx
+	if _, ok := ctx.Value(ContextKeyQueryID).(string); !ok {
+		queryId := uuid.NewString()
+		ctx = context.WithValue(ctx, ContextKeyQueryID, queryId)
 	}
-	queryId := uuid.NewString()
-	ctx = context.WithValue(ctx, ContextKeyQueryID, queryId)
 	return ctx
 }
