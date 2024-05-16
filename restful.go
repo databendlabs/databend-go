@@ -29,7 +29,6 @@ const (
 	AuthMethodAccessToken  AuthMethod = "accessToken"
 )
 
-type ContextKey string
 type RequestType int
 
 // request type
@@ -41,10 +40,10 @@ const (
 )
 
 const (
-	ContextKeyQueryID  ContextKey = "X-DATABEND-QUERY-ID"
-	ContextUserAgentID ContextKey = "USER-AGENT"
-	EMPTY_FIELD_AS     string     = "empty_field_as"
-	PURGE              string     = "purge"
+	ContextKeyQueryID  string = "X-DATABEND-QUERY-ID"
+	ContextUserAgentID string = "USER-AGENT"
+	EMPTY_FIELD_AS     string = "empty_field_as"
+	PURGE              string = "purge"
 )
 
 type PresignedResponse struct {

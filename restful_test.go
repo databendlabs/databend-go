@@ -42,6 +42,20 @@ func TestMakeHeadersAccessToken(t *testing.T) {
 	assert.NotEmptyf(t, headers["X-Databend-Query-Id"], "Query ID is not empty")
 }
 
+func TestCheckQueryID(t *testing.T) {
+	// Test case 1: Context does not have ContextKeyQueryID
+	ctx := context.Background()
+	newCtx := checkQueryID(ctx)
+	_, ok := newCtx.Value(ContextKeyQueryID).(string)
+	assert.True(t, ok, "Expected ContextKeyQueryID to be present in the context")
+
+	// Test case 2: Context already has ContextKeyQueryID
+	queryID := uuid.NewString()
+	ctxWithQueryID := context.WithValue(ctx, ContextKeyQueryID, queryID)
+	newCtxWithQueryID := checkQueryID(ctxWithQueryID)
+	assert.Equal(t, queryID, newCtxWithQueryID.Value(ContextKeyQueryID), "Expected ContextKeyQueryID to remain unchanged in the context")
+}
+
 func TestMakeHeadersQueryID(t *testing.T) {
 	c := APIClient{
 		user:         "root",
