@@ -22,7 +22,7 @@ jobs:
 
       - name: Get version
         id: get_version
-        run: echo ::set-output name=VERSION::$(cat version.go)
+        run: echo ::set-output name=VERSION::v$(cat version.go)
 
       - name: Create Release
         uses: actions/create-release@v1
