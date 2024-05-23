@@ -372,9 +372,10 @@ func (c *APIClient) applySessionState(response *QueryResponse) {
 }
 
 func (c *APIClient) PollUntilQueryEnd(ctx context.Context, resp *QueryResponse) (*QueryResponse, error) {
+	var err error
 	for !resp.ReadFinished() {
 		data := resp.Data
-		resp, err := c.PollQuery(ctx, resp.NextURI)
+		resp, err = c.PollQuery(ctx, resp.NextURI)
 		if err != nil {
 			return nil, err
 		}
