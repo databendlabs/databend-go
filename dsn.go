@@ -141,6 +141,10 @@ func (cfg *Config) FormatDSN() string {
 	} else {
 		query.Set("empty_field_as", "string")
 	}
+	// Add Params to the query
+	for k, v := range cfg.Params {
+		query.Set(k, v)
+	}
 
 	u.RawQuery = query.Encode()
 	return u.String()
