@@ -80,6 +80,7 @@ func (c *APIClient) NewDefaultCopyOptions() map[string]string {
 type APIClient struct {
 	SessionID string
 	QuerySeq  int64
+	NodeID    string
 	cli       *http.Client
 	rows      *nextRows
 
@@ -218,6 +219,9 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 		headers, err := c.makeHeaders(ctx)
 		if err != nil {
 			return errors.Wrap(err, "failed to make request headers")
+		}
+		if method == "GET" && len(c.NodeID) != 0 {
+			headers.Set(DatabendQueryIDNode, c.NodeID)
 		}
 		headers.Set(contentType, jsonContentType)
 		headers.Set(accept, jsonContentType)
@@ -460,6 +464,7 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
 	// e.g. transaction state need to be updated if commit fail
 	c.applySessionState(&resp)
+	c.NodeID = resp.NodeID
 	c.trackStats(&resp)
 	return &resp, nil
 }
