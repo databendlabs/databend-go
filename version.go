@@ -1,3 +1,3 @@
 package godatabend
 
-var version = "0.6.5"
+var version = "0.6.6"
