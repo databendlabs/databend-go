@@ -377,6 +377,14 @@ func (c *APIClient) PollUntilQueryEnd(ctx context.Context, resp *QueryResponse) 
 		data := resp.Data
 		resp, err = c.PollQuery(ctx, resp.NextURI)
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				// context might be canceled due to timeout or canceled. if it's canceled, we need call
+				// the kill url to tell the backend it's killed.
+				fmt.Printf("query canceled, kill query:%s", resp.ID)
+				_ = c.KillQuery(context.Background(), resp)
+			} else {
+				_ = c.CloseQuery(ctx, resp)
+			}
 			return nil, err
 		}
 		if resp.Error != nil {
