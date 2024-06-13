@@ -382,8 +382,6 @@ func (c *APIClient) PollUntilQueryEnd(ctx context.Context, resp *QueryResponse) 
 				// the kill url to tell the backend it's killed.
 				fmt.Printf("query canceled, kill query:%s", resp.ID)
 				_ = c.KillQuery(context.Background(), resp)
-			} else {
-				_ = c.CloseQuery(ctx, resp)
 			}
 			return nil, err
 		}
