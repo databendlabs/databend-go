@@ -374,7 +374,7 @@ func (c *APIClient) getSessionState() *SessionState {
 }
 
 func (c *APIClient) inActiveTransaction() bool {
-	return c.sessionState != nil && c.sessionState.TxnState == TxnStateActive
+	return c.sessionState != nil && strings.EqualFold(string(c.sessionState.TxnState), string(TxnStateActive))
 }
 
 func (c *APIClient) applySessionState(response *QueryResponse) {
@@ -491,7 +491,7 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	// e.g. transaction state need to be updated if commit fail
 	c.applySessionState(&resp)
 	// save route hint for the next following http requests
-	if len(respHeaders) > 0 && c.routeHint == "" {
+	if len(respHeaders) > 0 {
 		c.routeHint = respHeaders.Get(DatabendRouteHintHeader)
 	}
 	return &resp, nil
