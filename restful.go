@@ -298,7 +298,6 @@ func (c *APIClient) makeHeaders(ctx context.Context) (http.Header, error) {
 		headers.Set(UserAgent, fmt.Sprintf("%s/databend-go/%s", version, userAgent))
 	} else {
 		headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", version))
-
 	}
 	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", version))
 	if c.tenant != "" {
@@ -306,6 +305,9 @@ func (c *APIClient) makeHeaders(ctx context.Context) (http.Header, error) {
 	}
 	if c.warehouse != "" {
 		headers.Set(DatabendWarehouseHeader, c.warehouse)
+	}
+	if c.routeHint != "" {
+		headers.Set(DatabendRouteHintHeader, c.routeHint)
 	}
 
 	if queryID, ok := ctx.Value(ContextKeyQueryID).(string); ok {
