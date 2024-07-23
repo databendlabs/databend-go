@@ -1,3 +1,8 @@
 package godatabend
 
-var version = "0.6.6"
+import (
+	_ "embed"
+)
+
+//go:embed VERSION
+var version string
