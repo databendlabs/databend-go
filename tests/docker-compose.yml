@@ -6,7 +6,7 @@ services:
     volumes:
       - ./data:/data
   databend:
-    image: datafuselabs/databend:v1.2.367-nightly
+    image: datafuselabs/databend
     environment:
       - QUERY_DEFAULT_USER=databend
       - QUERY_DEFAULT_PASSWORD=databend
