@@ -85,6 +85,13 @@ type PaginationConfig struct {
 	MaxRowsPerPage  int64 `json:"max_rows_per_page,omitempty"`
 }
 
+type TxnState string
+
+const (
+	TxnStateActive     TxnState = "Active"
+	TxnStateAutoCommit TxnState = "AutoCommit"
+)
+
 type SessionState struct {
 	Database       string    `json:"database,omitempty"`
 	Role           string    `json:"role,omitempty"`
@@ -96,7 +103,7 @@ type SessionState struct {
 	Settings map[string]string `json:"settings,omitempty"`
 
 	// txn
-	TxnState string `json:"txn_state,omitempty"`
+	TxnState TxnState `json:"txn_state,omitempty"` // "Active", "AutoCommit"
 }
 
 type StageAttachmentConfig struct {
