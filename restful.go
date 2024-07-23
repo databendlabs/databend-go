@@ -93,6 +93,7 @@ type APIClient struct {
 
 	sessionStateRaw *json.RawMessage
 	sessionState    *SessionState
+	routeHint       string
 
 	statsTracker      QueryStatsTracker
 	accessTokenLoader AccessTokenLoader
@@ -361,6 +362,10 @@ func (c *APIClient) getSessionStateRaw() *json.RawMessage {
 
 func (c *APIClient) getSessionState() *SessionState {
 	return c.sessionState
+}
+
+func (c *APIClient) inActiveTransaction() bool {
+	return c.sessionState != nil && c.sessionState.TxnState == TxnStateActive
 }
 
 func (c *APIClient) applySessionState(response *QueryResponse) {
