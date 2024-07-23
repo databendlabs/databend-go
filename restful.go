@@ -429,7 +429,7 @@ func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.V
 	return c.PollUntilQueryEnd(ctx, resp)
 }
 
-func (c *APIClient) DoRetry(f retry.RetryableFunc, t RequestType) error {
+func (c *APIClient) doRetry(f retry.RetryableFunc, t RequestType) error {
 	var delay time.Duration = 1
 	var attempts uint = 3
 	if t == Query {
@@ -465,15 +465,20 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	c.NextQuery()
 	// fmt.Printf("start query %v %v\n", c.GetQueryID(), request.SQL)
 
+	if !c.inActiveTransaction() {
+		c.routeHint = ""
+	}
+
 	path := "/v1/query"
 	var resp QueryResponse
-	err := c.DoRetry(func() error {
+	err := c.doRetry(func() error {
 		return c.doRequest(ctx, "POST", path, request, &resp)
 	}, Query,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to do query request")
 	}
+
 	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
 	// e.g. transaction state need to be updated if commit fail
 	c.applySessionState(&resp)
@@ -497,7 +502,7 @@ func (c *APIClient) StartQuery(ctx context.Context, query string, args []driver.
 
 func (c *APIClient) PollQuery(ctx context.Context, nextURI string) (*QueryResponse, error) {
 	var result QueryResponse
-	err := c.DoRetry(
+	err := c.doRetry(
 		func() error {
 			return c.doRequest(ctx, "GET", nextURI, nil, &result)
 		},
@@ -517,7 +522,7 @@ func (c *APIClient) KillQuery(ctx context.Context, response *QueryResponse) erro
 	if response != nil && response.KillURI != "" {
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
-		_ = c.DoRetry(func() error {
+		_ = c.doRetry(func() error {
 			return c.doRequest(ctx, "GET", response.KillURI, nil, nil)
 		}, Kill,
 		)
@@ -529,7 +534,7 @@ func (c *APIClient) CloseQuery(ctx context.Context, response *QueryResponse) err
 	if response != nil && response.FinalURI != "" {
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
-		_ = c.DoRetry(func() error {
+		_ = c.doRetry(func() error {
 			return c.doRequest(ctx, "GET", response.FinalURI, nil, nil)
 		}, Final,
 		)
