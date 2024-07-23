@@ -194,7 +194,7 @@ func initAccessTokenLoader(cfg *Config) AccessTokenLoader {
 	return nil
 }
 
-func (c *APIClient) doRequest(ctx context.Context, method, path string, req interface{}, resp interface{}) error {
+func (c *APIClient) doRequest(ctx context.Context, method, path string, req interface{}, resp interface{}, respHeaders *http.Header) error {
 	if c.doRequestFunc != nil {
 		return c.doRequestFunc(method, path, req, resp)
 	}
@@ -267,6 +267,9 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 					return errors.Wrap(err, "failed to unmarshal response body")
 				}
 			}
+		}
+		if respHeaders != nil {
+			*respHeaders = httpResp.Header
 		}
 		return nil
 	}
@@ -470,20 +473,27 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	}
 
 	path := "/v1/query"
-	var resp QueryResponse
+	var (
+		resp        QueryResponse
+		respHeaders http.Header
+	)
 	err := c.doRetry(func() error {
-		return c.doRequest(ctx, "POST", path, request, &resp)
+		return c.doRequest(ctx, "POST", path, request, &resp, &respHeaders)
 	}, Query,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to do query request")
 	}
 
+	c.NodeID = resp.NodeID
+	c.trackStats(&resp)
 	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
 	// e.g. transaction state need to be updated if commit fail
 	c.applySessionState(&resp)
-	c.NodeID = resp.NodeID
-	c.trackStats(&resp)
+	// save route hint for the next following http requests
+	if len(respHeaders) > 0 && c.routeHint == "" {
+		c.routeHint = respHeaders.Get(DatabendRouteHintHeader)
+	}
 	return &resp, nil
 }
 
@@ -504,7 +514,7 @@ func (c *APIClient) PollQuery(ctx context.Context, nextURI string) (*QueryRespon
 	var result QueryResponse
 	err := c.doRetry(
 		func() error {
-			return c.doRequest(ctx, "GET", nextURI, nil, &result)
+			return c.doRequest(ctx, "GET", nextURI, nil, &result, nil)
 		},
 		Page,
 	)
@@ -523,7 +533,7 @@ func (c *APIClient) KillQuery(ctx context.Context, response *QueryResponse) erro
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		_ = c.doRetry(func() error {
-			return c.doRequest(ctx, "GET", response.KillURI, nil, nil)
+			return c.doRequest(ctx, "GET", response.KillURI, nil, nil, nil)
 		}, Kill,
 		)
 	}
@@ -535,7 +545,7 @@ func (c *APIClient) CloseQuery(ctx context.Context, response *QueryResponse) err
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		_ = c.doRetry(func() error {
-			return c.doRequest(ctx, "GET", response.FinalURI, nil, nil)
+			return c.doRequest(ctx, "GET", response.FinalURI, nil, nil, nil)
 		}, Final,
 		)
 	}
