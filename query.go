@@ -30,6 +30,7 @@ type DataField struct {
 
 type QueryResponse struct {
 	ID      string           `json:"id"`
+	NodeID  string           `json:"node_id"`
 	Session *json.RawMessage `json:"session"`
 	Schema  *[]DataField     `json:"schema"`
 	Data    [][]string       `json:"data"`

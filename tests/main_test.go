@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/test-go/testify/suite"
 
@@ -325,6 +327,20 @@ func (s *DatabendTestSuite) TestTransactionRollback() {
 	s.r.Empty(result)
 
 	s.r.NoError(rows.Close())
+}
+
+func (s *DatabendTestSuite) TestLongExec() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := s.db.ExecContext(ctx, "SELECT number from numbers(100000) order by number")
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			s.T().Errorf("Query execution exceeded the 10s timeout")
+		} else {
+			s.r.Nil(err)
+		}
+	}
 }
 
 func scanValues(rows *sql.Rows) (interface{}, error) {
