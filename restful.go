@@ -94,7 +94,11 @@ type APIClient struct {
 
 	sessionStateRaw *json.RawMessage
 	sessionState    *SessionState
-	routeHint       string
+
+	// routHint is used to save the route hint from the last responded X-Databend-Route-Hint, this is
+	// used for guiding the preferred route for the next following http requests, this is useful for
+	// some cases like query pagination & multi-statements transaction.
+	routeHint string
 
 	statsTracker      QueryStatsTracker
 	accessTokenLoader AccessTokenLoader
