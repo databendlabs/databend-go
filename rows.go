@@ -156,7 +156,12 @@ func (r *nextRows) Next(dest []driver.Value) error {
 	r.respData.Data = r.respData.Data[1:]
 
 	for j := range lineData {
-		reader := strings.NewReader(lineData[j])
+		val := lineData[j]
+		if val == nil {
+			dest[j] = nil
+			continue
+		}
+		reader := strings.NewReader(*val)
 		v, err := r.parsers[j].Parse(reader)
 		if err != nil {
 			r.dc.log("fail to parse field", j, ", error: ", err)
