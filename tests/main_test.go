@@ -115,9 +115,11 @@ func (s *DatabendTestSuite) TestQuoteStringQuery() {
 	m := make(map[string]string, 0)
 	m["message"] = "this is action 'with quote string'"
 	x, err := json.Marshal(m)
+	s.r.Nil(err)
 	_, err = s.db.Exec(fmt.Sprintf("insert into %s values(?)", s.table2), string(x))
 	s.r.Nil(err)
 	rows, err := s.db.Query(fmt.Sprintf("select * from %s", s.table2))
+	s.r.Nil(err)
 	for rows.Next() {
 		var t string
 		_ = rows.Scan(&t)
