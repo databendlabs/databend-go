@@ -368,6 +368,15 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 		}
 		values := make([]interface{}, len(types))
 		for i, p := range ptrs {
+			nullable, ok := ct[i].Nullable()
+			if !ok {
+				values[i] = reflect.ValueOf(p).Elem().Interface()
+				continue
+			}
+			if nullable && reflect.ValueOf(p).IsNil() {
+				values[i] = nil
+				continue
+			}
 			values[i] = reflect.ValueOf(p).Elem().Interface()
 		}
 		result = append(result, values)
