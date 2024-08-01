@@ -624,10 +624,18 @@ func (p *nullableParser) Parse(s io.RuneScanner) (driver.Value, error) {
 	}
 }
 
+func (p *nullableParser) Type() reflect.Type {
+	return reflectTypeEmptyStruct
+}
+
 func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParser, error) {
 	if t.Nullable {
 		t.Nullable = false
-		return newDataParser(t, unquote, opt)
+		inner, err := newDataParser(t, unquote, opt)
+		if err != nil {
+			return nil, err
+		}
+		return &nullableParser{innerParser: inner, innerType: t.Name}, nil
 	}
 	switch t.Name {
 	case "Nothing":
