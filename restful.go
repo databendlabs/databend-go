@@ -9,17 +9,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"mime/multipart"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-
 	"github.com/avast/retry-go"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type AuthMethod string
@@ -178,6 +178,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		password:        cfg.Password,
 		sessionState:    &sessionState,
 		sessionStateRaw: &sessionStateRaw,
+		routeHint:       randRouteHint(),
 
 		accessTokenLoader: initAccessTokenLoader(cfg),
 		statsTracker:      cfg.StatsTracker,
@@ -476,7 +477,7 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	// fmt.Printf("start query %v %v\n", c.GetQueryID(), request.SQL)
 
 	if !c.inActiveTransaction() {
-		c.routeHint = ""
+		c.routeHint = randRouteHint()
 	}
 
 	path := "/v1/query"
@@ -498,7 +499,7 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	// e.g. transaction state need to be updated if commit fail
 	c.applySessionState(&resp)
 	// save route hint for the next following http requests
-	if len(respHeaders) > 0 {
+	if len(respHeaders) > 0 && len(respHeaders.Get(DatabendRouteHintHeader)) > 0 {
 		c.routeHint = respHeaders.Get(DatabendRouteHintHeader)
 	}
 	return &resp, nil
@@ -719,4 +720,13 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 	}
 
 	return nil
+}
+
+func randRouteHint() string {
+	charset := "abcdef0123456789"
+	b := make([]byte, 16)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
 }
