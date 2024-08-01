@@ -613,6 +613,7 @@ func (p *nullableParser) Parse(s io.RuneScanner) (driver.Value, error) {
 		return p.innerParser.Parse(s)
 	default:
 		o, err := readString(s, 0, false)
+		// not string, continue with inner parser
 		if err != nil {
 			return p.innerParser.Parse(s)
 		}
