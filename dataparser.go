@@ -106,11 +106,11 @@ type DataParser interface {
 	Type() reflect.Type
 }
 
-type nullableParser struct {
+type nullParser struct {
 	DataParser
 }
 
-func (p *nullableParser) Parse(s io.RuneScanner) (driver.Value, error) {
+func (p *nullParser) Parse(s io.RuneScanner) (driver.Value, error) {
 	var dB *bytes.Buffer
 
 	dType := p.DataParser.Type()
@@ -362,7 +362,7 @@ func (p *arrayParser) Parse(s io.RuneScanner) (driver.Value, error) {
 		}
 
 		if v == nil {
-			if reflect.TypeOf(p.arg) != reflect.TypeOf(&nullableParser{}) {
+			if reflect.TypeOf(p.arg) != reflect.TypeOf(&nullParser{}) {
 				//need check if v is nil: panic otherwise
 				return nil, fmt.Errorf("unexpected nil element")
 			}
@@ -603,11 +603,14 @@ func NewDataParser(t *TypeDesc, opt *DataParserOptions) (DataParser, error) {
 }
 
 func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParser, error) {
+	if t.Nullable {
+		return &nothingParser{}, nil
+	}
 	switch t.Name {
 	case "Nothing":
 		return &nothingParser{}, nil
 	case "Nullable":
-		return &stringParser{unquote: unquote}, nil
+		return &nothingParser{}, fmt.Errorf("unexpected Nullable type: %s", t.Name)
 	case "NULL":
 		return &stringParser{unquote: unquote}, nil
 	case "Date":
