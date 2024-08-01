@@ -656,13 +656,8 @@ func (p *nullableParser) Parse(s io.RuneScanner) (driver.Value, error) {
 	case "String":
 		return p.innerParser.Parse(s)
 	default:
-		o, err := readString(s, 0, false)
-		// not string, continue with inner parser
-		if err != nil {
-			return p.innerParser.Parse(s)
-		}
-		// compatible with old databend server
-		if o == "NULL" {
+		// for compatibility with old databend versions
+		if peakNull(s) {
 			return nil, nil
 		}
 		return p.innerParser.Parse(s)
