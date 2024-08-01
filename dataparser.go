@@ -681,7 +681,11 @@ func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParse
 	case "Nothing":
 		return &nothingParser{}, nil
 	case "Nullable":
-		return &nothingParser{}, fmt.Errorf("unexpected Nullable type: %s", t.Name)
+		inner, err := newDataParser(t.Args[0], unquote, opt)
+		if err != nil {
+			return nil, err
+		}
+		return &nullableParser{innerParser: inner, innerType: t.Args[0].Name}, nil
 	case "NULL":
 		return &stringParser{unquote: unquote}, nil
 	case "Date":
