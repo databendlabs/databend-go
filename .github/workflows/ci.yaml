@@ -24,6 +24,6 @@ jobs:
 
       - name: Integration Test
         env:
-          TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?sslmode=disable&format_null_as_str=0"
+          TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?sslmode=disable"
         run: |
           make integration
