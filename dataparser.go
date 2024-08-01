@@ -602,9 +602,32 @@ func NewDataParser(t *TypeDesc, opt *DataParserOptions) (DataParser, error) {
 	return newDataParser(t, false, opt)
 }
 
+type nullableParser struct {
+	innerParser DataParser
+	innerType   string
+}
+
+func (p *nullableParser) Parse(s io.RuneScanner) (driver.Value, error) {
+	switch p.innerType {
+	case "String":
+		return p.innerParser.Parse(s)
+	default:
+		o, err := readString(s, 0, false)
+		if err != nil {
+			return p.innerParser.Parse(s)
+		}
+		// compatible with old databend server
+		if o == "NULL" {
+			return nil, nil
+		}
+		return p.innerParser.Parse(s)
+	}
+}
+
 func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParser, error) {
 	if t.Nullable {
-		return &nothingParser{}, nil
+		t.Nullable = false
+		return newDataParser(t, unquote, opt)
 	}
 	switch t.Name {
 	case "Nothing":
