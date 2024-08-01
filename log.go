@@ -11,6 +11,8 @@ import (
 	rlog "github.com/sirupsen/logrus"
 )
 
+type contextKey string
+
 // DBSessionIDKey is context key of session id
 const DBSessionIDKey contextKey = "LOG_SESSION_ID"
 
