@@ -87,7 +87,7 @@ func TestDoQuery(t *testing.T) {
 	}
 
 	c := APIClient{
-		host:              "tnxxxxxxx--default.gw.aws-us-east-2.default.databend.com",
+		host:              "tnxxxxxxx.gw.aws-us-east-2.default.databend.com",
 		tenant:            "tnxxxxxxx",
 		accessTokenLoader: NewStaticAccessTokenLoader("abc123"),
 		warehouse:         "small-abc",
