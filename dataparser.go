@@ -2,6 +2,7 @@ package godatabend
 
 import (
 	"bytes"
+	"database/sql"
 	"database/sql/driver"
 	"fmt"
 	"io"
@@ -628,7 +629,8 @@ func (p *nothingParser) Parse(s io.RuneScanner) (driver.Value, error) {
 }
 
 func (p *nothingParser) Type() reflect.Type {
-	return reflectTypeEmptyStruct
+	return reflect.TypeOf(sql.NullString{})
+	// return reflectTypeEmptyStruct
 }
 
 // DataParserOptions describes DataParser options.
