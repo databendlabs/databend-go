@@ -665,7 +665,7 @@ func (p *nullableParser) Parse(s io.RuneScanner) (driver.Value, error) {
 }
 
 func (p *nullableParser) Type() reflect.Type {
-	return reflectTypeEmptyStruct
+	return p.innerParser.Type()
 }
 
 func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParser, error) {
