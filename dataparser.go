@@ -100,6 +100,50 @@ func readString(s io.RuneScanner, length int, unquote bool) (string, error) {
 	return str, nil
 }
 
+func peakNull(s io.RuneScanner) bool {
+	r := read(s)
+	if r != 'N' {
+		_ = s.UnreadRune()
+		return false
+	}
+
+	r = read(s)
+	if r != 'U' {
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		return false
+	}
+
+	r = read(s)
+	if r != 'L' {
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		return false
+	}
+
+	r = read(s)
+	if r != 'L' {
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		return false
+	}
+
+	r = read(s)
+	if r != eof {
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		return false
+	}
+
+	return true
+}
+
 // DataParser implements parsing of a driver value and reporting its type.
 type DataParser interface {
 	Parse(io.RuneScanner) (driver.Value, error)
