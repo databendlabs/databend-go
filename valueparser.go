@@ -833,3 +833,18 @@ func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParse
 		return nil, fmt.Errorf("type %s is not supported", t.Name)
 	}
 }
+
+type NullableValue struct {
+	val any
+}
+
+// Scan implements the [Scanner] interface.
+func (nv *NullableValue) Scan(value any) error {
+	nv.val = value
+	return nil
+}
+
+// Value implements the [driver.Valuer] interface.
+func (nv NullableValue) Value() (driver.Value, error) {
+	return nv.val, nil
+}

@@ -363,7 +363,7 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 	for i, v := range ct {
 		// FIXME:
 		if nullable, ok := v.Nullable(); ok && nullable {
-			types[i] = reflect.TypeOf(sql.NullString{})
+			types[i] = reflect.TypeOf(dc.NullableValue{})
 		} else {
 			types[i] = v.ScanType()
 		}
