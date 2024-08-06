@@ -365,7 +365,7 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 			return nil, err
 		}
 		for i := range ct {
-			vals[i] = dc.NullableValue{}
+			vals[i] = &dc.NullableValue{}
 		}
 		err = rows.Scan(vals...)
 		if err != nil {
