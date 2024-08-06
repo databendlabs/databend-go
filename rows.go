@@ -12,9 +12,10 @@ import (
 )
 
 type resultSchema struct {
-	columns []string
-	types   []string
-	parsers []DataParser
+	columns   []string
+	types     []string
+	parsers   []DataParser
+	nullables []bool
 }
 
 type nextRows struct {
@@ -55,6 +56,7 @@ func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse)
 func parse_schema(fields *[]DataField) (*resultSchema, error) {
 	var columns []string
 	var types []string
+	var nullables []bool
 
 	if fields != nil {
 		for _, field := range *fields {
@@ -74,12 +76,19 @@ func parse_schema(fields *[]DataField) (*resultSchema, error) {
 		if err != nil {
 			return nil, fmt.Errorf("newTextRows: failed to create a data parser for the type '%s': %w", typ, err)
 		}
+
+		if desc.Name == "Nullable" {
+			nullables = append(nullables, true)
+		} else {
+			nullables = append(nullables, false)
+		}
 	}
 
 	schema := &resultSchema{
-		columns: columns,
-		types:   types,
-		parsers: parsers,
+		columns:   columns,
+		types:     types,
+		parsers:   parsers,
+		nullables: nullables,
 	}
 	return schema, nil
 }
@@ -188,11 +197,10 @@ func (r *nextRows) ColumnTypeDatabaseTypeName(index int) string {
 // 	return 10, true
 // }
 
-// // ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypeNullable
-// func (r *nextRows) ColumnTypeNullable(index int) (bool, bool) {
-// 	// TODO: implement this
-// 	return true, true
-// }
+// ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypeNullable
+func (r *nextRows) ColumnTypeNullable(index int) (bool, bool) {
+	return r.nullables[index], true
+}
 
 // // ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypePrecisionScale
 // func (r *nextRows) ColumnTypePrecisionScale(index int) (int64, int64, bool) {
