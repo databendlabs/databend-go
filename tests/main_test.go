@@ -345,6 +345,13 @@ func (s *DatabendTestSuite) TestLongExec() {
 	}
 }
 
+func getNullableType(t reflect.Type) reflect.Type {
+	if t.Kind() == reflect.Ptr {
+		return t.Elem()
+	}
+	return t
+}
+
 func scanValues(rows *sql.Rows) (interface{}, error) {
 	var err error
 	var result [][]interface{}
@@ -354,7 +361,11 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 	}
 	types := make([]reflect.Type, len(ct))
 	for i, v := range ct {
-		types[i] = v.ScanType()
+		if nullable, ok := v.Nullable(); ok && nullable {
+			types[i] = reflect.TypeOf(sql.NullString{})
+		} else {
+			types[i] = v.ScanType()
+		}
 	}
 	ptrs := make([]interface{}, len(types))
 	for rows.Next() {
