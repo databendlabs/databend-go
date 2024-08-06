@@ -373,7 +373,11 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 		}
 		values := make([]interface{}, len(ct))
 		for i, p := range vals {
-			values[i] = reflect.ValueOf(p).Elem().Interface()
+			val, err := p.(dc.NullableValue).Value()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get value: %w", err)
+			}
+			values[i] = val
 		}
 		result = append(result, values)
 	}
