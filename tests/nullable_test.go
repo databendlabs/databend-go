@@ -1,6 +1,9 @@
 package tests
 
-import "fmt"
+import (
+	"database/sql"
+	"fmt"
+)
 
 func (s *DatabendTestSuite) TestNullable() {
 	_, err := s.db.Exec(fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table), int64(1))
@@ -27,23 +30,25 @@ func (s *DatabendTestSuite) TestNullable() {
 	s.r.Nil(err)
 }
 
+func (s *DatabendTestSuite) TestQueryNullAsStr() {
+	row := s.db.QueryRow("SELECT NULL")
+	var val sql.NullString
+	err := row.Scan(&val)
+	s.r.Nil(err)
+	s.r.True(val.Valid)
+	s.r.Equal("NULL", val.String)
+}
+
 func (s *DatabendTestSuite) TestQueryNull() {
-	rows, err := s.db.Query("SELECT NULL")
-	s.r.Nil(err)
-	result, err := scanValues(rows)
-	s.r.Nil(err)
-	s.r.Equal([][]interface{}{{"NULL"}}, result)
-	s.r.NoError(rows.Close())
-
-	_, err = s.db.Exec("SET GLOBAL format_null_as_str=0")
+	_, err := s.db.Exec("SET GLOBAL format_null_as_str=0")
 	s.r.Nil(err)
 
-	rows, err = s.db.Query("SELECT NULL")
+	row := s.db.QueryRow("SELECT NULL")
+	var val sql.NullString
+	err = row.Scan(&val)
 	s.r.Nil(err)
-	result, err = scanValues(rows)
-	s.r.Nil(err)
-	s.r.Equal([][]interface{}{{nil}}, result)
-	s.r.NoError(rows.Close())
+	s.r.False(val.Valid)
+	s.r.Equal("", val.String)
 
 	_, err = s.db.Exec("UNSET format_null_as_str")
 	s.r.Nil(err)
