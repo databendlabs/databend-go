@@ -361,7 +361,6 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 	}
 	types := make([]reflect.Type, len(ct))
 	for i, v := range ct {
-		// FIXME:
 		if nullable, ok := v.Nullable(); ok && nullable {
 			types[i] = reflect.TypeOf(dc.NullableValue{})
 		} else {
