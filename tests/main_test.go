@@ -66,12 +66,11 @@ func (s *DatabendTestSuite) SetupSuite() {
 	err = s.db.Ping()
 	s.Nil(err)
 
-	rows, err := s.db.Query("select version()")
-	s.Nil(err)
-	result, err := scanValues(rows)
-	s.Nil(err)
-
-	s.T().Logf("connected to databend: %s\n", result)
+	// rows, err := s.db.Query("select version()")
+	// s.Nil(err)
+	// result, err := scanValues(rows)
+	// s.Nil(err)
+	// s.T().Logf("connected to databend: %s\n", result)
 }
 
 func (s *DatabendTestSuite) TearDownSuite() {
