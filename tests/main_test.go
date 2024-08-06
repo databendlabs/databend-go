@@ -32,16 +32,16 @@ const (
 )
 
 var (
-	dsn = "http://databend:databend@localhost:8000?presign=true"
+	dsn = "http://databend:databend@localhost:8000?presign=on"
 )
 
 func init() {
 	dsn = os.Getenv("TEST_DATABEND_DSN")
 	// databend default
-	// dsn = "http://root:@localhost:8000?presign=true"
+	// dsn = "http://root:@localhost:8000?presign=on"
 
 	// add user databend by uncommenting corresponding [[query.users]] section scripts/ci/deploy/config/databend-query-node-1.toml
-	//dsn = "http://databend:databend@localhost:8000?presign=true"
+	//dsn = "http://databend:databend@localhost:8000?presign=on"
 }
 
 func TestDatabendSuite(t *testing.T) {
