@@ -359,33 +359,20 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	types := make([]reflect.Type, len(ct))
-	for i, v := range ct {
-		if nullable, ok := v.Nullable(); ok && nullable {
-			types[i] = reflect.TypeOf(dc.NullableValue{})
-		} else {
-			types[i] = v.ScanType()
-		}
-	}
-	ptrs := make([]interface{}, len(types))
+	vals := make([]any, len(ct))
 	for rows.Next() {
 		if err = rows.Err(); err != nil {
 			return nil, err
 		}
-		for i, t := range types {
-			ptrs[i] = reflect.New(t).Interface()
+		for i := range ct {
+			vals[i] = dc.NullableValue{}
 		}
-		err = rows.Scan(ptrs...)
+		err = rows.Scan(vals...)
 		if err != nil {
 			return nil, err
 		}
-		values := make([]interface{}, len(types))
-		for i, p := range ptrs {
-			nullable, _ := ct[i].Nullable()
-			if nullable && reflect.ValueOf(p).IsNil() {
-				values[i] = nil
-				continue
-			}
+		values := make([]interface{}, len(ct))
+		for i, p := range vals {
 			values[i] = reflect.ValueOf(p).Elem().Interface()
 		}
 		result = append(result, values)
