@@ -65,12 +65,6 @@ func (s *DatabendTestSuite) SetupSuite() {
 
 	err = s.db.Ping()
 	s.Nil(err)
-
-	// rows, err := s.db.Query("select version()")
-	// s.Nil(err)
-	// result, err := scanValues(rows)
-	// s.Nil(err)
-	// s.T().Logf("connected to databend: %s\n", result)
 }
 
 func (s *DatabendTestSuite) TearDownSuite() {
@@ -100,6 +94,14 @@ func (s *DatabendTestSuite) TearDownTest() {
 	s.r.Nil(err)
 	_, err = s.db.Exec(fmt.Sprintf("DROP TABLE %s", s.table2))
 	s.r.Nil(err)
+}
+
+func (s *DatabendTestSuite) TestVersion() {
+	rows, err := s.db.Query("select version()")
+	s.Nil(err)
+	result, err := scanValues(rows)
+	s.Nil(err)
+	s.T().Logf("connected to databend: %s\n", result)
 }
 
 // For load balance test
