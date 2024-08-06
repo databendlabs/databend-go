@@ -26,3 +26,25 @@ func (s *DatabendTestSuite) TestNullable() {
 	_, err = s.db.Exec("UNSET format_null_as_str")
 	s.r.Nil(err)
 }
+
+func (s *DatabendTestSuite) TestQueryNull() {
+	rows, err := s.db.Query("SELECT NULL")
+	s.r.Nil(err)
+	result, err := scanValues(rows)
+	s.r.Nil(err)
+	s.r.Equal([][]interface{}{{"NULL"}}, result)
+	s.r.NoError(rows.Close())
+
+	_, err = s.db.Exec("SET GLOBAL format_null_as_str=0")
+	s.r.Nil(err)
+
+	rows, err = s.db.Query("SELECT NULL")
+	s.r.Nil(err)
+	result, err = scanValues(rows)
+	s.r.Nil(err)
+	s.r.Equal([][]interface{}{{nil}}, result)
+	s.r.NoError(rows.Close())
+
+	_, err = s.db.Exec("UNSET format_null_as_str")
+	s.r.Nil(err)
+}

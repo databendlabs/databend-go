@@ -274,17 +274,6 @@ func (s *DatabendTestSuite) TestServerError() {
 	s.Contains(err.Error(), "error")
 }
 
-func (s *DatabendTestSuite) TestQueryNull() {
-	rows, err := s.db.Query("SELECT NULL")
-	s.r.Nil(err)
-
-	result, err := scanValues(rows)
-	s.r.Nil(err)
-	s.r.Equal([][]interface{}{{"NULL"}}, result)
-
-	s.r.NoError(rows.Close())
-}
-
 func (s *DatabendTestSuite) TestTransactionCommit() {
 	tx, err := s.db.Begin()
 	s.r.Nil(err)
