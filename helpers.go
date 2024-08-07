@@ -1,9 +1,7 @@
 package godatabend
 
 import (
-	"bytes"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -33,17 +31,6 @@ func formatDate(value time.Time) string {
 	return quote(value.Format(dateFormat))
 }
 
-func readResponse(response *http.Response) (result []byte, err error) {
-	if response.ContentLength > 0 {
-		result = make([]byte, 0, response.ContentLength)
-	}
-	buf := bytes.NewBuffer(result)
-	defer response.Body.Close()
-	_, err = buf.ReadFrom(response.Body)
-	result = buf.Bytes()
-	return
-}
-
 func getTableFromInsertQuery(query string) (string, error) {
 	if !strings.Contains(query, "insert") && !strings.Contains(query, "INSERT") {
 		return "", errors.New("wrong insert statement")
@@ -61,32 +48,4 @@ func generateDescTable(query string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("DESC %s", table), nil
-}
-
-func databendParquetReflect(databendType string) string {
-
-	var parquetType string
-	switch databendType {
-	case "VARCHAR":
-		parquetType = "type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"
-
-	case "BOOLEAN":
-		parquetType = "type=BOOLEAN"
-	case "TINYINT", "SMALLINT", "INT":
-		parquetType = "type=INT32"
-	case "BIGINT":
-		parquetType = "type=INT64"
-	case "FLOAT":
-		parquetType = "type=FLOAT"
-	case "DOUBLE":
-		parquetType = "type=DOUBLE"
-	case "DATE":
-		parquetType = "type=INT32, convertedtype=DATE"
-	case "TIMESTAMP":
-		parquetType = "type=INT64"
-	case "ARRAY":
-		parquetType = "type=LIST, convertedtype=LIST"
-
-	}
-	return parquetType
 }

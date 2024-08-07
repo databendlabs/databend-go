@@ -602,7 +602,6 @@ func (c *APIClient) UploadToStage(ctx context.Context, stage *StageLocation, inp
 }
 
 func (c *APIClient) GetPresignedURL(ctx context.Context, stage *StageLocation) (*PresignedResponse, error) {
-	var headers string
 	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD %s", stage)
 	resp, err := c.QuerySync(ctx, presignUploadSQL, nil)
 	if err != nil {
@@ -611,16 +610,20 @@ func (c *APIClient) GetPresignedURL(ctx context.Context, stage *StageLocation) (
 	if len(resp.Data) < 1 || len(resp.Data[0]) < 2 {
 		return nil, errors.Errorf("generate presign url invalid response: %+v", resp.Data)
 	}
-
-	result := &PresignedResponse{
-		Method:  resp.Data[0][0],
-		Headers: make(map[string]string),
-		URL:     resp.Data[0][2],
+	if resp.Data[0][0] == nil || resp.Data[0][1] == nil || resp.Data[0][2] == nil {
+		return nil, errors.Errorf("generate presign url invalid response: %+v", resp.Data)
 	}
-	headers = resp.Data[0][1]
-	err = json.Unmarshal([]byte(headers), &result.Headers)
+	method := *resp.Data[0][0]
+	url := *resp.Data[0][2]
+	headers := map[string]string{}
+	err = json.Unmarshal([]byte(*resp.Data[0][1]), &headers)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal headers")
+	}
+	result := &PresignedResponse{
+		Method:  method,
+		Headers: headers,
+		URL:     url,
 	}
 	return result, nil
 }

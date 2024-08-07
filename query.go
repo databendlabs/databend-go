@@ -33,7 +33,7 @@ type QueryResponse struct {
 	NodeID  string           `json:"node_id"`
 	Session *json.RawMessage `json:"session"`
 	Schema  *[]DataField     `json:"schema"`
-	Data    [][]string       `json:"data"`
+	Data    [][]*string      `json:"data"`
 	State   string           `json:"state"`
 	Error   *QueryError      `json:"error"`
 	Stats   *QueryStats      `json:"stats"`

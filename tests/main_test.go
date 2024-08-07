@@ -32,16 +32,16 @@ const (
 )
 
 var (
-	dsn = "http://databend:databend@localhost:8000?presigned_url_disabled=true"
+	dsn = "http://databend:databend@localhost:8000?presign=on"
 )
 
 func init() {
 	dsn = os.Getenv("TEST_DATABEND_DSN")
 	// databend default
-	// dsn = "http://root:@localhost:8000?presigned_url_disabled=true"
+	// dsn = "http://root:@localhost:8000?presign=on"
 
 	// add user databend by uncommenting corresponding [[query.users]] section scripts/ci/deploy/config/databend-query-node-1.toml
-	//dsn = "http://databend:databend@localhost:8000?presigned_url_disabled=true"
+	//dsn = "http://databend:databend@localhost:8000?presign=on"
 }
 
 func TestDatabendSuite(t *testing.T) {
@@ -65,13 +65,6 @@ func (s *DatabendTestSuite) SetupSuite() {
 
 	err = s.db.Ping()
 	s.Nil(err)
-
-	rows, err := s.db.Query("select version()")
-	s.Nil(err)
-	result, err := scanValues(rows)
-	s.Nil(err)
-
-	s.T().Logf("connected to databend: %s\n", result)
 }
 
 func (s *DatabendTestSuite) TearDownSuite() {
@@ -103,6 +96,14 @@ func (s *DatabendTestSuite) TearDownTest() {
 	s.r.Nil(err)
 }
 
+func (s *DatabendTestSuite) TestVersion() {
+	rows, err := s.db.Query("select version()")
+	s.Nil(err)
+	result, err := scanValues(rows)
+	s.Nil(err)
+	s.T().Logf("connected to databend: %s\n", result)
+}
+
 // For load balance test
 func (s *DatabendTestSuite) TestCycleExec() {
 	rows, err := s.db.Query("SELECT number from numbers(200) order by number")
@@ -115,9 +116,11 @@ func (s *DatabendTestSuite) TestQuoteStringQuery() {
 	m := make(map[string]string, 0)
 	m["message"] = "this is action 'with quote string'"
 	x, err := json.Marshal(m)
+	s.r.Nil(err)
 	_, err = s.db.Exec(fmt.Sprintf("insert into %s values(?)", s.table2), string(x))
 	s.r.Nil(err)
 	rows, err := s.db.Query(fmt.Sprintf("select * from %s", s.table2))
+	s.r.Nil(err)
 	for rows.Next() {
 		var t string
 		_ = rows.Scan(&t)
@@ -272,17 +275,6 @@ func (s *DatabendTestSuite) TestServerError() {
 	s.Contains(err.Error(), "error")
 }
 
-func (s *DatabendTestSuite) TestQueryNull() {
-	rows, err := s.db.Query("SELECT NULL")
-	s.r.Nil(err)
-
-	result, err := scanValues(rows)
-	s.r.Nil(err)
-	s.r.Equal([][]interface{}{{"NULL"}}, result)
-
-	s.r.NoError(rows.Close())
-}
-
 func (s *DatabendTestSuite) TestTransactionCommit() {
 	tx, err := s.db.Begin()
 	s.r.Nil(err)
@@ -298,7 +290,7 @@ func (s *DatabendTestSuite) TestTransactionCommit() {
 
 	result, err := scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{{"1", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"}}, result)
+	s.r.Equal([][]interface{}{{int64(1), nil, nil, "NULL", "NULL", nil, nil, nil, nil}}, result)
 
 	s.r.NoError(rows.Close())
 }
@@ -343,6 +335,13 @@ func (s *DatabendTestSuite) TestLongExec() {
 	}
 }
 
+func getNullableType(t reflect.Type) reflect.Type {
+	if t.Kind() == reflect.Ptr {
+		return t.Elem()
+	}
+	return t
+}
+
 func scanValues(rows *sql.Rows) (interface{}, error) {
 	var err error
 	var result [][]interface{}
@@ -350,25 +349,25 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	types := make([]reflect.Type, len(ct))
-	for i, v := range ct {
-		types[i] = v.ScanType()
-	}
-	ptrs := make([]interface{}, len(types))
+	vals := make([]any, len(ct))
 	for rows.Next() {
 		if err = rows.Err(); err != nil {
 			return nil, err
 		}
-		for i, t := range types {
-			ptrs[i] = reflect.New(t).Interface()
+		for i := range ct {
+			vals[i] = &dc.NullableValue{}
 		}
-		err = rows.Scan(ptrs...)
+		err = rows.Scan(vals...)
 		if err != nil {
 			return nil, err
 		}
-		values := make([]interface{}, len(types))
-		for i, p := range ptrs {
-			values[i] = reflect.ValueOf(p).Elem().Interface()
+		values := make([]interface{}, len(ct))
+		for i, p := range vals {
+			val, err := p.(*dc.NullableValue).Value()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get value: %w", err)
+			}
+			values[i] = val
 		}
 		result = append(result, values)
 	}

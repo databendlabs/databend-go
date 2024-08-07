@@ -9,8 +9,11 @@ import (
 )
 
 func TestTextRows(t *testing.T) {
+	ptr1 := strPtr("1")
+	ptr2 := strPtr("2")
+	ptr3 := strPtr("2")
 	rows, err := newNextRows(context.Background(), &DatabendConn{}, &QueryResponse{
-		Data: [][]string{{"1", "2", "3"}, {"3", "2", "1"}},
+		Data: [][]*string{{ptr1, ptr2, ptr3}, {ptr3, ptr2, ptr1}},
 		Schema: &[]DataField{
 			{Name: "age", Type: "Int32"},
 			{Name: "height", Type: "Int64"},
@@ -27,4 +30,8 @@ func TestTextRows(t *testing.T) {
 	assert.Equal(t, reflect.TypeOf(""), rows.ColumnTypeScanType(2))
 	assert.Equal(t, "Int32", rows.ColumnTypeDatabaseTypeName(0))
 	assert.Equal(t, "String", rows.ColumnTypeDatabaseTypeName(2))
+}
+
+func strPtr(s string) *string {
+	return &s
 }

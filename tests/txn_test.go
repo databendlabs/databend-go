@@ -53,13 +53,13 @@ func TestTnx(t *testing.T) {
 	assert.NoError(t, err)
 	if rows1 != nil {
 		res1, _ := scanValues(rows1)
-		assert.Equal(t, [][]interface{}{{"2"}}, res1)
+		assert.Equal(t, [][]interface{}{{int32(2)}}, res1)
 	}
 	rows2, err = db2.Query(selectT)
 	assert.NoError(t, err)
 	if rows2 != nil {
 		res2, _ := scanValues(rows2)
-		assert.Equal(t, [][]interface{}{{"2"}}, res2)
+		assert.Equal(t, [][]interface{}{{int32(2)}}, res2)
 	}
 
 	// test rollback
