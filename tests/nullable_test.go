@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
@@ -16,18 +17,19 @@ func (s *DatabendTestSuite) TestNullable() {
 	s.r.Equal([][]interface{}{{int64(1), nil, nil, "NULL", "NULL", nil, nil, nil, nil}}, result)
 	s.r.NoError(rows.Close())
 
-	_, err = s.db.Exec("SET GLOBAL format_null_as_str=0")
+	ctx := context.TODO()
+	conn, err := s.db.Conn(ctx)
 	s.r.Nil(err)
 
-	rows, err = s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
+	_, err = conn.ExecContext(ctx, "SET format_null_as_str=0")
+	s.r.Nil(err)
+
+	rows, err = conn.QueryContext(ctx, fmt.Sprintf("SELECT * FROM %s", s.table))
 	s.r.Nil(err)
 	result, err = scanValues(rows)
 	s.r.Nil(err)
 	s.r.Equal([][]interface{}{{int64(1), nil, nil, nil, nil, nil, nil, nil, nil}}, result)
 	s.r.NoError(rows.Close())
-
-	_, err = s.db.Exec("UNSET format_null_as_str")
-	s.r.Nil(err)
 }
 
 func (s *DatabendTestSuite) TestQueryNullAsStr() {
@@ -40,16 +42,17 @@ func (s *DatabendTestSuite) TestQueryNullAsStr() {
 }
 
 func (s *DatabendTestSuite) TestQueryNull() {
-	_, err := s.db.Exec("SET GLOBAL format_null_as_str=0")
+	ctx := context.TODO()
+	conn, err := s.db.Conn(ctx)
 	s.r.Nil(err)
 
-	row := s.db.QueryRow("SELECT NULL")
+	_, err = conn.ExecContext(ctx, "SET format_null_as_str=0")
+	s.r.Nil(err)
+
+	row := conn.QueryRowContext(ctx, "SELECT NULL")
 	var val sql.NullString
 	err = row.Scan(&val)
 	s.r.Nil(err)
 	s.r.False(val.Valid)
 	s.r.Equal("", val.String)
-
-	_, err = s.db.Exec("UNSET format_null_as_str")
-	s.r.Nil(err)
 }
