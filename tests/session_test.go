@@ -83,3 +83,15 @@ func (s *DatabendTestSuite) TestSessionConfig() {
 	r.Nil(err)
 	r.Equal(int64(0), result)
 }
+
+func (s *DatabendTestSuite) TestSessionVariable() {
+	r := require.New(s.T())
+
+	var result int64
+
+	_, err := s.db.Exec("set variable a = 100")
+	r.Nil(err)
+	err = s.db.QueryRow("select $a").Scan(&result)
+	r.Nil(err)
+	r.Equal(int64(100), result)
+}
