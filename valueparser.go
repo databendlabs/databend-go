@@ -100,17 +100,62 @@ func readString(s io.RuneScanner, length int, unquote bool) (string, error) {
 	return str, nil
 }
 
+func peakNull(s io.RuneScanner) bool {
+	r := read(s)
+	if r != 'N' {
+		_ = s.UnreadRune()
+		return false
+	}
+
+	r = read(s)
+	if r != 'U' {
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		return false
+	}
+
+	r = read(s)
+	if r != 'L' {
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		return false
+	}
+
+	r = read(s)
+	if r != 'L' {
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		return false
+	}
+
+	r = read(s)
+	if r != eof {
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		_ = s.UnreadRune()
+		return false
+	}
+
+	return true
+}
+
 // DataParser implements parsing of a driver value and reporting its type.
 type DataParser interface {
 	Parse(io.RuneScanner) (driver.Value, error)
+	Nullable() bool
 	Type() reflect.Type
 }
 
-type nullableParser struct {
+type nullParser struct {
 	DataParser
 }
 
-func (p *nullableParser) Parse(s io.RuneScanner) (driver.Value, error) {
+func (p *nullParser) Parse(s io.RuneScanner) (driver.Value, error) {
 	var dB *bytes.Buffer
 
 	dType := p.DataParser.Type()
@@ -238,6 +283,10 @@ func (p *stringParser) Type() reflect.Type {
 	return reflectTypeString
 }
 
+func (p *stringParser) Nullable() bool {
+	return false
+}
+
 type booleanParser struct {
 	length int
 }
@@ -252,6 +301,10 @@ func (p *booleanParser) Parse(s io.RuneScanner) (driver.Value, error) {
 
 func (p *booleanParser) Type() reflect.Type {
 	return reflectTypeBool
+}
+
+func (p *booleanParser) Nullable() bool {
+	return false
 }
 
 type dateTimeParser struct {
@@ -290,6 +343,10 @@ func (p *dateTimeParser) Type() reflect.Type {
 	return reflectTypeTime
 }
 
+func (p *dateTimeParser) Nullable() bool {
+	return false
+}
+
 type tupleParser struct {
 	args []DataParser
 }
@@ -301,6 +358,10 @@ func (p *tupleParser) Type() reflect.Type {
 		fields[i].Type = arg.Type()
 	}
 	return reflect.StructOf(fields)
+}
+
+func (p *tupleParser) Nullable() bool {
+	return false
 }
 
 func (p *tupleParser) Parse(s io.RuneScanner) (driver.Value, error) {
@@ -342,6 +403,10 @@ func (p *arrayParser) Type() reflect.Type {
 	return reflect.SliceOf(p.arg.Type())
 }
 
+func (p *arrayParser) Nullable() bool {
+	return false
+}
+
 func (p *arrayParser) Parse(s io.RuneScanner) (driver.Value, error) {
 	r := read(s)
 	if r != '[' {
@@ -362,7 +427,7 @@ func (p *arrayParser) Parse(s io.RuneScanner) (driver.Value, error) {
 		}
 
 		if v == nil {
-			if reflect.TypeOf(p.arg) != reflect.TypeOf(&nullableParser{}) {
+			if reflect.TypeOf(p.arg) != reflect.TypeOf(&nullParser{}) {
 				//need check if v is nil: panic otherwise
 				return nil, fmt.Errorf("unexpected nil element")
 			}
@@ -391,6 +456,10 @@ type mapParser struct {
 
 func (p *mapParser) Type() reflect.Type {
 	return reflect.MapOf(p.key.Type(), p.value.Type())
+}
+
+func (p *mapParser) Nullable() bool {
+	return false
 }
 
 func (p *mapParser) Parse(s io.RuneScanner) (driver.Value, error) {
@@ -436,30 +505,6 @@ func (p *mapParser) Parse(s io.RuneScanner) (driver.Value, error) {
 	}
 
 	return m.Interface(), nil
-}
-
-type lowCardinalityParser struct {
-	arg DataParser
-}
-
-func (p *lowCardinalityParser) Type() reflect.Type {
-	return p.arg.Type()
-}
-
-func (p *lowCardinalityParser) Parse(s io.RuneScanner) (driver.Value, error) {
-	return p.arg.Parse(s)
-}
-
-type simpleAggregateFunctionParser struct {
-	arg DataParser
-}
-
-func (p *simpleAggregateFunctionParser) Type() reflect.Type {
-	return p.arg.Type()
-}
-
-func (p *simpleAggregateFunctionParser) Parse(s io.RuneScanner) (driver.Value, error) {
-	return p.arg.Parse(s)
 }
 
 func newDateTimeParser(format string, loc *time.Location, precision int, unquote bool) (DataParser, error) {
@@ -545,6 +590,10 @@ func (p *intParser) Type() reflect.Type {
 	}
 }
 
+func (p *intParser) Nullable() bool {
+	return false
+}
+
 type floatParser struct {
 	bitSize int
 }
@@ -577,6 +626,10 @@ func (p *floatParser) Type() reflect.Type {
 	}
 }
 
+func (p *floatParser) Nullable() bool {
+	return false
+}
+
 type nothingParser struct{}
 
 func (p *nothingParser) Parse(s io.RuneScanner) (driver.Value, error) {
@@ -585,6 +638,10 @@ func (p *nothingParser) Parse(s io.RuneScanner) (driver.Value, error) {
 
 func (p *nothingParser) Type() reflect.Type {
 	return reflectTypeEmptyStruct
+}
+
+func (p *nothingParser) Nullable() bool {
+	return true
 }
 
 // DataParserOptions describes DataParser options.
@@ -602,14 +659,53 @@ func NewDataParser(t *TypeDesc, opt *DataParserOptions) (DataParser, error) {
 	return newDataParser(t, false, opt)
 }
 
+type nullableParser struct {
+	innerParser DataParser
+	innerType   string
+}
+
+func (p *nullableParser) Parse(s io.RuneScanner) (driver.Value, error) {
+	switch p.innerType {
+	case "String":
+		return p.innerParser.Parse(s)
+	default:
+		// for compatibility with old databend versions
+		if peakNull(s) {
+			return nil, nil
+		}
+		return p.innerParser.Parse(s)
+	}
+}
+
+func (p *nullableParser) Type() reflect.Type {
+	return p.innerParser.Type()
+}
+
+func (p *nullableParser) Nullable() bool {
+	return true
+}
+
 func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParser, error) {
+	if t.Nullable {
+		t.Nullable = false
+		inner, err := newDataParser(t, unquote, opt)
+		if err != nil {
+			return nil, err
+		}
+		return &nullableParser{innerParser: inner, innerType: t.Name}, nil
+	}
 	switch t.Name {
 	case "Nothing":
 		return &nothingParser{}, nil
 	case "Nullable":
-		return &stringParser{unquote: unquote}, nil
+		inner, err := newDataParser(t.Args[0], unquote, opt)
+		if err != nil {
+			return nil, err
+		}
+		return &nullableParser{innerParser: inner, innerType: t.Args[0].Name}, nil
 	case "NULL":
-		return &stringParser{unquote: unquote}, nil
+		inner := &stringParser{unquote: unquote}
+		return &nullableParser{innerParser: inner, innerType: "String"}, nil
 	case "Date":
 		loc := time.UTC
 		if opt != nil && opt.Location != nil {
@@ -717,24 +813,6 @@ func newDataParser(t *TypeDesc, unquote bool, opt *DataParserOptions) (DataParse
 			subParsers[i] = subParser
 		}
 		return &tupleParser{subParsers}, nil
-	case "LowCardinality":
-		if len(t.Args) != 1 {
-			return nil, fmt.Errorf("element type not specified for LowCardinality")
-		}
-		subParser, err := newDataParser(t.Args[0], unquote, opt)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create parser for LowCardinality elements: %v", err)
-		}
-		return &lowCardinalityParser{subParser}, nil
-	case "SimpleAggregateFunction":
-		if len(t.Args) != 2 {
-			return nil, fmt.Errorf("incorrect number of arguments for SimpleAggregateFunction")
-		}
-		subParser, err := newDataParser(t.Args[1], unquote, opt)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create parser for SimpleAggregateFunction element: %v", err)
-		}
-		return &simpleAggregateFunctionParser{subParser}, nil
 	case "Map":
 		if len(t.Args) != 2 {
 			return nil, fmt.Errorf("incorrect number of arguments for Map")

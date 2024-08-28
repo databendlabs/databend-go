@@ -156,7 +156,12 @@ func (r *nextRows) Next(dest []driver.Value) error {
 	r.respData.Data = r.respData.Data[1:]
 
 	for j := range lineData {
-		reader := strings.NewReader(lineData[j])
+		val := lineData[j]
+		if val == nil {
+			dest[j] = nil
+			continue
+		}
+		reader := strings.NewReader(*val)
 		v, err := r.parsers[j].Parse(reader)
 		if err != nil {
 			r.dc.log("fail to parse field", j, ", error: ", err)
@@ -177,16 +182,15 @@ func (r *nextRows) ColumnTypeDatabaseTypeName(index int) string {
 	return r.types[index]
 }
 
+// ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypeNullable
+func (r *nextRows) ColumnTypeNullable(index int) (bool, bool) {
+	return r.parsers[index].Nullable(), true
+}
+
 // // ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypeLength
 // func (r *nextRows) ColumnTypeLength(index int) (int64, bool) {
 // 	// TODO: implement this
 // 	return 10, true
-// }
-
-// // ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypeNullable
-// func (r *nextRows) ColumnTypeNullable(index int) (bool, bool) {
-// 	// TODO: implement this
-// 	return true, true
 // }
 
 // // ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypePrecisionScale

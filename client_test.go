@@ -87,8 +87,8 @@ func TestDoQuery(t *testing.T) {
 	}
 
 	c := APIClient{
-		host:              "tn3ftqihs--bl.ch.aws-us-east-2.default.databend.com",
-		tenant:            "tn3ftqihs",
+		host:              "tnxxxxxxx.gw.aws-us-east-2.default.databend.com",
+		tenant:            "tnxxxxxxx",
 		accessTokenLoader: NewStaticAccessTokenLoader("abc123"),
 		warehouse:         "small-abc",
 		doRequestFunc:     mockDoRequest,

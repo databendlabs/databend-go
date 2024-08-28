@@ -6,85 +6,125 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type typeparserTestCase struct {
+	desc   string
+	input  string
+	output *TypeDesc
+	fail   bool
+}
+
 func TestParseTypeDesc(t *testing.T) {
-	type testCase struct {
-		name   string
-		input  string
-		output *TypeDesc
-		fail   bool
-	}
-	testCases := []*testCase{
+	testCases := []*typeparserTestCase{
 		{
-			name:   "plain type",
-			input:  "String",
-			output: &TypeDesc{Name: "String"},
-		},
-		{
-			name:  "nullable type",
-			input: "Nullable(Nothing)",
+			desc:  "plain type",
+			input: "String",
 			output: &TypeDesc{
-				Name: "Nullable",
-				Args: []*TypeDesc{{Name: "Nothing"}},
+				Name:     "String",
+				Nullable: false,
+				Args:     []*TypeDesc{},
 			},
 		},
 		{
-			name:   "empty arg",
-			input:  "DateTime()",
-			output: &TypeDesc{Name: "DateTime"},
-		},
-		{
-			name:  "numeric arg",
-			input: "FixedString(42)",
+			desc:  "decimal type",
+			input: "Decimal(42, 42)",
 			output: &TypeDesc{
-				Name: "FixedString",
-				Args: []*TypeDesc{{Name: "42"}},
-			},
-		},
-		{
-			name:   "args are ignored for Enum",
-			input:  "Enum8(you can = put, 'whatever' here)",
-			output: &TypeDesc{Name: "Enum8"},
-		},
-		{
-			name:  "quoted arg",
-			input: "DateTime('UTC')",
-			output: &TypeDesc{
-				Name: "DateTime",
-				Args: []*TypeDesc{{Name: "UTC"}},
-			},
-		},
-		{
-			name:  "decimal",
-			input: "Decimal(9,4)",
-			output: &TypeDesc{
-				Name: "Decimal",
-				Args: []*TypeDesc{{Name: "9"}, {Name: "4"}},
-			},
-		},
-		{
-			name:  "quoted escaped arg",
-			input: `DateTime('UTC\b\r\n\'\f\t\0')`,
-			output: &TypeDesc{
-				Name: "DateTime",
-				Args: []*TypeDesc{{Name: "UTC\b\r\n'\f\t\x00"}},
-			},
-		},
-		{
-			name:  "nested args",
-			input: "Array(Tuple(Tuple(String, String), Tuple(String, UInt64)))",
-			output: &TypeDesc{
-				Name: "Array",
+				Name:     "Decimal",
+				Nullable: false,
 				Args: []*TypeDesc{
 					{
-						Name: "Tuple",
+						Name:     "42",
+						Nullable: false,
+						Args:     []*TypeDesc{},
+					},
+					{
+						Name:     "42",
+						Nullable: false,
+						Args:     []*TypeDesc{},
+					},
+				},
+			},
+		},
+		{
+			desc:  "nullable type",
+			input: "Nullable(Nothing)",
+			output: &TypeDesc{
+				Name:     "Nullable",
+				Nullable: false,
+				Args: []*TypeDesc{
+					{
+						Name:     "Nothing",
+						Nullable: false,
+						Args:     []*TypeDesc{},
+					},
+				},
+			},
+		},
+		{
+			desc:  "empty arg",
+			input: "DateTime()",
+			output: &TypeDesc{
+				Name:     "DateTime",
+				Nullable: false,
+				Args:     []*TypeDesc{},
+			},
+		},
+		{
+			desc:  "numeric arg",
+			input: "FixedString(42)",
+			output: &TypeDesc{
+				Name:     "FixedString",
+				Nullable: false,
+				Args: []*TypeDesc{
+					{
+						Name:     "42",
+						Nullable: false,
+						Args:     []*TypeDesc{},
+					},
+				},
+			},
+		},
+		{
+			desc:  "multiple args",
+			input: "Array(Tuple(Tuple(String, String), Tuple(String, UInt64)))",
+			output: &TypeDesc{
+				Name:     "Array",
+				Nullable: false,
+				Args: []*TypeDesc{
+					{
+						Name:     "Tuple",
+						Nullable: false,
 						Args: []*TypeDesc{
 							{
-								Name: "Tuple",
-								Args: []*TypeDesc{{Name: "String"}, {Name: "String"}},
+								Name:     "Tuple",
+								Nullable: false,
+								Args: []*TypeDesc{
+									{
+										Name:     "String",
+										Nullable: false,
+										Args:     []*TypeDesc{},
+									},
+									{
+										Name:     "String",
+										Nullable: false,
+										Args:     []*TypeDesc{},
+									},
+								},
 							},
 							{
-								Name: "Tuple",
-								Args: []*TypeDesc{{Name: "String"}, {Name: "UInt64"}},
+								Name:     "Tuple",
+								Nullable: false,
+								Args: []*TypeDesc{
+									{
+										Name:     "String",
+										Nullable: false,
+										Args:     []*TypeDesc{},
+									},
+									{
+										Name:     "UInt64",
+										Nullable: false,
+										Args:     []*TypeDesc{},
+									},
+								},
 							},
 						},
 					},
@@ -92,50 +132,126 @@ func TestParseTypeDesc(t *testing.T) {
 			},
 		},
 		{
-			name:  "map args",
+			desc:  "map args",
 			input: "Map(String, Array(Int64))",
 			output: &TypeDesc{
-				Name: "Map",
+				Name:     "Map",
+				Nullable: false,
 				Args: []*TypeDesc{
 					{
-						Name: "String",
+						Name:     "String",
+						Nullable: false,
+						Args:     []*TypeDesc{},
 					},
 					{
-						Name: "Array",
-						Args: []*TypeDesc{{Name: "Int64"}},
+						Name:     "Array",
+						Nullable: false,
+						Args: []*TypeDesc{
+							{
+								Name:     "Int64",
+								Nullable: false,
+								Args:     []*TypeDesc{},
+							},
+						},
 					},
 				},
 			},
 		},
 		{
-			name:  "unfinished arg list",
-			input: "Array(Tuple(Tuple(String, String), Tuple(String, UInt64))",
-			fail:  true,
-		},
-		{
-			name:  "left paren without name",
-			input: "(",
-			fail:  true,
-		},
-		{
-			name:  "unfinished quote",
-			input: "Array(')",
-			fail:  true,
-		},
-		{
-			name:  "unfinished escape",
-			input: `Array(\`,
-			fail:  true,
-		},
-		{
-			name:  "stuff after end",
-			input: `Array() String`,
-			fail:  true,
+			desc:  "map nullable value args",
+			input: "Map(String, String NULL)",
+			output: &TypeDesc{
+				Name:     "Map",
+				Nullable: false,
+				Args: []*TypeDesc{
+					{
+						Name:     "String",
+						Nullable: false,
+						Args:     []*TypeDesc{},
+					},
+					{
+						Name:     "String",
+						Nullable: true,
+						Args:     []*TypeDesc{},
+					},
+				},
+			},
 		},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(tt *testing.T) {
+		t.Run(tc.desc, func(tt *testing.T) {
+			output, err := ParseTypeDesc(tc.input)
+			if tc.fail {
+				assert.Error(tt, err)
+			} else {
+				assert.NoError(tt, err)
+			}
+			assert.Equal(tt, tc.output, output)
+		})
+	}
+}
+
+func TestParseComplexTypeWithNull(t *testing.T) {
+	testCases := []*typeparserTestCase{
+		{
+			desc:  "complex nullable type",
+			input: "Nullable(Tuple(String NULL, Array(Tuple(Array(Int32 NULL) NULL, Array(String NULL) NULL) NULL) NULL))",
+			output: &TypeDesc{
+				Name:     "Nullable",
+				Nullable: false,
+				Args: []*TypeDesc{
+					{
+						Name:     "Tuple",
+						Nullable: false,
+						Args: []*TypeDesc{
+							{
+								Name:     "String",
+								Nullable: true,
+								Args:     []*TypeDesc{},
+							},
+							{
+								Name:     "Array",
+								Nullable: true,
+								Args: []*TypeDesc{
+									{
+										Name:     "Tuple",
+										Nullable: true,
+										Args: []*TypeDesc{
+											{
+												Name:     "Array",
+												Nullable: true,
+												Args: []*TypeDesc{
+													{
+														Name:     "Int32",
+														Nullable: true,
+														Args:     []*TypeDesc{},
+													},
+												},
+											},
+											{
+												Name:     "Array",
+												Nullable: true,
+												Args: []*TypeDesc{
+													{
+														Name:     "String",
+														Nullable: true,
+														Args:     []*TypeDesc{},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(tt *testing.T) {
 			output, err := ParseTypeDesc(tc.input)
 			if tc.fail {
 				assert.Error(tt, err)

@@ -9,17 +9,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"mime/multipart"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-
 	"github.com/avast/retry-go"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type AuthMethod string
@@ -178,6 +178,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		password:        cfg.Password,
 		sessionState:    &sessionState,
 		sessionStateRaw: &sessionStateRaw,
+		routeHint:       randRouteHint(),
 
 		accessTokenLoader: initAccessTokenLoader(cfg),
 		statsTracker:      cfg.StatsTracker,
@@ -474,7 +475,7 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	// fmt.Printf("start query %v %v\n", c.GetQueryID(), request.SQL)
 
 	if !c.inActiveTransaction() {
-		c.routeHint = ""
+		c.routeHint = randRouteHint()
 	}
 
 	path := "/v1/query"
@@ -496,7 +497,7 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	// e.g. transaction state need to be updated if commit fail
 	c.applySessionState(&resp)
 	// save route hint for the next following http requests
-	if len(respHeaders) > 0 {
+	if len(respHeaders) > 0 && len(respHeaders.Get(DatabendRouteHintHeader)) > 0 {
 		c.routeHint = respHeaders.Get(DatabendRouteHintHeader)
 	}
 	return &resp, nil
@@ -599,7 +600,6 @@ func (c *APIClient) UploadToStage(ctx context.Context, stage *StageLocation, inp
 }
 
 func (c *APIClient) GetPresignedURL(ctx context.Context, stage *StageLocation) (*PresignedResponse, error) {
-	var headers string
 	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD %s", stage)
 	resp, err := c.QuerySync(ctx, presignUploadSQL, nil)
 	if err != nil {
@@ -608,16 +608,20 @@ func (c *APIClient) GetPresignedURL(ctx context.Context, stage *StageLocation) (
 	if len(resp.Data) < 1 || len(resp.Data[0]) < 2 {
 		return nil, errors.Errorf("generate presign url invalid response: %+v", resp.Data)
 	}
-
-	result := &PresignedResponse{
-		Method:  resp.Data[0][0],
-		Headers: make(map[string]string),
-		URL:     resp.Data[0][2],
+	if resp.Data[0][0] == nil || resp.Data[0][1] == nil || resp.Data[0][2] == nil {
+		return nil, errors.Errorf("generate presign url invalid response: %+v", resp.Data)
 	}
-	headers = resp.Data[0][1]
-	err = json.Unmarshal([]byte(headers), &result.Headers)
+	method := *resp.Data[0][0]
+	url := *resp.Data[0][2]
+	headers := map[string]string{}
+	err = json.Unmarshal([]byte(*resp.Data[0][1]), &headers)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal headers")
+	}
+	result := &PresignedResponse{
+		Method:  method,
+		Headers: headers,
+		URL:     url,
 	}
 	return result, nil
 }
@@ -717,4 +721,13 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 	}
 
 	return nil
+}
+
+func randRouteHint() string {
+	charset := "abcdef0123456789"
+	b := make([]byte, 16)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
 }
