@@ -311,7 +311,7 @@ func (c *APIClient) makeHeaders(ctx context.Context) (http.Header, error) {
 	headers.Set(WarehouseRoute, "warehouse")
 	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", version))
 	if userAgent, ok := ctx.Value(ContextUserAgentID).(string); ok {
-		headers.Set(UserAgent, fmt.Sprintf("%s/databend-go/%s", version, userAgent))
+		headers.Set(UserAgent, fmt.Sprintf("databend-go/%s/%s", version, userAgent))
 	}
 	if c.tenant != "" {
 		headers.Set(DatabendTenantHeader, c.tenant)
