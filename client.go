@@ -128,8 +128,11 @@ func (c *APIClient) GetQueryID() string {
 }
 
 func NewAPIHttpClientFromConfig(cfg *Config) *http.Client {
+	jar := NewIgnoreDomainCookieJar()
+	jar.SetCookies(nil, []*http.Cookie{{Name: "cookie_enabled", Value: "true"}})
 	cli := &http.Client{
 		Timeout: cfg.Timeout,
+		Jar:     jar,
 	}
 	if cfg.EnableOpenTelemetry {
 		cli.Transport = otelhttp.NewTransport(http.DefaultTransport)
