@@ -95,3 +95,27 @@ func (s *DatabendTestSuite) TestSessionVariable() {
 	r.Nil(err)
 	r.Equal(int64(100), result)
 }
+
+func (s *DatabendTestSuite) TestTempTable() {
+	r := require.New(s.T())
+
+	var result int64
+
+	_, err := s.db.Exec("create temp table t_temp (a int64)")
+	r.Nil(err)
+	_, err = s.db.Exec("insert into t_temp values (1), (2)")
+	r.Nil(err)
+	rows, err := s.db.Query("select * from t_temp")
+	r.Nil(err)
+	defer rows.Close()
+
+	r.True(rows.Next())
+	err = rows.Scan(&result)
+	r.Equal(int64(1), result)
+
+	r.True(rows.Next())
+	err = rows.Scan(&result)
+	r.Equal(int64(2), result)
+
+	r.False(rows.Next())
+}
