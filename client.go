@@ -127,6 +127,20 @@ func (c *APIClient) GetQueryID() string {
 	return fmt.Sprintf("%s.%d", c.SessionID, c.QuerySeq)
 }
 
+func (c *APIClient) NeedSticky() bool {
+	if c.sessionState != nil {
+		return c.sessionState.NeedSticky
+	}
+	return false
+}
+
+func (c *APIClient) NeedKeepAlive() bool {
+	if c.sessionState != nil {
+		return c.sessionState.NeedKeepAlive
+	}
+	return false
+}
+
 func NewAPIHttpClientFromConfig(cfg *Config) *http.Client {
 	jar := NewIgnoreDomainCookieJar()
 	jar.SetCookies(nil, []*http.Cookie{{Name: "cookie_enabled", Value: "true"}})
@@ -151,7 +165,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 
 	// if role is set in config, we'd prefer to limit it as the only effective role,
 	// so you could limit the privileges by setting a role with limited privileges.
-	// however this can be overridden by executing `SET SECONDARY ROLES ALL` in the
+	// however, this can be overridden by executing `SET SECONDARY ROLES ALL` in the
 	// query.
 	// secondaryRoles now have two viable values:
 	// - nil: means enabling ALL the granted roles of the user
@@ -490,7 +504,7 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 		respHeaders http.Header
 	)
 	err := c.doRetry(func() error {
-		return c.doRequest(ctx, "POST", path, request, c.sessionState.NeedSticky, &resp, &respHeaders)
+		return c.doRequest(ctx, "POST", path, request, c.NeedSticky(), &resp, &respHeaders)
 	}, Query,
 	)
 	if err != nil {
@@ -730,9 +744,9 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 }
 
 func (c *APIClient) Logout(ctx context.Context) error {
-	if c.sessionState.NeedKeepAlive {
+	if c.NeedKeepAlive() {
 		req := &struct{}{}
-		return c.doRequest(ctx, "POST", "/v1/session/logout/", req, c.sessionState.NeedSticky, nil, nil)
+		return c.doRequest(ctx, "POST", "/v1/session/logout/", req, c.NeedSticky(), nil, nil)
 	}
 	return nil
 }
