@@ -104,7 +104,9 @@ type SessionState struct {
 	Settings map[string]string `json:"settings,omitempty"`
 
 	// txn
-	TxnState TxnState `json:"txn_state,omitempty"` // "Active", "AutoCommit"
+	TxnState      TxnState `json:"txn_state,omitempty"` // "Active", "AutoCommit"
+	NeedSticky    bool     `json:"need_sticky,omitempty"`
+	NeedKeepAlive bool     `json:"need_keep_alive,omitempty"`
 }
 
 type StageAttachmentConfig struct {
