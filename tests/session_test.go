@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"github.com/stretchr/testify/require"
@@ -100,12 +101,17 @@ func (s *DatabendTestSuite) TestTempTable() {
 	r := require.New(s.T())
 
 	var result int64
-
-	_, err := s.db.Exec("create temp table t_temp (a int64)")
+	ctx := context.Background()
+	conn, err := s.db.Conn(ctx)
+	defer func() {
+		err = conn.Close()
+		r.Nil(err)
+	}()
+	_, err = conn.ExecContext(ctx, "create temp table t_temp (a int64)")
 	r.Nil(err)
-	_, err = s.db.Exec("insert into t_temp values (1), (2)")
+	_, err = conn.ExecContext(ctx, "insert into t_temp values (1), (2)")
 	r.Nil(err)
-	rows, err := s.db.Query("select * from t_temp")
+	rows, err := conn.QueryContext(ctx, "select * from t_temp")
 	r.Nil(err)
 	defer rows.Close()
 
