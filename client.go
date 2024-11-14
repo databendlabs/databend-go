@@ -127,9 +127,26 @@ func (c *APIClient) GetQueryID() string {
 	return fmt.Sprintf("%s.%d", c.SessionID, c.QuerySeq)
 }
 
+func (c *APIClient) NeedSticky() bool {
+	if c.sessionState != nil {
+		return c.sessionState.NeedSticky
+	}
+	return false
+}
+
+func (c *APIClient) NeedKeepAlive() bool {
+	if c.sessionState != nil {
+		return c.sessionState.NeedKeepAlive
+	}
+	return false
+}
+
 func NewAPIHttpClientFromConfig(cfg *Config) *http.Client {
+	jar := NewIgnoreDomainCookieJar()
+	jar.SetCookies(nil, []*http.Cookie{{Name: "cookie_enabled", Value: "true"}})
 	cli := &http.Client{
 		Timeout: cfg.Timeout,
+		Jar:     jar,
 	}
 	if cfg.EnableOpenTelemetry {
 		cli.Transport = otelhttp.NewTransport(http.DefaultTransport)
@@ -148,7 +165,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 
 	// if role is set in config, we'd prefer to limit it as the only effective role,
 	// so you could limit the privileges by setting a role with limited privileges.
-	// however this can be overridden by executing `SET SECONDARY ROLES ALL` in the
+	// however, this can be overridden by executing `SET SECONDARY ROLES ALL` in the
 	// query.
 	// secondaryRoles now have two viable values:
 	// - nil: means enabling ALL the granted roles of the user
@@ -202,7 +219,7 @@ func initAccessTokenLoader(cfg *Config) AccessTokenLoader {
 	return nil
 }
 
-func (c *APIClient) doRequest(ctx context.Context, method, path string, req interface{}, resp interface{}, respHeaders *http.Header) error {
+func (c *APIClient) doRequest(ctx context.Context, method, path string, req interface{}, needSticky bool, resp interface{}, respHeaders *http.Header) error {
 	if c.doRequestFunc != nil {
 		return c.doRequestFunc(method, path, req, resp)
 	}
@@ -226,6 +243,9 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 	maxRetries := 2
 	for i := 1; i <= maxRetries; i++ {
 		headers, err := c.makeHeaders(ctx)
+		if needSticky {
+			headers.Set(DatabendQueryStickyNode, c.NodeID)
+		}
 		if err != nil {
 			return errors.Wrap(err, "failed to make request headers")
 		}
@@ -484,7 +504,7 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 		respHeaders http.Header
 	)
 	err := c.doRetry(func() error {
-		return c.doRequest(ctx, "POST", path, request, &resp, &respHeaders)
+		return c.doRequest(ctx, "POST", path, request, c.NeedSticky(), &resp, &respHeaders)
 	}, Query,
 	)
 	if err != nil {
@@ -520,7 +540,7 @@ func (c *APIClient) PollQuery(ctx context.Context, nextURI string) (*QueryRespon
 	var result QueryResponse
 	err := c.doRetry(
 		func() error {
-			return c.doRequest(ctx, "GET", nextURI, nil, &result, nil)
+			return c.doRequest(ctx, "GET", nextURI, nil, true, &result, nil)
 		},
 		Page,
 	)
@@ -539,7 +559,7 @@ func (c *APIClient) KillQuery(ctx context.Context, response *QueryResponse) erro
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		_ = c.doRetry(func() error {
-			return c.doRequest(ctx, "GET", response.KillURI, nil, nil, nil)
+			return c.doRequest(ctx, "GET", response.KillURI, nil, true, nil, nil)
 		}, Kill,
 		)
 	}
@@ -551,7 +571,7 @@ func (c *APIClient) CloseQuery(ctx context.Context, response *QueryResponse) err
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		_ = c.doRetry(func() error {
-			return c.doRequest(ctx, "GET", response.FinalURI, nil, nil, nil)
+			return c.doRequest(ctx, "GET", response.FinalURI, nil, true, nil, nil)
 		}, Final,
 		)
 	}
@@ -720,6 +740,14 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 		return NewAPIError("please check your arguments.", resp.StatusCode, respBody)
 	}
 
+	return nil
+}
+
+func (c *APIClient) Logout(ctx context.Context) error {
+	if c.NeedKeepAlive() {
+		req := &struct{}{}
+		return c.doRequest(ctx, "POST", "/v1/session/logout/", req, c.NeedSticky(), nil, nil)
+	}
 	return nil
 }
 

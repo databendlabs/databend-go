@@ -78,7 +78,7 @@ func (dc *DatabendConn) BeginTx(
 }
 
 func (dc *DatabendConn) cleanup() {
-	// must flush log buffer while the process is running.
+	dc.rest.Logout(dc.ctx)
 	dc.rest = nil
 	dc.cfg = nil
 }

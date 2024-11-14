@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"github.com/stretchr/testify/require"
@@ -94,4 +95,33 @@ func (s *DatabendTestSuite) TestSessionVariable() {
 	err = s.db.QueryRow("select $a").Scan(&result)
 	r.Nil(err)
 	r.Equal(int64(100), result)
+}
+
+func (s *DatabendTestSuite) TestTempTable() {
+	r := require.New(s.T())
+
+	var result int64
+	ctx := context.Background()
+	conn, err := s.db.Conn(ctx)
+	defer func() {
+		err = conn.Close()
+		r.Nil(err)
+	}()
+	_, err = conn.ExecContext(ctx, "create temp table t_temp (a int64)")
+	r.Nil(err)
+	_, err = conn.ExecContext(ctx, "insert into t_temp values (1), (2)")
+	r.Nil(err)
+	rows, err := conn.QueryContext(ctx, "select * from t_temp")
+	r.Nil(err)
+	defer rows.Close()
+
+	r.True(rows.Next())
+	err = rows.Scan(&result)
+	r.Equal(int64(1), result)
+
+	r.True(rows.Next())
+	err = rows.Scan(&result)
+	r.Equal(int64(2), result)
+
+	r.False(rows.Next())
 }
