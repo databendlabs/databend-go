@@ -729,6 +729,14 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 	return nil
 }
 
+func (c *APIClient) Logout(ctx context.Context) error {
+	if c.sessionState.NeedKeepAlive {
+		req := &struct{}{}
+		return c.doRequest(ctx, "POST", "/v1/session/logout/", req, c.sessionState.NeedSticky, nil, nil)
+	}
+	return nil
+}
+
 func randRouteHint() string {
 	charset := "abcdef0123456789"
 	b := make([]byte, 16)
