@@ -243,7 +243,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 	maxRetries := 2
 	for i := 1; i <= maxRetries; i++ {
 		headers, err := c.makeHeaders(ctx)
-		if needSticky {
+		if needSticky && len(c.NodeID) != 0 {
 			headers.Set(DatabendQueryStickyNode, c.NodeID)
 		}
 		if err != nil {
@@ -511,7 +511,9 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 		return nil, errors.Wrap(err, "failed to do query request")
 	}
 
-	c.NodeID = resp.NodeID
+	if len(resp.NodeID) != 0 {
+		c.NodeID = resp.NodeID
+	}
 	c.trackStats(&resp)
 	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
 	// e.g. transaction state need to be updated if commit fail
