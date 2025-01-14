@@ -24,6 +24,7 @@ type nextRows struct {
 	dc         *DatabendConn
 	ctx        context.Context
 	respData   *QueryResponse
+	latestRow  []*string
 }
 
 func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse) (*QueryResponse, error) {
@@ -154,6 +155,7 @@ func (r *nextRows) Next(dest []driver.Value) error {
 
 	lineData := r.respData.Data[0]
 	r.respData.Data = r.respData.Data[1:]
+	r.latestRow = lineData
 
 	for j := range lineData {
 		val := lineData[j]
@@ -172,17 +174,20 @@ func (r *nextRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-// ColumnTypeScanType implements the driver.RowsColumnTypeScanType
+var _ driver.RowsColumnTypeScanType = (*nextRows)(nil)
+
 func (r *nextRows) ColumnTypeScanType(index int) reflect.Type {
 	return r.parsers[index].Type()
 }
 
-// ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypeDatabaseTypeName
+var _ driver.RowsColumnTypeDatabaseTypeName = (*nextRows)(nil)
+
 func (r *nextRows) ColumnTypeDatabaseTypeName(index int) string {
 	return r.types[index]
 }
 
-// ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypeNullable
+var _ driver.RowsColumnTypeNullable = (*nextRows)(nil)
+
 func (r *nextRows) ColumnTypeNullable(index int) (bool, bool) {
 	return r.parsers[index].Nullable(), true
 }

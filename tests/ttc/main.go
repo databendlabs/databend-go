@@ -11,7 +11,7 @@ import (
 	"net"
 	"os"
 
-	_ "github.com/datafuselabs/databend-go"
+	godatabend "github.com/datafuselabs/databend-go"
 	"github.com/pkg/errors"
 )
 
@@ -88,7 +88,10 @@ func NewResponse(rows *sql.Rows, err error) (res *Response) {
 	defer func() {
 		if errMsg != "" {
 			res.Error = &errMsg
-			res.Values = nil
+			res.Values = [][]*string{}
+		}
+		if res.Values == nil {
+			res.Values = [][]*string{}
 		}
 	}()
 
@@ -115,16 +118,7 @@ func NewResponse(rows *sql.Rows, err error) (res *Response) {
 			return
 		}
 
-		values := make([]*string, 0, len(row))
-		for _, v := range row {
-			if v == nil {
-				values = append(values, nil)
-			} else {
-				s := fmt.Sprintf("%v", v)
-				values = append(values, &s)
-			}
-		}
-		res.Values = append(res.Values, values)
+		res.Values = append(res.Values, godatabend.LastRawRow(rows))
 	}
 
 	err = rows.Close()
@@ -164,6 +158,7 @@ func main() {
 		db:       db,
 	}
 
+	fmt.Println("Ready to accept connections")
 	err = s.Serve()
 	if err != nil {
 		slog.Error("failed to serve", "error", err)
