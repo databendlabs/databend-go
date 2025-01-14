@@ -135,15 +135,15 @@ func NewResponse(rows *sql.Rows, err error) (res *Response) {
 }
 
 func main() {
-	dataSource := os.Getenv("TTC_DSN")
+	dataSource := os.Getenv("DATABEND_DSN")
 	if dataSource == "" {
-		slog.Error("TTC_DSN is not set")
+		slog.Error("DATABEND_DSN is not set")
 		return
 	}
 
-	addr := os.Getenv("TTC_LISTEN_ADDR")
-	if addr == "" {
-		slog.Error("TTC_LISTEN_ADDR is not set")
+	port := os.Getenv("TTC_PORT")
+	if port == "" {
+		slog.Error("TTC_PORT is not set")
 		return
 	}
 
@@ -153,7 +153,7 @@ func main() {
 		return
 	}
 
-	listener, err := net.Listen("tcp", addr)
+	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		slog.Error("failed to listen", "error", err)
 		return
