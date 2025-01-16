@@ -67,6 +67,10 @@ func (b isNullable) wrapName(s string) string {
 	return s
 }
 
+func (b isNullable) checkNull(s string) bool {
+	return bool(b) && s == "NULL"
+}
+
 type simpleColumnType struct {
 	dbType   string
 	scanType reflect.Type
@@ -103,6 +107,9 @@ type timestampColumnType struct {
 }
 
 func (c timestampColumnType) Parse(s string) (driver.Value, error) {
+	if c.checkNull(s) {
+		return nil, nil
+	}
 	return time.ParseInLocation("2006-01-02 15:04:05.999999", s, time.UTC)
 }
 
@@ -125,6 +132,9 @@ type dateColumnType struct {
 }
 
 func (c dateColumnType) Parse(s string) (driver.Value, error) {
+	if c.checkNull(s) {
+		return nil, nil
+	}
 	return time.ParseInLocation("2006-01-02", s, c.tz)
 }
 

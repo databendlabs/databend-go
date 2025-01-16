@@ -123,6 +123,11 @@ func NewResponse(rows *sql.Rows, err error) (res *Response) {
 
 		res.Values = append(res.Values, godatabend.LastRawRow(rows))
 	}
+	err = rows.Err()
+	if err != nil {
+		errMsg = err.Error()
+		return
+	}
 
 	err = rows.Close()
 	if err != nil {

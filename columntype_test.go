@@ -32,6 +32,7 @@ func TestColumnType(t *testing.T) {
 		{typeDesc: "Float32", input: "123.0", want: float32(123)},
 		{typeDesc: "Float64", input: "123.0", want: float64(123)},
 		{typeDesc: "Timestamp", input: "2025-01-16 02:01:26.739219", want: time.Date(2025, 1, 16, 2, 1, 26, 739219000, time.UTC)},
+		{typeDesc: "Timestamp NULL", input: "NULL", want: time.Time{}},
 		{typeDesc: "Date", input: "2025-01-16", want: time.Date(2025, 1, 16, 0, 0, 0, 0, time.UTC)},
 		{typeDesc: "Decimal(10, 2)", input: "123.45", want: "123.45"},
 	}
@@ -44,7 +45,9 @@ func TestColumnType(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, driver.IsValue(v))
 
-			require.Equal(t, reflect.TypeOf(tc.want).Name(), colType.ScanType().Name())
+			if tc.want != nil {
+				require.Equal(t, reflect.TypeOf(tc.want).Name(), colType.ScanType().Name())
+			}
 
 			desc, err := ParseTypeDesc(tc.typeDesc)
 			require.NoError(t, err)

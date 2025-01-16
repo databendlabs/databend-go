@@ -17,7 +17,7 @@ func (d DatabendDriver) Open(dsn string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return d.OpenWithConfig(ctx, *cfg)
+	return d.OpenWithConfig(ctx, cfg)
 }
 
 func (d DatabendDriver) OpenConnector(dsn string) (driver.Connector, error) {
@@ -27,7 +27,7 @@ func (d DatabendDriver) OpenConnector(dsn string) (driver.Connector, error) {
 // OpenWithConfig creates a new connection with the given Config.
 func (d DatabendDriver) OpenWithConfig(
 	ctx context.Context,
-	config Config,
+	config *Config,
 ) (driver.Conn, error) {
 	logger.Info("OpenWithConfig")
 	dc, err := buildDatabendConn(ctx, config)
