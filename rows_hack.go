@@ -9,8 +9,12 @@ import (
 	"unsafe"
 )
 
+func init() {
+	rowsHack = true
+}
+
 func LastRawRow(rows *sql.Rows) []*string {
-	field, ok := reflect.ValueOf((*sql.Rows)(nil)).Type().Elem().FieldByName("rowsi")
+	field, ok := reflect.TypeOf((*sql.Rows)(nil)).Elem().FieldByName("rowsi")
 	if !ok {
 		panic("rowsi field not found")
 	}

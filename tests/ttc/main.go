@@ -17,7 +17,7 @@ import (
 
 type Server struct {
 	listener net.Listener
-	db       *sql.DB
+	cfg      *godatabend.Config
 }
 
 func (s *Server) Serve() error {
@@ -36,6 +36,9 @@ func (s *Server) Serve() error {
 }
 
 func (s *Server) handleConn(conn net.Conn) error {
+	db := sql.OpenDB(s.cfg)
+	db.SetMaxOpenConns(1)
+	defer db.Close()
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	defer conn.Close()
 	for {
@@ -54,7 +57,7 @@ func (s *Server) handleConn(conn net.Conn) error {
 			return errors.WithStack(err)
 		}
 
-		res := NewResponse(s.db.Query(string(sql)))
+		res := NewResponse(db.Query(string(sql)))
 		resData, err := json.Marshal(res)
 		if err != nil {
 			return errors.WithStack(err)
@@ -141,11 +144,19 @@ func main() {
 		return
 	}
 
-	db, err := sql.Open("databend", dataSource)
+	cfg, err := godatabend.ParseDSN(dataSource)
 	if err != nil {
-		slog.Error("failed to open db", "error", err)
+		slog.Error("failed to parse dsn", "error", err)
 		return
 	}
+
+	db := sql.OpenDB(cfg)
+	err = db.Ping()
+	if err != nil {
+		slog.Error("failed to ping db", "error", err)
+		return
+	}
+	_ = db.Close()
 
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
@@ -155,7 +166,7 @@ func main() {
 
 	s := &Server{
 		listener: listener,
-		db:       db,
+		cfg:      cfg,
 	}
 
 	fmt.Println("Ready to accept connections")

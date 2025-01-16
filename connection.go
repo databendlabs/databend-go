@@ -57,7 +57,7 @@ func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.
 	if err != nil {
 		return nil, err
 	}
-	return newNextRows(ctx, dc, response)
+	return dc.newNextRows(ctx, response)
 }
 
 func (dc *DatabendConn) Begin() (driver.Tx, error) {
@@ -75,6 +75,10 @@ func (dc *DatabendConn) BeginTx(
 		return nil, err
 	}
 	return &databendTx{dc}, nil
+}
+
+func (dc *DatabendConn) DataParserOptions() *DataParserOptions {
+	return nil
 }
 
 func (dc *DatabendConn) cleanup() {

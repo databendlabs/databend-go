@@ -653,6 +653,13 @@ type DataParserOptions struct {
 	UseDBLocation bool
 }
 
+func (opt *DataParserOptions) Timezone() *time.Location {
+	if opt == nil || opt.Location == nil {
+		return time.UTC
+	}
+	return opt.Location
+}
+
 // NewDataParser creates a new DataParser based on the
 // given TypeDesc.
 func NewDataParser(t *TypeDesc, opt *DataParserOptions) (DataParser, error) {

@@ -7,14 +7,14 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"strings"
 	"sync/atomic"
 )
 
+var rowsHack = false
+
 type resultSchema struct {
 	columns []string
-	types   []string
-	parsers []DataParser
+	types   []ColumnType
 }
 
 type nextRows struct {
@@ -53,40 +53,30 @@ func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse)
 	return response, nil
 }
 
-func parse_schema(fields *[]DataField) (*resultSchema, error) {
-	var columns []string
-	var types []string
-
-	if fields != nil {
-		for _, field := range *fields {
-			columns = append(columns, field.Name)
-			types = append(types, field.Type)
-		}
-	}
-
-	parsers := make([]DataParser, len(types))
-	for i, typ := range types {
-		desc, err := ParseTypeDesc(typ)
-		if err != nil {
-			return nil, fmt.Errorf("newTextRows: failed to parse a description of the type '%s': %w", typ, err)
-		}
-
-		parsers[i], err = NewDataParser(desc, &DataParserOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("newTextRows: failed to create a data parser for the type '%s': %w", typ, err)
-		}
+func parse_schema(fields *[]DataField, opts *DataParserOptions) (*resultSchema, error) {
+	if fields == nil {
+		return &resultSchema{}, nil
 	}
 
 	schema := &resultSchema{
-		columns: columns,
-		types:   types,
-		parsers: parsers,
+		columns: make([]string, 0, len(*fields)),
+		types:   make([]ColumnType, 0, len(*fields)),
 	}
+
+	for _, field := range *fields {
+		schema.columns = append(schema.columns, field.Name)
+		parser, err := NewColumnType(field.Type, opts)
+		if err != nil {
+			return nil, fmt.Errorf("newTextRows: failed to create a data parser for the type '%s': %w", field.Type, err)
+		}
+		schema.types = append(schema.types, parser)
+	}
+
 	return schema, nil
 }
 
-func newNextRows(ctx context.Context, dc *DatabendConn, resp *QueryResponse) (*nextRows, error) {
-	schema, err := parse_schema(resp.Schema)
+func (dc *DatabendConn) newNextRows(ctx context.Context, resp *QueryResponse) (*nextRows, error) {
+	schema, err := parse_schema(resp.Schema, dc.DataParserOptions())
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +145,9 @@ func (r *nextRows) Next(dest []driver.Value) error {
 
 	lineData := r.respData.Data[0]
 	r.respData.Data = r.respData.Data[1:]
-	r.latestRow = lineData
+	if rowsHack {
+		r.latestRow = lineData
+	}
 
 	for j := range lineData {
 		val := lineData[j]
@@ -163,8 +155,7 @@ func (r *nextRows) Next(dest []driver.Value) error {
 			dest[j] = nil
 			continue
 		}
-		reader := strings.NewReader(*val)
-		v, err := r.parsers[j].Parse(reader)
+		v, err := r.types[j].Parse(*val)
 		if err != nil {
 			r.dc.log("fail to parse field", j, ", error: ", err)
 			return err
@@ -177,29 +168,30 @@ func (r *nextRows) Next(dest []driver.Value) error {
 var _ driver.RowsColumnTypeScanType = (*nextRows)(nil)
 
 func (r *nextRows) ColumnTypeScanType(index int) reflect.Type {
-	return r.parsers[index].Type()
+	return r.types[index].ScanType()
 }
 
 var _ driver.RowsColumnTypeDatabaseTypeName = (*nextRows)(nil)
 
 func (r *nextRows) ColumnTypeDatabaseTypeName(index int) string {
-	return r.types[index]
+	return r.types[index].DatabaseTypeName()
 }
 
 var _ driver.RowsColumnTypeNullable = (*nextRows)(nil)
 
 func (r *nextRows) ColumnTypeNullable(index int) (bool, bool) {
-	return r.parsers[index].Nullable(), true
+	return r.types[index].Nullable()
 }
 
-// // ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypeLength
-// func (r *nextRows) ColumnTypeLength(index int) (int64, bool) {
-// 	// TODO: implement this
-// 	return 10, true
-// }
+var _ driver.RowsColumnTypeLength = (*nextRows)(nil)
 
-// // ColumnTypeDatabaseTypeName implements the driver.RowsColumnTypePrecisionScale
-// func (r *nextRows) ColumnTypePrecisionScale(index int) (int64, int64, bool) {
-// 	// TODO: implement this
-// 	return 10, 10, true
-// }
+func (r *nextRows) ColumnTypeLength(index int) (length int64, ok bool) {
+	return 0, false
+}
+
+var _ driver.RowsColumnTypePrecisionScale = (*nextRows)(nil)
+
+func (r *nextRows) ColumnTypePrecisionScale(index int) (int64, int64, bool) {
+	// TODO: implement this
+	return 0, 0, false
+}
