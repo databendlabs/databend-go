@@ -180,7 +180,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		Database:       cfg.Database,
 		Role:           cfg.Role,
 		SecondaryRoles: secondaryRoles,
-		Settings:       maps.Clone(cfg.Params),
+		Settings:       maps.Clone(cfg.Params), // Config may shared
 	}
 	sessionStateRawJson, _ := json.Marshal(sessionState)
 	sessionStateRaw := json.RawMessage(sessionStateRawJson)
