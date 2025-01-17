@@ -1,6 +1,8 @@
 package godatabend
 
 import (
+	"context"
+	"database/sql/driver"
 	"fmt"
 	"net"
 	"net/url"
@@ -253,4 +255,12 @@ func ParseDSN(dsn string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func (cfg *Config) Connect(ctx context.Context) (driver.Conn, error) {
+	return DatabendDriver{}.OpenWithConfig(ctx, cfg)
+}
+
+func (cfg *Config) Driver() driver.Driver {
+	return DatabendDriver{}
 }

@@ -2,7 +2,7 @@ package godatabend
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 
 	"github.com/BurntSushi/toml"
 )
@@ -44,7 +44,7 @@ func NewFileAccessTokenLoader(path string) *FileAccessTokenLoader {
 
 // try decode as toml, if not toml, return the plain key content
 func (l *FileAccessTokenLoader) LoadAccessToken(ctx context.Context, forceRotate bool) (string, error) {
-	buf, err := ioutil.ReadFile(l.path)
+	buf, err := os.ReadFile(l.path)
 	if err != nil {
 		return "", err
 	}
