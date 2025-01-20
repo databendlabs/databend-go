@@ -511,7 +511,9 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 		return c.doRequest(ctx, "POST", path, request, c.NeedSticky(), &resp, &respHeaders)
 	}, Query,
 	)
-	if err != nil {
+	if resp.Error != nil {
+		return nil, errors.Wrap(resp.Error, "failed to do query request")
+	} else if err != nil {
 		return nil, errors.Wrap(err, "failed to do query request")
 	}
 
@@ -554,7 +556,9 @@ func (c *APIClient) PollQuery(ctx context.Context, nextURI string) (*QueryRespon
 	// e.g. transaction state need to be updated if commit fail
 	c.applySessionState(&result)
 	c.trackStats(&result)
-	if err != nil {
+	if result.Error != nil {
+		return nil, errors.Wrap(result.Error, "failed to query page")
+	} else if err != nil {
 		return nil, errors.Wrap(err, "failed to query page")
 	}
 	return &result, nil
