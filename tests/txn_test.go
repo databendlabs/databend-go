@@ -51,7 +51,7 @@ func TestTnx(t *testing.T) {
 	require.Error(t, err)
 
 	rows1, err = db1.Query(selectT)
-	assert.NoError(t, err)
+	require.Error(t, err)
 	if rows1 != nil {
 		res1, _ := scanValues(rows1)
 		assert.Equal(t, [][]interface{}{{int32(2)}}, res1)
