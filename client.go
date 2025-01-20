@@ -273,6 +273,21 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 			return errors.Wrap(ErrReadResponse, err.Error())
 		}
 
+		// unmarshal response body to retrieve the possible error code & message before handing
+		// http status err.
+		var unmarshalErr error
+		if resp != nil {
+			contentType := httpResp.Header.Get("Content-Type")
+			if strings.HasPrefix(contentType, "application/json") {
+				if unmarshalErr = json.Unmarshal(httpRespBody, &resp); unmarshalErr != nil {
+					unmarshalErr = errors.Wrap(unmarshalErr, "failed to unmarshal response body")
+				}
+			}
+		}
+		if respHeaders != nil {
+			*respHeaders = httpResp.Header
+		}
+
 		if httpResp.StatusCode == http.StatusUnauthorized {
 			if c.authMethod() == AuthMethodAccessToken && i < maxRetries {
 				// retry with a rotated access token
@@ -288,18 +303,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 			return NewAPIError("unexpected HTTP StatusCode", httpResp.StatusCode, httpRespBody)
 		}
 
-		if resp != nil {
-			contentType := httpResp.Header.Get("Content-Type")
-			if strings.HasPrefix(contentType, "application/json") {
-				if err := json.Unmarshal(httpRespBody, &resp); err != nil {
-					return errors.Wrap(err, "failed to unmarshal response body")
-				}
-			}
-		}
-		if respHeaders != nil {
-			*respHeaders = httpResp.Header
-		}
-		return nil
+		return unmarshalErr
 	}
 	return errors.Errorf("failed to do request after %d retries", maxRetries)
 }
@@ -507,9 +511,6 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 		return c.doRequest(ctx, "POST", path, request, c.NeedSticky(), &resp, &respHeaders)
 	}, Query,
 	)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to do query request")
-	}
 
 	if len(resp.NodeID) != 0 {
 		c.NodeID = resp.NodeID
@@ -521,6 +522,11 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	// save route hint for the next following http requests
 	if len(respHeaders) > 0 && len(respHeaders.Get(DatabendRouteHintHeader)) > 0 {
 		c.routeHint = respHeaders.Get(DatabendRouteHintHeader)
+	}
+	if resp.Error != nil {
+		return nil, errors.Wrap(resp.Error, "query error")
+	} else if err != nil {
+		return nil, errors.Wrap(err, "failed to do query request")
 	}
 	return &resp, nil
 }
@@ -550,7 +556,9 @@ func (c *APIClient) PollQuery(ctx context.Context, nextURI string) (*QueryRespon
 	// e.g. transaction state need to be updated if commit fail
 	c.applySessionState(&result)
 	c.trackStats(&result)
-	if err != nil {
+	if result.Error != nil {
+		return nil, errors.Wrap(result.Error, "query error")
+	} else if err != nil {
 		return nil, errors.Wrap(err, "failed to query page")
 	}
 	return &result, nil
