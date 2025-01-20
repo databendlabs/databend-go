@@ -66,7 +66,7 @@ func TestTnx(t *testing.T) {
 	// test rollback
 	db1.Exec("DROP table  t;")
 	_, err = db1.Exec("CREATE OR REPLACE TABLE t(c int);")
-	require.NoError(t, err)
+	require.Error(t, err)
 	tx1, err = db1.Begin()
 	require.NoError(t, err)
 	_, err = tx1.Exec("INSERT INTO t(c) VALUES(1);")
