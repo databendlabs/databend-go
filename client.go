@@ -512,7 +512,7 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	}, Query,
 	)
 	if resp.Error != nil {
-		return nil, errors.Wrap(resp.Error, "failed to do query request")
+		return nil, errors.Wrap(resp.Error, "query error")
 	} else if err != nil {
 		return nil, errors.Wrap(err, "failed to do query request")
 	}
@@ -557,7 +557,7 @@ func (c *APIClient) PollQuery(ctx context.Context, nextURI string) (*QueryRespon
 	c.applySessionState(&result)
 	c.trackStats(&result)
 	if result.Error != nil {
-		return nil, errors.Wrap(result.Error, "failed to query page")
+		return nil, errors.Wrap(result.Error, "query error")
 	} else if err != nil {
 		return nil, errors.Wrap(err, "failed to query page")
 	}
