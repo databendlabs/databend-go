@@ -511,11 +511,6 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 		return c.doRequest(ctx, "POST", path, request, c.NeedSticky(), &resp, &respHeaders)
 	}, Query,
 	)
-	if resp.Error != nil {
-		return nil, errors.Wrap(resp.Error, "query error")
-	} else if err != nil {
-		return nil, errors.Wrap(err, "failed to do query request")
-	}
 
 	if len(resp.NodeID) != 0 {
 		c.NodeID = resp.NodeID
@@ -527,6 +522,11 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	// save route hint for the next following http requests
 	if len(respHeaders) > 0 && len(respHeaders.Get(DatabendRouteHintHeader)) > 0 {
 		c.routeHint = respHeaders.Get(DatabendRouteHintHeader)
+	}
+	if resp.Error != nil {
+		return nil, errors.Wrap(resp.Error, "query error")
+	} else if err != nil {
+		return nil, errors.Wrap(err, "failed to do query request")
 	}
 	return &resp, nil
 }
