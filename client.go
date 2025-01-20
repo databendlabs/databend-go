@@ -273,6 +273,21 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 			return errors.Wrap(ErrReadResponse, err.Error())
 		}
 
+		// unmarshal response body to retrieve the possible error code & message before handing
+		// http status err.
+		var unmarshalErr error
+		if resp != nil {
+			contentType := httpResp.Header.Get("Content-Type")
+			if strings.HasPrefix(contentType, "application/json") {
+				if unmarshalErr = json.Unmarshal(httpRespBody, &resp); unmarshalErr != nil {
+					unmarshalErr = errors.Wrap(unmarshalErr, "failed to unmarshal response body")
+				}
+			}
+		}
+		if respHeaders != nil {
+			*respHeaders = httpResp.Header
+		}
+
 		if httpResp.StatusCode == http.StatusUnauthorized {
 			if c.authMethod() == AuthMethodAccessToken && i < maxRetries {
 				// retry with a rotated access token
@@ -288,18 +303,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 			return NewAPIError("unexpected HTTP StatusCode", httpResp.StatusCode, httpRespBody)
 		}
 
-		if resp != nil {
-			contentType := httpResp.Header.Get("Content-Type")
-			if strings.HasPrefix(contentType, "application/json") {
-				if err := json.Unmarshal(httpRespBody, &resp); err != nil {
-					return errors.Wrap(err, "failed to unmarshal response body")
-				}
-			}
-		}
-		if respHeaders != nil {
-			*respHeaders = httpResp.Header
-		}
-		return nil
+		return unmarshalErr
 	}
 	return errors.Errorf("failed to do request after %d retries", maxRetries)
 }
