@@ -78,7 +78,7 @@ func (dc *DatabendConn) BeginTx(
 }
 
 func (dc *DatabendConn) DataParserOptions() *DataParserOptions {
-	return nil
+	return &dc.cfg.DataParserOptions
 }
 
 func (dc *DatabendConn) cleanup() {

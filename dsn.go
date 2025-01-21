@@ -59,6 +59,7 @@ type Config struct {
 	// databend version should >= v1.2.345-nightly
 	EmptyFieldAs        string
 	EnableOpenTelemetry bool
+	DataParserOptions   DataParserOptions
 }
 
 // NewConfig creates a new config with default values

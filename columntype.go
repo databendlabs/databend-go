@@ -72,9 +72,10 @@ func (b isNullable) checkNull(s string) bool {
 }
 
 type simpleColumnType struct {
-	dbType   string
-	scanType reflect.Type
-	isNullable
+	dbType    string
+	scanType  reflect.Type
+	nullable  bool
+	parseNull bool
 }
 
 func (*simpleColumnType) PrecisionScale() (int64, int64, bool) {
@@ -85,8 +86,12 @@ func (c *simpleColumnType) DatabaseTypeName() string {
 	return c.dbType
 }
 
+func (c *simpleColumnType) Nullable() (bool, bool) {
+	return c.nullable, true
+}
+
 func (c *simpleColumnType) Desc() *TypeDesc {
-	return &TypeDesc{Name: c.dbType, Nullable: bool(c.isNullable)}
+	return &TypeDesc{Name: c.dbType, Nullable: c.nullable}
 }
 
 func (*simpleColumnType) Length() (int64, bool) {
@@ -94,7 +99,7 @@ func (*simpleColumnType) Length() (int64, bool) {
 }
 
 func (c *simpleColumnType) Parse(s string) (driver.Value, error) {
-	if c.checkNull(s) {
+	if c.nullable && c.parseNull && s == "NULL" {
 		return nil, nil
 	}
 	return s, nil
@@ -187,31 +192,32 @@ func NewColumnType(dbType string, opts *DataParserOptions) (ColumnType, error) {
 	}
 	desc = desc.Normalize()
 	nullable := isNullable(desc.Nullable)
+	parseNull := opts.ParseNull()
 	switch desc.Name {
 	case "String":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeString, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeString, nullable: desc.Nullable, parseNull: false}, nil
 	case "Boolean":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeBool, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeBool, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "Int8":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeInt8, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeInt8, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "Int16":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeInt16, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeInt16, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "Int32":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeInt32, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeInt32, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "Int64":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeInt64, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeInt64, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "UInt8":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeUInt8, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeUInt8, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "UInt16":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeUInt16, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeUInt16, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "UInt32":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeUInt32, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeUInt32, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "UInt64":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeUInt64, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeUInt64, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "Float32":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeFloat32, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeFloat32, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "Float64":
-		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeFloat64, isNullable: nullable}, nil
+		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeFloat64, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "Timestamp":
 		return &timestampColumnType{isNullable: nullable}, nil
 	case "Date":
