@@ -19,12 +19,11 @@ type resultSchema struct {
 
 type nextRows struct {
 	resultSchema
-	isClosed   int32
-	isCanceled bool
-	dc         *DatabendConn
-	ctx        context.Context
-	respData   *QueryResponse
-	latestRow  []*string
+	isClosed  int32
+	dc        *DatabendConn
+	ctx       context.Context
+	respData  *QueryResponse
+	latestRow []*string
 }
 
 func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse) (*QueryResponse, error) {

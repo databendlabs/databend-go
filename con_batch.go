@@ -51,7 +51,6 @@ type httpBatch struct {
 	ctx       context.Context
 	conn      *DatabendConn
 	batchFile string
-	err       error
 }
 
 func (b *httpBatch) BatchInsert() error {
