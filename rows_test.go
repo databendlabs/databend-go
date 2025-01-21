@@ -12,7 +12,9 @@ func TestTextRows(t *testing.T) {
 	ptr1 := strPtr("1")
 	ptr2 := strPtr("2")
 	ptr3 := strPtr("2")
-	dc := &DatabendConn{}
+	dc := &DatabendConn{
+		cfg: &Config{},
+	}
 	rows, err := dc.newNextRows(context.Background(), &QueryResponse{
 		Data: [][]*string{{ptr1, ptr2, ptr3}, {ptr3, ptr2, ptr1}},
 		Schema: &[]DataField{
