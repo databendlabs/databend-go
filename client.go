@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"mime/multipart"
 	"net"
@@ -179,7 +180,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		Database:       cfg.Database,
 		Role:           cfg.Role,
 		SecondaryRoles: secondaryRoles,
-		Settings:       cfg.Params,
+		Settings:       maps.Clone(cfg.Params), // Config may shared
 	}
 	sessionStateRawJson, _ := json.Marshal(sessionState)
 	sessionStateRaw := json.RawMessage(sessionStateRawJson)

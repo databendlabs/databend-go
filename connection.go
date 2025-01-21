@@ -119,11 +119,11 @@ func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (drive
 	return dc.prepare(ctx, query)
 }
 
-func buildDatabendConn(ctx context.Context, config Config) (*DatabendConn, error) {
+func buildDatabendConn(ctx context.Context, config *Config) (*DatabendConn, error) {
 	dc := &DatabendConn{
 		ctx:  ctx,
-		cfg:  &config,
-		rest: NewAPIClientFromConfig(&config),
+		cfg:  config,
+		rest: NewAPIClientFromConfig(config),
 	}
 	if config.Debug {
 		dc.logger = log.New(os.Stderr, "databend: ", log.LstdFlags)

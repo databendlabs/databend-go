@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 )
 
+var rowsHack = false
+
 type resultSchema struct {
 	columns []string
 	types   []string
@@ -24,6 +26,7 @@ type nextRows struct {
 	dc         *DatabendConn
 	ctx        context.Context
 	respData   *QueryResponse
+	latestRow  []*string
 }
 
 func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse) (*QueryResponse, error) {
@@ -154,6 +157,9 @@ func (r *nextRows) Next(dest []driver.Value) error {
 
 	lineData := r.respData.Data[0]
 	r.respData.Data = r.respData.Data[1:]
+	if rowsHack {
+		r.latestRow = lineData
+	}
 
 	for j := range lineData {
 		val := lineData[j]
