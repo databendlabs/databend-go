@@ -94,7 +94,7 @@ func (res *Response) checkError(err error) bool {
 
 	var qErr *godatabend.QueryError
 	if errors.As(err, &qErr) {
-		text := fmt.Sprintf("[%d]%s", qErr.Code, qErr.Message)
+		text := fmt.Sprintf("code: %d, message: %s", qErr.Code, qErr.Message)
 		if qErr.Detail != "" {
 			text += "\n" + qErr.Detail
 		}
