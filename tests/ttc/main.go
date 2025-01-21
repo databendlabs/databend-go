@@ -1,3 +1,5 @@
+//go:build rows_hack
+
 package main
 
 import (
