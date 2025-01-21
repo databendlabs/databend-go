@@ -93,7 +93,10 @@ func (*simpleColumnType) Length() (int64, bool) {
 	return 0, false
 }
 
-func (*simpleColumnType) Parse(s string) (driver.Value, error) {
+func (c *simpleColumnType) Parse(s string) (driver.Value, error) {
+	if c.checkNull(s) {
+		return nil, nil
+	}
 	return s, nil
 }
 

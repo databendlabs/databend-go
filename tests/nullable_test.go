@@ -14,7 +14,7 @@ func (s *DatabendTestSuite) TestNullable() {
 	s.r.Nil(err)
 	result, err := scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{{int64(1), nil, nil, "NULL", "NULL", nil, nil, nil, nil}}, result)
+	s.r.Equal([][]any{{"1", nil, nil, nil, nil, "NULL", "NULL", nil, nil}}, result)
 	s.r.NoError(rows.Close())
 
 	ctx := context.TODO()
@@ -28,7 +28,7 @@ func (s *DatabendTestSuite) TestNullable() {
 	s.r.Nil(err)
 	result, err = scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{{int64(1), nil, nil, nil, nil, nil, nil, nil, nil}}, result)
+	s.r.Equal([][]any{{"1", nil, nil, nil, nil, nil, nil, nil, nil}}, result)
 	s.r.NoError(rows.Close())
 }
 

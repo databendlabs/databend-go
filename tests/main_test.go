@@ -32,11 +32,14 @@ const (
 )
 
 var (
-	dsn = "http://databend:databend@localhost:8000?presign=on"
+	dsn = "http://root@localhost:8000?presign=on"
 )
 
 func init() {
-	dsn = os.Getenv("TEST_DATABEND_DSN")
+	s := os.Getenv("TEST_DATABEND_DSN")
+	if s != "" {
+		dsn = s
+	}
 	// databend default
 	// dsn = "http://root:@localhost:8000?presign=on"
 
@@ -290,7 +293,7 @@ func (s *DatabendTestSuite) TestTransactionCommit() {
 
 	result, err := scanValues(rows)
 	s.r.Nil(err)
-	s.r.Equal([][]interface{}{{int64(1), nil, nil, "NULL", "NULL", nil, nil, nil, nil}}, result)
+	s.r.Equal([][]any{{"1", nil, nil, nil, nil, "NULL", "NULL", nil, nil}}, result)
 
 	s.r.NoError(rows.Close())
 }
@@ -351,9 +354,6 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 	}
 	vals := make([]any, len(ct))
 	for rows.Next() {
-		if err = rows.Err(); err != nil {
-			return nil, err
-		}
 		for i := range ct {
 			vals[i] = &dc.NullableValue{}
 		}
@@ -370,6 +370,9 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 			values[i] = val
 		}
 		result = append(result, values)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 	return result, nil
 }
