@@ -16,15 +16,14 @@ func (s *DatabendTestSuite) TestNullable() {
 	s.r.NoError(err)
 	result, err := scanValues(rows)
 	s.r.NoError(err)
-	s.r.Equal([][]any{{"1", nil, nil, "NULL", "NULL", "NULL", "NULL", nil, nil}}, result)
+	s.r.Equal([][]any{{"1", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", nil, nil}}, result)
 	s.r.NoError(rows.Close())
 	s.r.NoError(conn.Close())
 
-	cfg := *s.cfg
-	cfg.DataParserOptions.DisableFormatNullAsStr = true
-	db := sql.OpenDB(&cfg)
-	conn, err = db.Conn(ctx)
-	s.r.NoError(err)
+	conn = s.Conn()
+	defer func() {
+		s.r.NoError(conn.Close())
+	}()
 
 	_, err = conn.ExecContext(ctx, "SET format_null_as_str=0")
 	s.r.NoError(err)
@@ -49,15 +48,11 @@ func (s *DatabendTestSuite) TestQueryNullAsStr() {
 }
 
 func (s *DatabendTestSuite) TestQueryNull() {
-	cfg := *s.cfg
-	cfg.DataParserOptions.DisableFormatNullAsStr = true
-	db := sql.OpenDB(&cfg)
-	ctx := context.Background()
-	conn, err := db.Conn(ctx)
-	s.r.NoError(err)
+	conn := s.Conn()
 	defer conn.Close()
 
-	_, err = conn.ExecContext(ctx, "SET format_null_as_str=0")
+	ctx := context.Background()
+	_, err := conn.ExecContext(ctx, "SET format_null_as_str=0")
 	s.r.NoError(err)
 
 	row := conn.QueryRowContext(ctx, "SELECT NULL")

@@ -650,19 +650,7 @@ type DataParserOptions struct {
 	// Location describes default location for DateTime and Date field without Timezone argument.
 	Location *time.Location
 	// UseDBLocation if false: always use Location, ignore DateTime argument.
-	UseDBLocation          bool
-	DisableFormatNullAsStr bool
-}
-
-func (opt *DataParserOptions) Timezone() *time.Location {
-	if opt == nil || opt.Location == nil {
-		return time.UTC
-	}
-	return opt.Location
-}
-
-func (opt *DataParserOptions) ParseNull() bool {
-	return opt == nil || !opt.DisableFormatNullAsStr
+	UseDBLocation bool
 }
 
 // NewDataParser creates a new DataParser based on the

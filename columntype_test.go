@@ -130,7 +130,7 @@ func (s *fakeStmt) NumInput() int {
 }
 
 func (s *fakeStmt) Query(args []driver.Value) (driver.Rows, error) {
-	schema, err := parse_schema(s.resp.Schema, nil)
+	schema, err := parse_schema(s.resp.Schema)
 	if err != nil {
 		return nil, err
 	}

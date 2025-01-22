@@ -328,7 +328,7 @@ func (s *DatabendTestSuite) TestTransactionCommit() {
 
 	result, err := scanValues(rows)
 	s.r.NoError(err)
-	s.r.Equal([][]any{{"1", nil, nil, "NULL", "NULL", "NULL", "NULL", nil, nil}}, result)
+	s.r.Equal([][]any{{"1", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", nil, nil}}, result)
 
 	s.r.NoError(rows.Close())
 }

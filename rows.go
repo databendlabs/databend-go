@@ -52,7 +52,7 @@ func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse)
 	return response, nil
 }
 
-func parse_schema(fields *[]DataField, opts *DataParserOptions) (*resultSchema, error) {
+func parse_schema(fields *[]DataField) (*resultSchema, error) {
 	if fields == nil {
 		return &resultSchema{}, nil
 	}
@@ -64,7 +64,7 @@ func parse_schema(fields *[]DataField, opts *DataParserOptions) (*resultSchema, 
 
 	for _, field := range *fields {
 		schema.columns = append(schema.columns, field.Name)
-		parser, err := NewColumnType(field.Type, opts)
+		parser, err := NewColumnType(field.Type, nil)
 		if err != nil {
 			return nil, fmt.Errorf("newTextRows: failed to create a data parser for the type '%s': %w", field.Type, err)
 		}
@@ -75,7 +75,7 @@ func parse_schema(fields *[]DataField, opts *DataParserOptions) (*resultSchema, 
 }
 
 func (dc *DatabendConn) newNextRows(ctx context.Context, resp *QueryResponse) (*nextRows, error) {
-	schema, err := parse_schema(resp.Schema, dc.DataParserOptions())
+	schema, err := parse_schema(resp.Schema)
 	if err != nil {
 		return nil, err
 	}

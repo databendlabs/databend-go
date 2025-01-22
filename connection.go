@@ -77,10 +77,6 @@ func (dc *DatabendConn) BeginTx(
 	return &databendTx{dc}, nil
 }
 
-func (dc *DatabendConn) DataParserOptions() *DataParserOptions {
-	return &dc.cfg.DataParserOptions
-}
-
 func (dc *DatabendConn) cleanup() {
 	dc.rest.Logout(dc.ctx)
 	dc.rest = nil

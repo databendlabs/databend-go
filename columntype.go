@@ -185,14 +185,17 @@ func (*decimalColumnType) ScanType() reflect.Type {
 	return reflectTypeString
 }
 
-func NewColumnType(dbType string, opts *DataParserOptions) (ColumnType, error) {
+func NewColumnType(dbType string, opts *ColumnTypeOptions) (ColumnType, error) {
+	if opts == nil {
+		opts = defaultColumnTypeOptions()
+	}
 	desc, err := ParseTypeDesc(dbType)
 	if err != nil {
 		return nil, err
 	}
 	desc = desc.Normalize()
 	nullable := isNullable(desc.Nullable)
-	parseNull := opts.ParseNull()
+	parseNull := opts.formatNullAsStr
 	switch desc.Name {
 	case "String":
 		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeString, nullable: desc.Nullable, parseNull: false}, nil
@@ -221,7 +224,7 @@ func NewColumnType(dbType string, opts *DataParserOptions) (ColumnType, error) {
 	case "Timestamp":
 		return &timestampColumnType{isNullable: nullable}, nil
 	case "Date":
-		return &dateColumnType{isNullable: nullable, tz: opts.Timezone()}, nil
+		return &dateColumnType{isNullable: nullable, tz: opts.timezone}, nil
 	case "Decimal":
 		precision, err := strconv.ParseInt(desc.Args[0].Name, 10, 64)
 		if err != nil {
@@ -235,4 +238,24 @@ func NewColumnType(dbType string, opts *DataParserOptions) (ColumnType, error) {
 	default:
 		return unknownColumnType{dbType: dbType, desc: desc}, nil
 	}
+}
+
+type ColumnTypeOptions struct {
+	formatNullAsStr bool
+	timezone        *time.Location
+}
+
+func defaultColumnTypeOptions() *ColumnTypeOptions {
+	return &ColumnTypeOptions{
+		formatNullAsStr: false,
+		timezone:        time.UTC,
+	}
+}
+
+func (opt *ColumnTypeOptions) SetFormatNullAsStr(v bool) {
+	opt.formatNullAsStr = v
+}
+
+func (opt *ColumnTypeOptions) SetTimezone(v *time.Location) {
+	opt.timezone = v
 }
