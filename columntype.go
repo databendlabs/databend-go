@@ -110,6 +110,7 @@ func (c *simpleColumnType) ScanType() reflect.Type {
 }
 
 type timestampColumnType struct {
+	tz *time.Location
 	columnTypeDefault
 	isNullable
 }
@@ -118,7 +119,7 @@ func (c timestampColumnType) Parse(s string) (driver.Value, error) {
 	if c.checkNull(s) {
 		return nil, nil
 	}
-	return time.ParseInLocation("2006-01-02 15:04:05.999999", s, time.UTC)
+	return time.ParseInLocation("2006-01-02 15:04:05.999999", s, c.tz)
 }
 
 func (c timestampColumnType) ScanType() reflect.Type {
@@ -222,7 +223,7 @@ func NewColumnType(dbType string, opts *ColumnTypeOptions) (ColumnType, error) {
 	case "Float64":
 		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeFloat64, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "Timestamp":
-		return &timestampColumnType{isNullable: nullable}, nil
+		return &timestampColumnType{isNullable: nullable, tz: opts.timezone}, nil
 	case "Date":
 		return &dateColumnType{isNullable: nullable, tz: opts.timezone}, nil
 	case "Decimal":

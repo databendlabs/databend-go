@@ -29,6 +29,14 @@ type DatabendConn struct {
 	batchInsert func() error
 }
 
+func (dc *DatabendConn) columnTypeOptions() *ColumnTypeOptions {
+	opts := defaultColumnTypeOptions()
+	if dc.cfg.Location != nil {
+		opts.SetTimezone(dc.cfg.Location)
+	}
+	return opts
+}
+
 func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.Value) (driver.Result, error) {
 	ctx = checkQueryID(ctx)
 	_, err := dc.rest.QuerySync(ctx, query, args)
