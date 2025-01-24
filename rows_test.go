@@ -12,7 +12,10 @@ func TestTextRows(t *testing.T) {
 	ptr1 := strPtr("1")
 	ptr2 := strPtr("2")
 	ptr3 := strPtr("2")
-	rows, err := newNextRows(context.Background(), &DatabendConn{}, &QueryResponse{
+	dc := &DatabendConn{
+		cfg: &Config{},
+	}
+	rows, err := dc.newNextRows(context.Background(), &QueryResponse{
 		Data: [][]*string{{ptr1, ptr2, ptr3}, {ptr3, ptr2, ptr1}},
 		Schema: &[]DataField{
 			{Name: "age", Type: "Int32"},
@@ -24,7 +27,6 @@ func TestTextRows(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	assert.Equal(t, []string{"Int32", "Int64", "String"}, rows.types)
 	assert.Equal(t, []string{"age", "height", "score"}, rows.Columns())
 	assert.Equal(t, reflect.TypeOf(int32(0)), rows.ColumnTypeScanType(0))
 	assert.Equal(t, reflect.TypeOf(""), rows.ColumnTypeScanType(2))

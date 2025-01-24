@@ -78,3 +78,17 @@ func ParseTypeDesc(s string) (*TypeDesc, error) {
 	}
 	return &TypeDesc{Name: name, Nullable: nullable, Args: args}, nil
 }
+
+func (desc *TypeDesc) Normalize() *TypeDesc {
+	switch desc.Name {
+	case "Nullable":
+		sub := desc.Args[0].Normalize()
+		sub.Nullable = true
+		return sub
+	case "DateTime":
+		desc.Name = "Timestamp"
+		return desc
+	default:
+		return desc
+	}
+}

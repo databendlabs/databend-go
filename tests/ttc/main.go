@@ -87,28 +87,41 @@ type Response struct {
 	Error  *string     `json:"error"`
 }
 
+func (res *Response) checkError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var qErr *godatabend.QueryError
+	if errors.As(err, &qErr) {
+		text := fmt.Sprintf("code: %d, message: %s", qErr.Code, qErr.Message)
+		if qErr.Detail != "" {
+			text += "\n" + qErr.Detail
+		}
+		res.Error = &text
+		return true
+	}
+
+	errMsg := err.Error()
+	res.Error = &errMsg
+	return true
+}
+
 func NewResponse(rows *sql.Rows, err error) (res *Response) {
 	res = &Response{}
-	var errMsg string
 	defer func() {
-		if errMsg != "" {
-			res.Error = &errMsg
-			res.Values = [][]*string{}
-		}
 		if res.Values == nil {
 			res.Values = [][]*string{}
 		}
 	}()
 
-	if err != nil {
-		errMsg = err.Error()
+	if res.checkError(err) {
 		return
 	}
 
 	for rows.Next() {
 		types, err := rows.ColumnTypes()
-		if err != nil {
-			errMsg = err.Error()
+		if res.checkError(err) {
 			return
 		}
 
@@ -117,23 +130,18 @@ func NewResponse(rows *sql.Rows, err error) (res *Response) {
 			var v any
 			row[i] = &v
 		}
-		err = rows.Scan(row...)
-		if err != nil {
-			errMsg = err.Error()
+		if res.checkError(rows.Scan(row...)) {
 			return
 		}
 
 		res.Values = append(res.Values, godatabend.LastRawRow(rows))
 	}
-	err = rows.Err()
-	if err != nil {
-		errMsg = err.Error()
+	if res.checkError(rows.Err()) {
 		return
 	}
 
-	err = rows.Close()
-	if err != nil {
-		errMsg = err.Error()
+	if res.checkError(rows.Close()) {
+		return
 	}
 	return
 }

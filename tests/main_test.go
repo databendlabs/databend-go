@@ -32,11 +32,14 @@ const (
 )
 
 var (
-	dsn = "http://databend:databend@localhost:8000?presign=on"
+	dsn = "http://root@localhost:8000?presign=on"
 )
 
 func init() {
-	dsn = os.Getenv("TEST_DATABEND_DSN")
+	s := os.Getenv("TEST_DATABEND_DSN")
+	if s != "" {
+		dsn = s
+	}
 	// databend default
 	// dsn = "http://root:@localhost:8000?presign=on"
 
@@ -50,7 +53,7 @@ func TestDatabendSuite(t *testing.T) {
 
 type DatabendTestSuite struct {
 	suite.Suite
-	db     *sql.DB
+	cfg    *dc.Config
 	table  string
 	table2 string
 	r      *require.Assertions
@@ -60,67 +63,86 @@ func (s *DatabendTestSuite) SetupSuite() {
 	var err error
 
 	s.NotEmpty(dsn)
-	s.db, err = sql.Open("databend", dsn)
-	s.Nil(err)
 
-	err = s.db.Ping()
-	s.Nil(err)
+	s.cfg, err = dc.ParseDSN(dsn)
+	s.NoError(err)
+
+	db, err := sql.Open("databend", dsn)
+	s.NoError(err)
+
+	s.NoError(db.Ping())
+	s.NoError(db.Close())
 }
 
-func (s *DatabendTestSuite) TearDownSuite() {
-	_ = s.db.Close()
+func (s *DatabendTestSuite) Conn() *sql.Conn {
+	db := sql.OpenDB(s.cfg)
+	conn, err := db.Conn(context.Background())
+	s.NoError(err)
+	return conn
 }
 
 func (s *DatabendTestSuite) SetupTest() {
 	t := s.T()
 	s.r = require.New(t)
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
 
 	s.table = fmt.Sprintf("test_%s_%d", t.Name(), time.Now().Unix())
 	// t.Logf("setup test with table %s", s.table)
 	s.table2 = fmt.Sprintf("test_%s_%d", t.Name(), time.Now().Unix()+1)
 
-	_, err := s.db.Exec(fmt.Sprintf(createTable, s.table))
-	s.r.Nil(err)
-	_, err = s.db.Exec(fmt.Sprintf(createTable2, s.table2))
-	s.r.Nil(err)
+	_, err := db.Exec(fmt.Sprintf(createTable, s.table))
+	s.r.NoError(err)
+	_, err = db.Exec(fmt.Sprintf(createTable2, s.table2))
+	s.r.NoError(err)
 }
 
 func (s *DatabendTestSuite) TearDownTest() {
 	// t := s.T()
 	s.SetupSuite()
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
 
 	// t.Logf("teardown test with table %s", s.table)
-	_, err := s.db.Exec(fmt.Sprintf("DROP TABLE %s", s.table))
-	s.r.Nil(err)
-	_, err = s.db.Exec(fmt.Sprintf("DROP TABLE %s", s.table2))
-	s.r.Nil(err)
+	_, err := db.Exec(fmt.Sprintf("DROP TABLE %s", s.table))
+	s.r.NoError(err)
+	_, err = db.Exec(fmt.Sprintf("DROP TABLE %s", s.table2))
+	s.r.NoError(err)
 }
 
 func (s *DatabendTestSuite) TestVersion() {
-	rows, err := s.db.Query("select version()")
-	s.Nil(err)
+	s.SetupSuite()
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
+
+	rows, err := db.Query("select version()")
+	s.NoError(err)
 	result, err := scanValues(rows)
-	s.Nil(err)
+	s.NoError(err)
 	s.T().Logf("connected to databend: %s\n", result)
 }
 
 // For load balance test
 func (s *DatabendTestSuite) TestCycleExec() {
-	rows, err := s.db.Query("SELECT number from numbers(200) order by number")
-	s.r.Nil(err)
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
+	rows, err := db.Query("SELECT number from numbers(200) order by number")
+	s.r.NoError(err)
 	_, err = scanValues(rows)
-	s.r.Nil(err)
+	s.r.NoError(err)
 }
 
 func (s *DatabendTestSuite) TestQuoteStringQuery() {
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
 	m := make(map[string]string, 0)
 	m["message"] = "this is action 'with quote string'"
 	x, err := json.Marshal(m)
-	s.r.Nil(err)
-	_, err = s.db.Exec(fmt.Sprintf("insert into %s values(?)", s.table2), string(x))
-	s.r.Nil(err)
-	rows, err := s.db.Query(fmt.Sprintf("select * from %s", s.table2))
-	s.r.Nil(err)
+	s.r.NoError(err)
+	_, err = db.Exec(fmt.Sprintf("insert into %s values(?)", s.table2), string(x))
+	s.r.NoError(err)
+	rows, err := db.Query(fmt.Sprintf("select * from %s", s.table2))
+	s.r.NoError(err)
 	for rows.Next() {
 		var t string
 		_ = rows.Scan(&t)
@@ -129,22 +151,26 @@ func (s *DatabendTestSuite) TestQuoteStringQuery() {
 }
 
 func (s *DatabendTestSuite) TestDesc() {
-	rows, err := s.db.Query("DESC " + s.table)
-	s.r.Nil(err)
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
+	rows, err := db.Query("DESC " + s.table)
+	s.r.NoError(err)
 
 	result, err := scanValues(rows)
-	s.r.Nil(err)
+	s.r.NoError(err)
 	s.r.Equal([][]interface{}{{"i64", "BIGINT", "YES", "NULL", ""}, {"u64", "BIGINT UNSIGNED", "YES", "NULL", ""}, {"f64", "DOUBLE", "YES", "NULL", ""}, {"s", "VARCHAR", "YES", "NULL", ""}, {"s2", "VARCHAR", "YES", "NULL", ""}, {"a16", "ARRAY(INT16)", "YES", "NULL", ""}, {"a8", "ARRAY(UINT8)", "YES", "NULL", ""}, {"d", "DATE", "YES", "NULL", ""}, {"t", "TIMESTAMP", "YES", "NULL", ""}}, result)
 	_ = rows.Close()
 }
 
 func (s *DatabendTestSuite) TestBasicSelect() {
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
 	query := "SELECT ?"
-	result, err := s.db.Exec(query, []interface{}{1}...)
-	s.r.Nil(err)
+	result, err := db.Exec(query, []interface{}{1}...)
+	s.r.NoError(err)
 
 	affected, err := result.RowsAffected()
-	s.r.Nil(err)
+	s.r.NoError(err)
 	// s.r.ErrorIs(err, dc.ErrNoRowsAffected)
 	s.r.Equal(int64(0), affected)
 }
@@ -152,10 +178,12 @@ func (s *DatabendTestSuite) TestBasicSelect() {
 func (s *DatabendTestSuite) TestSelectMultiPage() {
 	// by default, each page size is 10000 rows
 	// So we need a large result set to test the multi pages case.
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
 	n := 46000
 	query := fmt.Sprintf("SELECT number from numbers(%d) order by number", n)
-	rows, err := s.db.Query(query)
-	s.r.Nil(err)
+	rows, err := db.Query(query)
+	s.r.NoError(err)
 
 	v := -1
 	for i := 0; i < n; i++ {
@@ -168,12 +196,14 @@ func (s *DatabendTestSuite) TestSelectMultiPage() {
 
 func (s *DatabendTestSuite) TestBatchInsert() {
 	r := require.New(s.T())
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
 
-	scope, err := s.db.Begin()
-	r.Nil(err)
+	scope, err := db.Begin()
+	r.NoError(err)
 
 	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s VALUES", s.table))
-	r.Nil(err)
+	r.NoError(err)
 
 	for i := 0; i < 10; i++ {
 		_, err = batch.Exec(
@@ -187,11 +217,11 @@ func (s *DatabendTestSuite) TestBatchInsert() {
 			"2021-01-01",
 			"2021-01-01 00:00:00",
 		)
-		r.Nil(err)
+		r.NoError(err)
 	}
 
 	err = scope.Commit()
-	r.Nil(err)
+	r.NoError(err)
 }
 
 func (s *DatabendTestSuite) TestDDL() {
@@ -214,9 +244,11 @@ func (s *DatabendTestSuite) TestDDL() {
 			(-3, 3, 3.0, '3', '2', [3], [30], '2016-04-04', '2016-04-04 11:30:00')
 		`,
 	}
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
 	for _, ddl := range ddls {
-		_, err := s.db.Exec(ddl)
-		s.Nil(err)
+		_, err := db.Exec(ddl)
+		s.NoError(err)
 	}
 }
 
@@ -250,20 +282,22 @@ func (s *DatabendTestSuite) TestExec() {
 			},
 		},
 	}
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
 	for _, tc := range testCases {
-		result, err := s.db.Exec(tc.query, tc.args...)
+		result, err := db.Exec(tc.query, tc.args...)
 		s.T().Logf("query: %s, args: %v\n", tc.query, tc.args)
-		s.r.Nil(err)
+		s.r.NoError(err)
 		s.r.NotNil(result)
 
 		if len(tc.query2) == 0 {
 			continue
 		}
-		rows, err := s.db.Query(tc.query2, tc.args...)
-		s.r.Nil(err)
+		rows, err := db.Query(tc.query2, tc.args...)
+		s.r.NoError(err)
 
 		v, err := scanValues(rows)
-		s.r.Nil(err)
+		s.r.NoError(err)
 		s.r.Equal([][]interface{}{tc.args}, v)
 
 		s.r.NoError(rows.Close())
@@ -271,66 +305,74 @@ func (s *DatabendTestSuite) TestExec() {
 }
 
 func (s *DatabendTestSuite) TestServerError() {
-	_, err := s.db.Query("SELECT 1 FROM '???'")
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
+	_, err := db.Query("SELECT 1 FROM '???'")
 	s.Contains(err.Error(), "error")
 }
 
 func (s *DatabendTestSuite) TestTransactionCommit() {
-	tx, err := s.db.Begin()
-	s.r.Nil(err)
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
+	tx, err := db.Begin()
+	s.r.NoError(err)
 
 	_, err = tx.Exec(fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table), int64(1))
-	s.r.Nil(err)
+	s.r.NoError(err)
 
 	err = tx.Commit()
-	s.r.Nil(err)
+	s.r.NoError(err)
 
-	rows, err := s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
-	s.r.Nil(err)
+	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
+	s.r.NoError(err)
 
 	result, err := scanValues(rows)
-	s.r.Nil(err)
-	s.r.Equal([][]interface{}{{int64(1), nil, nil, "NULL", "NULL", nil, nil, nil, nil}}, result)
+	s.r.NoError(err)
+	s.r.Equal([][]any{{"1", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", nil, nil}}, result)
 
 	s.r.NoError(rows.Close())
 }
 
 func (s *DatabendTestSuite) TestTransactionRollback() {
-	tx, err := s.db.Begin()
-	s.r.Nil(err)
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
+	tx, err := db.Begin()
+	s.r.NoError(err)
 
 	_, err = tx.Exec(fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table), int64(1))
-	s.r.Nil(err)
-	rows, err := s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
-	s.r.Nil(err)
+	s.r.NoError(err)
+	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
+	s.r.NoError(err)
 
 	result, err := scanValues(rows)
-	s.r.Nil(err)
+	s.r.NoError(err)
 	s.r.Equal([][]interface{}(nil), result)
 
 	err = tx.Rollback()
-	s.r.Nil(err)
+	s.r.NoError(err)
 
-	rows, err = s.db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
-	s.r.Nil(err)
+	rows, err = db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
+	s.r.NoError(err)
 
 	result, err = scanValues(rows)
-	s.r.Nil(err)
+	s.r.NoError(err)
 	s.r.Empty(result)
 
 	s.r.NoError(rows.Close())
 }
 
 func (s *DatabendTestSuite) TestLongExec() {
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := s.db.ExecContext(ctx, "SELECT number from numbers(100000) order by number")
+	_, err := db.ExecContext(ctx, "SELECT number from numbers(100000) order by number")
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			s.T().Errorf("Query execution exceeded the 10s timeout")
 		} else {
-			s.r.Nil(err)
+			s.r.NoError(err)
 		}
 	}
 }
@@ -351,9 +393,6 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 	}
 	vals := make([]any, len(ct))
 	for rows.Next() {
-		if err = rows.Err(); err != nil {
-			return nil, err
-		}
 		for i := range ct {
 			vals[i] = &dc.NullableValue{}
 		}
@@ -370,6 +409,9 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 			values[i] = val
 		}
 		result = append(result, values)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 	return result, nil
 }

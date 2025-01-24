@@ -10,6 +10,7 @@ type QueryError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Kind    string `json:"kind"`
+	Detail  string `json:"detail"`
 }
 
 func (e *QueryError) Error() string {
