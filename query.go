@@ -18,6 +18,9 @@ func (e *QueryError) Error() string {
 	if e.Message != "" {
 		text += fmt.Sprintf(", message: %s", e.Message)
 	}
+	if e.Detail != "" {
+		text += fmt.Sprintf(", datail: %s", e.Detail)
+	}
 	if e.Kind != "" {
 		text += fmt.Sprintf(", kind: %s", e.Kind)
 	}
