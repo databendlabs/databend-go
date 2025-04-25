@@ -207,10 +207,61 @@ func (cfg *Config) makeDefaultConfigValue() {
 	}
 }
 
+func needEscape(s string) bool {
+	unescaped, err := url.QueryUnescape(s)
+	if err != nil {
+		return true
+	}
+	return url.QueryEscape(unescaped) != s
+}
+
+func autoEncodeUserPassInDSN(dsn string) (string, error) {
+	i := strings.Index(dsn, "://")
+	if i == -1 {
+		return dsn, nil
+	}
+	rest := dsn[i+3:]
+	atIdx := strings.Index(rest, "@")
+	if atIdx == -1 {
+		return dsn, nil
+	}
+	userinfo := rest[:atIdx]
+	user := userinfo
+	pass := ""
+	if idx := strings.Index(userinfo, ":"); idx != -1 {
+		user = userinfo[:idx]
+		pass = userinfo[idx+1:]
+	}
+	var encUser, encPass string
+	if needEscape(user) {
+		encUser = url.QueryEscape(user)
+	} else {
+		encUser = user
+	}
+	if needEscape(pass) {
+		encPass = url.QueryEscape(pass)
+	} else {
+		encPass = pass
+	}
+	var encUserinfo string
+	if pass != "" {
+		encUserinfo = encUser + ":" + encPass
+	} else {
+		encUserinfo = encUser
+	}
+	encodedDSN := dsn[:i+3] + encUserinfo + rest[atIdx:]
+	return encodedDSN, nil
+}
+
 // ParseDSN parses the DSN string to a Config
 func ParseDSN(dsn string) (*Config, error) {
-	u, err := url.Parse(dsn)
+	encodedDSN, err := autoEncodeUserPassInDSN(dsn)
 	if err != nil {
+		return nil, err
+	}
+	u, err := url.Parse(encodedDSN)
+	if err != nil {
+		logger.Error("ParseDSN", "err", err)
 		return nil, err
 	}
 	cfg := NewConfig()
@@ -220,11 +271,9 @@ func ParseDSN(dsn string) (*Config, error) {
 	}
 
 	if len(u.Path) > 1 {
-		// skip '/'
 		cfg.Database = u.Path[1:]
 	}
 	if u.User != nil {
-		// it is expected that empty password will be dropped out on Parse and Format
 		cfg.User = u.User.Username()
 		if passwd, ok := u.User.Password(); ok {
 			cfg.Password = passwd
@@ -253,10 +302,8 @@ func ParseDSN(dsn string) (*Config, error) {
 			cfg.Host = net.JoinHostPort(u.Host, "443")
 		}
 	}
-
 	return cfg, nil
 }
-
 func (cfg *Config) Connect(ctx context.Context) (driver.Conn, error) {
 	return DatabendDriver{}.OpenWithConfig(ctx, cfg)
 }
