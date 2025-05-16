@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync/atomic"
 
 	"github.com/google/uuid"
@@ -192,7 +193,7 @@ func (dc *DatabendConn) ExecuteBatch() (err error) {
 // checkQueryID checks if query_id exists in context, if not, generate a new one
 func checkQueryID(ctx context.Context) context.Context {
 	if _, ok := ctx.Value(ContextKeyQueryID).(string); !ok {
-		queryId := uuid.NewString()
+		queryId := strings.ReplaceAll(uuid.NewString(), "-", "")
 		ctx = context.WithValue(ctx, ContextKeyQueryID, queryId)
 	}
 	return ctx
