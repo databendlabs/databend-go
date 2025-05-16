@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -50,7 +51,7 @@ func TestCheckQueryID(t *testing.T) {
 	assert.True(t, ok, "Expected ContextKeyQueryID to be present in the context")
 
 	// Test case 2: Context already has ContextKeyQueryID
-	queryID := uuid.NewString()
+	queryID := strings.ReplaceAll(uuid.NewString(), "-", "")
 	ctxWithQueryID := context.WithValue(ctx, ContextKeyQueryID, queryID)
 	newCtxWithQueryID := checkQueryID(ctxWithQueryID)
 	assert.Equal(t, queryID, newCtxWithQueryID.Value(ContextKeyQueryID), "Expected ContextKeyQueryID to remain unchanged in the context")
@@ -64,7 +65,7 @@ func TestMakeHeadersQueryID(t *testing.T) {
 		tenant:       "default",
 		sessionState: &SessionState{Role: "role1"},
 	}
-	queryId := uuid.NewString()
+	queryId := strings.ReplaceAll(uuid.NewString(), "-", "")
 	ctx := context.WithValue(context.Background(), ContextKeyQueryID, queryId)
 	headers, err := c.makeHeaders(ctx)
 	assert.Nil(t, err)
