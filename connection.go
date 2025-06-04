@@ -39,11 +39,17 @@ func (dc *DatabendConn) columnTypeOptions() *ColumnTypeOptions {
 
 func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.Value) (driver.Result, error) {
 	ctx = checkQueryID(ctx)
-	_, err := dc.rest.QuerySync(ctx, query, args)
+	queryResponse, err := dc.rest.QuerySync(ctx, query, args)
 	if err != nil {
 		return emptyResult, err
 	}
-	return emptyResult, nil
+
+	affectedRows, err := parseAffectedRows(queryResponse)
+	if err != nil {
+		return emptyResult, err
+	}
+
+	return newDatabendResult(affectedRows, 0), nil
 }
 
 func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.Value) (rows driver.Rows, err error) {

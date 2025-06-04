@@ -123,3 +123,17 @@ type ServerInfo struct {
 	Id        string `json:"id"`
 	StartTime string `json:"start_time"`
 }
+
+func parseAffectedRows(queryResp *QueryResponse) (int64, error) {
+	// the schema can be `number of rows inserted`, `number of rows deleted`, `number of rows updated` when sql start with  `insert`, `delete`, `update`
+	if queryResp.Schema != nil && len(*queryResp.Schema) > 0 && strings.Contains((*queryResp.Schema)[0].Name, "number of rows") {
+		if len(queryResp.Data) > 0 && len(queryResp.Data[0]) > 0 && queryResp.Data[0][0] != nil {
+			var affectedRows int64
+			if err := json.Unmarshal([]byte(*queryResp.Data[0][0]), &affectedRows); err != nil {
+				return 0, fmt.Errorf("failed to parse affected rows: %w", err)
+			}
+			return affectedRows, nil
+		}
+	}
+	return 0, nil
+}
