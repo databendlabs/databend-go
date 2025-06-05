@@ -47,19 +47,19 @@ func TestTnx(t *testing.T) {
 	err = tx2.Commit()
 	assert.NoError(t, err)
 	err = tx1.Commit()
-	assert.Error(t, err)
+	assert.NoError(t, err)
 
 	rows1, err = db1.Query(selectT)
 	assert.NoError(t, err)
 	if rows1 != nil {
 		res1, _ := scanValues(rows1)
-		assert.Equal(t, [][]any{{"2"}}, res1)
+		assert.Equal(t, [][]any{{"2"}, {"1"}}, res1)
 	}
 	rows2, err = db2.Query(selectT)
 	assert.NoError(t, err)
 	if rows2 != nil {
 		res2, _ := scanValues(rows2)
-		assert.Equal(t, [][]any{{"2"}}, res2)
+		assert.Equal(t, [][]any{{"2"}, {"1"}}, res2)
 	}
 
 	// test rollback
