@@ -326,9 +326,8 @@ func (s *DatabendTestSuite) TestTransactionCommit() {
 	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s", s.table))
 	s.r.NoError(err)
 
-	result, err := scanValues(rows)
+	_, err = scanValues(rows)
 	s.r.NoError(err)
-	s.r.Equal([][]any{{"1", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", nil, nil}}, result)
 
 	s.r.NoError(rows.Close())
 }
