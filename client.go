@@ -392,7 +392,7 @@ var databendInsecureTransport = &http.Transport{
 	}).DialContext,
 }
 
-func (c *APIClient) getPagenationConfig() *PaginationConfig {
+func (c *APIClient) getPaginationConfig() *PaginationConfig {
 	if c.MaxRowsPerPage == 0 && c.MaxRowsInBuffer == 0 && c.WaitTimeSeconds == 0 {
 		return nil
 	}
@@ -546,7 +546,7 @@ func (c *APIClient) StartQuery(ctx context.Context, query string, args []driver.
 	}
 	request := QueryRequest{
 		SQL:        q,
-		Pagination: c.getPagenationConfig(),
+		Pagination: c.getPaginationConfig(),
 		Session:    c.getSessionStateRaw(),
 	}
 	return c.startQueryRequest(ctx, &request)
@@ -608,7 +608,7 @@ func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *Stag
 	}
 	request := QueryRequest{
 		SQL:        sql,
-		Pagination: c.getPagenationConfig(),
+		Pagination: c.getPaginationConfig(),
 		Session:    c.getSessionStateRaw(),
 		StageAttachment: &StageAttachmentConfig{
 			Location:          stage.String(),
