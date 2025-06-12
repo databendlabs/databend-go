@@ -239,6 +239,13 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 	if err != nil {
 		return errors.Wrap(err, "failed to create http request")
 	}
+
+	select {
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "context done")
+	default:
+	}
+
 	httpReq = httpReq.WithContext(ctx)
 
 	maxRetries := 2
@@ -425,7 +432,7 @@ func (c *APIClient) PollUntilQueryEnd(ctx context.Context, resp *QueryResponse) 
 			if errors.Is(err, context.Canceled) {
 				// context might be canceled due to timeout or canceled. if it's canceled, we need call
 				// the kill url to tell the backend it's killed.
-				fmt.Printf("query canceled, kill query:%s", resp.ID)
+				fmt.Printf("query canceled, kill query: %s", resp.ID)
 				_ = c.KillQuery(context.Background(), resp)
 			}
 			return nil, err
@@ -478,7 +485,7 @@ func (c *APIClient) doRetry(f retry.RetryableFunc, t RequestType) error {
 			if err == nil {
 				return false
 			}
-			if errors.Is(err, context.Canceled) {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return false
 			}
 			if errors.Is(err, ErrDoRequest) || errors.Is(err, ErrReadResponse) || IsProxyErr(err) {
