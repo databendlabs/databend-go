@@ -239,10 +239,11 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 	if err != nil {
 		return errors.Wrap(err, "failed to create http request")
 	}
+
 	httpReq = httpReq.WithContext(ctx)
 
-	maxRetries := 2
-	for i := 1; i <= maxRetries; i++ {
+	authRetryLimit := 2
+	for i := 1; i <= authRetryLimit; i++ {
 		headers, err := c.makeHeaders(ctx)
 		if needSticky && len(c.NodeID) != 0 {
 			headers.Set(DatabendQueryStickyNode, c.NodeID)
@@ -259,6 +260,12 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 
 		if len(c.host) > 0 {
 			httpReq.Host = c.host
+		}
+
+		select {
+		case <-ctx.Done():
+			return errors.Wrap(ctx.Err(), "context done")
+		default:
 		}
 
 		httpResp, err := c.cli.Do(httpReq)
@@ -290,7 +297,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 		}
 
 		if httpResp.StatusCode == http.StatusUnauthorized {
-			if c.authMethod() == AuthMethodAccessToken && i < maxRetries {
+			if c.authMethod() == AuthMethodAccessToken && i < authRetryLimit {
 				// retry with a rotated access token
 				_, _ = c.accessTokenLoader.LoadAccessToken(context.Background(), true)
 				continue
@@ -306,7 +313,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 
 		return unmarshalErr
 	}
-	return errors.Errorf("failed to do request after %d retries", maxRetries)
+	return errors.Errorf("failed to do request after %d retries", authRetryLimit)
 }
 
 func (c *APIClient) trackStats(resp *QueryResponse) {
@@ -385,7 +392,7 @@ var databendInsecureTransport = &http.Transport{
 	}).DialContext,
 }
 
-func (c *APIClient) getPagenationConfig() *PaginationConfig {
+func (c *APIClient) getPaginationConfig() *PaginationConfig {
 	if c.MaxRowsPerPage == 0 && c.MaxRowsInBuffer == 0 && c.WaitTimeSeconds == 0 {
 		return nil
 	}
@@ -425,7 +432,7 @@ func (c *APIClient) PollUntilQueryEnd(ctx context.Context, resp *QueryResponse) 
 			if errors.Is(err, context.Canceled) {
 				// context might be canceled due to timeout or canceled. if it's canceled, we need call
 				// the kill url to tell the backend it's killed.
-				fmt.Printf("query canceled, kill query:%s", resp.ID)
+				fmt.Printf("query canceled, kill query: %s", resp.ID)
 				_ = c.KillQuery(context.Background(), resp)
 			}
 			return nil, err
@@ -478,7 +485,7 @@ func (c *APIClient) doRetry(f retry.RetryableFunc, t RequestType) error {
 			if err == nil {
 				return false
 			}
-			if errors.Is(err, context.Canceled) {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return false
 			}
 			if errors.Is(err, ErrDoRequest) || errors.Is(err, ErrReadResponse) || IsProxyErr(err) {
@@ -539,7 +546,7 @@ func (c *APIClient) StartQuery(ctx context.Context, query string, args []driver.
 	}
 	request := QueryRequest{
 		SQL:        q,
-		Pagination: c.getPagenationConfig(),
+		Pagination: c.getPaginationConfig(),
 		Session:    c.getSessionStateRaw(),
 	}
 	return c.startQueryRequest(ctx, &request)
@@ -601,7 +608,7 @@ func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *Stag
 	}
 	request := QueryRequest{
 		SQL:        sql,
-		Pagination: c.getPagenationConfig(),
+		Pagination: c.getPaginationConfig(),
 		Session:    c.getSessionStateRaw(),
 		StageAttachment: &StageAttachmentConfig{
 			Location:          stage.String(),

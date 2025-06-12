@@ -24,7 +24,7 @@ import (
 var (
 	ProvisionWarehouseTimeout = "ProvisionWarehouseTimeout"
 
-	ErrDoRequest    = errors.New("DoReqeustFailed")
+	ErrDoRequest    = errors.New("DoRequestFailed")
 	ErrReadResponse = errors.New("ReadResponseFailed")
 )
 
