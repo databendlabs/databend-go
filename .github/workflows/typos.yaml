@@ -1,4 +1,4 @@
-name: Check Typos
+name: Typos
 
 on:
   pull_request:
