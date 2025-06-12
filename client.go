@@ -240,12 +240,6 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 		return errors.Wrap(err, "failed to create http request")
 	}
 
-	select {
-	case <-ctx.Done():
-		return errors.Wrap(ctx.Err(), "context done")
-	default:
-	}
-
 	httpReq = httpReq.WithContext(ctx)
 
 	maxRetries := 2
@@ -266,6 +260,12 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 
 		if len(c.host) > 0 {
 			httpReq.Host = c.host
+		}
+
+		select {
+		case <-ctx.Done():
+			return errors.Wrap(ctx.Err(), "context done")
+		default:
 		}
 
 		httpResp, err := c.cli.Do(httpReq)
