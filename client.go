@@ -242,8 +242,8 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 
 	httpReq = httpReq.WithContext(ctx)
 
-	maxAuthRetries := 2
-	for i := 1; i <= maxAuthRetries; i++ {
+	authRetryLimit := 2
+	for i := 1; i <= authRetryLimit; i++ {
 		headers, err := c.makeHeaders(ctx)
 		if needSticky && len(c.NodeID) != 0 {
 			headers.Set(DatabendQueryStickyNode, c.NodeID)
@@ -297,7 +297,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 		}
 
 		if httpResp.StatusCode == http.StatusUnauthorized {
-			if c.authMethod() == AuthMethodAccessToken && i < maxAuthRetries {
+			if c.authMethod() == AuthMethodAccessToken && i < authRetryLimit {
 				// retry with a rotated access token
 				_, _ = c.accessTokenLoader.LoadAccessToken(context.Background(), true)
 				continue
@@ -313,7 +313,7 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 
 		return unmarshalErr
 	}
-	return errors.Errorf("failed to do request after %d retries", maxAuthRetries)
+	return errors.Errorf("failed to do request after %d retries", authRetryLimit)
 }
 
 func (c *APIClient) trackStats(resp *QueryResponse) {
