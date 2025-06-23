@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  schedule:
+    - cron: '0 0 * * *'
   push:
     branches: [main]
   pull_request:
@@ -27,3 +29,29 @@ jobs:
           TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?sslmode=disable"
         run: |
           make integration
+
+  notify:
+    if: failure()
+    needs: [ test ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Notify Dev Team
+        uses: actions/github-script@v7
+        env:
+          WEBHOOK_URL: ${{ secrets.DEV_TEAM_WEBHOOK_URL }}
+        with:
+          script: |
+            const body = {
+              msg_type: 'text',
+              content: {
+                text: '⚠️ Databend JDBC Integration Tests Failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+              }
+            }
+            const response = await fetch(process.env.WEBHOOK_URL, {
+              method: 'POST',
+              body: JSON.stringify(body),
+              headers: {'Content-Type': 'application/json'}
+            });
+            const result = await response.json();
+            console.log(result);
