@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -98,9 +99,9 @@ func (dc *DatabendConn) cleanup() {
 }
 
 func (dc *DatabendConn) Ping(ctx context.Context) error {
-	_, err := dc.exec(ctx, "SELECT 1")
+	err := dc.rest.Verify(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "ping failed")
 	}
 	return nil
 }

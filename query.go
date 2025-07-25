@@ -137,3 +137,9 @@ func parseAffectedRows(queryResp *QueryResponse) (int64, error) {
 	}
 	return 0, nil
 }
+
+type VerifyResponse struct {
+	Tenant string   `json:"tenant"`
+	User   string   `json:"user"`
+	Roles  []string `json:"roles"`
+}
