@@ -763,7 +763,7 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 
 func (c *APIClient) Verify(ctx context.Context) error {
 	var response VerifyResponse
-	err := c.doRequest(ctx, "GET", "/v1/verify", nil, false, &response, nil)
+	err := c.doRequest(ctx, "POST", "/v1/verify", nil, false, &response, nil)
 	if err != nil {
 		return errors.Wrap(err, "verify failed")
 	}
