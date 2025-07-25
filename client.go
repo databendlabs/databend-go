@@ -761,6 +761,21 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 	return nil
 }
 
+func (c *APIClient) Verify(ctx context.Context) error {
+	var response VerifyResponse
+	err := c.doRequest(ctx, "GET", "/v1/verify", nil, false, &response, nil)
+	if err != nil {
+		return errors.Wrap(err, "verify failed")
+	}
+	if c.tenant != "" && response.Tenant != c.tenant {
+		return errors.Errorf("verify tenant mismatch, expected: %s, got: %s", c.tenant, response.Tenant)
+	}
+	if c.user != "" && response.User != c.user {
+		return errors.Errorf("verify user mismatch, expected: %s, got: %s", c.user, response.User)
+	}
+	return nil
+}
+
 func (c *APIClient) Logout(ctx context.Context) error {
 	if c.NeedKeepAlive() {
 		req := &struct{}{}
