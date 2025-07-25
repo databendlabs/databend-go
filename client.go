@@ -778,8 +778,7 @@ func (c *APIClient) Verify(ctx context.Context) error {
 
 func (c *APIClient) Logout(ctx context.Context) error {
 	if c.NeedKeepAlive() {
-		req := &struct{}{}
-		return c.doRequest(ctx, "POST", "/v1/session/logout", req, c.NeedSticky(), nil, nil)
+		return c.doRequest(ctx, "POST", "/v1/session/logout", nil, c.NeedSticky(), nil, nil)
 	}
 	return nil
 }
