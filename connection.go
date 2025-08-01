@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync/atomic"
 
 	"github.com/google/uuid"
@@ -200,6 +201,7 @@ func (dc *DatabendConn) ExecuteBatch() (err error) {
 func checkQueryID(ctx context.Context) context.Context {
 	if _, ok := ctx.Value(ContextKeyQueryID).(string); !ok {
 		queryId := uuid.NewString()
+		queryId = strings.ReplaceAll(queryId, "-", "")
 		ctx = context.WithValue(ctx, ContextKeyQueryID, queryId)
 	}
 	return ctx
