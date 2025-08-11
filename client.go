@@ -765,10 +765,25 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 
 func (c *APIClient) Verify(ctx context.Context) error {
 	var response VerifyResponse
-	err := c.doRequest(ctx, "POST", "/v1/verify", nil, false, &response, nil)
+	var err error
+
+	maxRetries := 2
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		err = c.doRequest(ctx, "POST", "/v1/verify", nil, false, &response, nil)
+		if err == nil {
+			break
+		}
+		if attempt < maxRetries && isBadGateway(err) {
+			time.Sleep(time.Millisecond * 200)
+			continue
+		}
+		break
+	}
+
 	if err != nil {
 		return errors.Wrap(err, "verify failed")
 	}
+
 	if c.tenant != "" && response.Tenant != c.tenant {
 		return errors.Errorf("verify tenant mismatch, expected: %s, got: %s", c.tenant, response.Tenant)
 	}
