@@ -79,6 +79,11 @@ func IsAuthFailed(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.StatusCode == 401
 }
 
+func isBadGateway(err error) bool {
+	var apiErr APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == 502
+}
+
 func RespBody(err error) APIErrorResponseBody {
 	var apiErr APIError
 	if !errors.As(err, &apiErr) {

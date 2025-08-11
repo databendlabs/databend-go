@@ -242,26 +242,26 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 
 	httpReq = httpReq.WithContext(ctx)
 
+	headers, err := c.makeHeaders(ctx)
+	if needSticky && len(c.NodeID) != 0 {
+		headers.Set(DatabendQueryStickyNode, c.NodeID)
+	}
+	if err != nil {
+		return errors.Wrap(err, "failed to make request headers")
+	}
+	if method == "GET" && len(c.NodeID) != 0 {
+		headers.Set(DatabendQueryIDNode, c.NodeID)
+	}
+	headers.Set(contentType, jsonContentType)
+	headers.Set(accept, jsonContentType)
+	httpReq.Header = headers
+
+	if len(c.host) > 0 {
+		httpReq.Host = c.host
+	}
+
 	authRetryLimit := 2
 	for i := 1; i <= authRetryLimit; i++ {
-		headers, err := c.makeHeaders(ctx)
-		if needSticky && len(c.NodeID) != 0 {
-			headers.Set(DatabendQueryStickyNode, c.NodeID)
-		}
-		if err != nil {
-			return errors.Wrap(err, "failed to make request headers")
-		}
-		if method == "GET" && len(c.NodeID) != 0 {
-			headers.Set(DatabendQueryIDNode, c.NodeID)
-		}
-		headers.Set(contentType, jsonContentType)
-		headers.Set(accept, jsonContentType)
-		httpReq.Header = headers
-
-		if len(c.host) > 0 {
-			httpReq.Host = c.host
-		}
-
 		select {
 		case <-ctx.Done():
 			return errors.Wrap(ctx.Err(), "context done")
@@ -303,8 +303,10 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 				continue
 			}
 			return NewAPIError("authorization failed", httpResp.StatusCode, httpRespBody)
-		} else if httpResp.StatusCode >= 500 {
+		} else if httpResp.StatusCode > 500 {
 			return NewAPIError("please retry again later", httpResp.StatusCode, httpRespBody)
+		} else if httpResp.StatusCode == 500 {
+			return NewAPIError("internal server error", httpResp.StatusCode, httpRespBody)
 		} else if httpResp.StatusCode >= 400 {
 			return NewAPIError("please check your arguments", httpResp.StatusCode, httpRespBody)
 		} else if httpResp.StatusCode != 200 {
@@ -763,10 +765,25 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 
 func (c *APIClient) Verify(ctx context.Context) error {
 	var response VerifyResponse
-	err := c.doRequest(ctx, "POST", "/v1/verify", nil, false, &response, nil)
+	var err error
+
+	maxRetries := 2
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		err = c.doRequest(ctx, "POST", "/v1/verify", nil, false, &response, nil)
+		if err == nil {
+			break
+		}
+		if attempt < maxRetries && isBadGateway(err) {
+			time.Sleep(time.Millisecond * 200)
+			continue
+		}
+		break
+	}
+
 	if err != nil {
 		return errors.Wrap(err, "verify failed")
 	}
+
 	if c.tenant != "" && response.Tenant != c.tenant {
 		return errors.Errorf("verify tenant mismatch, expected: %s, got: %s", c.tenant, response.Tenant)
 	}
