@@ -49,4 +49,5 @@ jobs:
         with:
           push: true
           file: ./tests/ttc/Dockerfile
+          platforms: linux/amd64,linux/arm64
           tags: ghcr.io/databendlabs/ttc-go:${{ env.DOCKER_TAG }}
