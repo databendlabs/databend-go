@@ -5,6 +5,9 @@ tmp
 /script/build
 /tests/data
 
+# Build artifacts
+ttc
+
 # VS Code
 .vscode
 
