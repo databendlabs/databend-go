@@ -12,7 +12,6 @@ import (
 	"maps"
 	"math/rand"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -383,17 +382,6 @@ func encode(name string, key string) string {
 	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", name, key)))
 }
 
-// databendInsecureTransport is the transport object that doesn't do certificate revocation check.
-var databendInsecureTransport = &http.Transport{
-	MaxIdleConns:    10,
-	IdleConnTimeout: 30 * time.Minute,
-	Proxy:           http.ProxyFromEnvironment,
-	DialContext: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).DialContext,
-}
-
 func (c *APIClient) getPaginationConfig() *PaginationConfig {
 	if c.MaxRowsPerPage == 0 && c.MaxRowsInBuffer == 0 && c.WaitTimeSeconds == 0 {
 		return nil
@@ -501,6 +489,7 @@ func (c *APIClient) doRetry(f retry.RetryableFunc, t RequestType) error {
 		retry.Delay(delay*time.Second),
 		retry.Attempts(attempts),
 		retry.DelayType(retry.FixedDelay),
+		retry.LastErrorOnly(true),
 	)
 }
 
