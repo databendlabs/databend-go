@@ -12,7 +12,6 @@ import (
 	"maps"
 	"math/rand"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -381,17 +380,6 @@ func (c *APIClient) makeHeaders(ctx context.Context) (http.Header, error) {
 
 func encode(name string, key string) string {
 	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", name, key)))
-}
-
-// databendInsecureTransport is the transport object that doesn't do certificate revocation check.
-var databendInsecureTransport = &http.Transport{
-	MaxIdleConns:    10,
-	IdleConnTimeout: 30 * time.Minute,
-	Proxy:           http.ProxyFromEnvironment,
-	DialContext: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).DialContext,
 }
 
 func (c *APIClient) getPaginationConfig() *PaginationConfig {
