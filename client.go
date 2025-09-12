@@ -489,6 +489,7 @@ func (c *APIClient) doRetry(f retry.RetryableFunc, t RequestType) error {
 		retry.Delay(delay*time.Second),
 		retry.Attempts(attempts),
 		retry.DelayType(retry.FixedDelay),
+		retry.LastErrorOnly(true),
 	)
 }
 
