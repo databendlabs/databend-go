@@ -30,9 +30,8 @@ func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse)
 	if response.Error != nil {
 		return nil, response.Error
 	}
-	var err error
 	for !response.ReadFinished() && len(response.Data) == 0 && response.Error == nil {
-		response, err = dc.rest.PollQuery(ctx, response.NextURI)
+		nextResponse, err := dc.rest.PollQuery(ctx, response.NextURI)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				// context might be canceled due to timeout or canceled. if it's canceled, we need call
@@ -44,6 +43,7 @@ func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse)
 			}
 			return nil, err
 		}
+		response = nextResponse
 		if response.Error != nil {
 			_ = dc.rest.CloseQuery(ctx, response)
 			return nil, fmt.Errorf("query error: %+v", response.Error)
