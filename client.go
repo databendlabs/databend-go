@@ -414,10 +414,8 @@ func (c *APIClient) applySessionState(response *QueryResponse) {
 }
 
 func (c *APIClient) PollUntilQueryEnd(ctx context.Context, resp *QueryResponse) (*QueryResponse, error) {
-	var err error
 	for !resp.ReadFinished() {
-		data := resp.Data
-		resp, err = c.PollQuery(ctx, resp.NextURI)
+		nextResponse, err := c.PollQuery(ctx, resp.NextURI)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				// context might be canceled due to timeout or canceled. if it's canceled, we need call
@@ -427,6 +425,8 @@ func (c *APIClient) PollUntilQueryEnd(ctx context.Context, resp *QueryResponse) 
 			}
 			return nil, err
 		}
+		data := resp.Data
+		resp = nextResponse
 		if resp.Error != nil {
 			return nil, errors.Wrap(resp.Error, "query page has error")
 		}
