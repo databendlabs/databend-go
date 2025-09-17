@@ -1,8 +1,13 @@
 TEST_DATABEND_DSN ?= "databend://databend:databend@localhost:8000/default?sslmode=disable"
 
-up:
+prepare:
 	mkdir -p data/databend
-	docker compose up --quiet-pull -d databend --wait
+
+up: prepare
+	docker compose up --scale query=3 --quiet-pull -d  --wait
+	grep -q '127.0.0.1 minio' /etc/hosts || echo '127.0.0.1 minio' | sudo tee -a /etc/hosts > /dev/null
+	curl  -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select version()",  "pagination": { "wait_time_secs": 10}}'
+
 
 down:
 	docker compose down
