@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -37,37 +38,27 @@ func (s *DatabendTestSuite) TestChangeRole() {
 
 	err := db.QueryRow("select version()").Scan(&result)
 	r.NoError(err)
+	_, err = db.Exec("drop role if exists test_role")
+	_, err = db.Exec("drop role if exists test_role_2")
 	println(result)
 	_, err = db.Exec("create role if not exists test_role")
 	r.NoError(err)
-
-	s.NotEmpty(dsn)
-	dsn_with_role := fmt.Sprintf("%s&role=test_role", dsn)
-	db, err = sql.Open("databend", dsn_with_role)
 	s.NoError(err)
 
+	// wait for RoleCacheManager to reload
+	time.Sleep(15 * time.Second)
+
+	_, err = db.Exec("set role 'test_role'")
+	r.NoError(err)
 	err = db.QueryRow("select current_role()").Scan(&result)
 	r.NoError(err)
 	r.Equal("test_role", result)
 
-	s.NotEmpty(dsn)
-	db, err = sql.Open("databend", dsn)
-	s.NoError(err)
-	//
-	//defer s.db.Exec("drop role if exists test_role")
-	//_, err = s.db.Exec("set role 'test_role'")
-	//r.NoError(err)
-	//
-
-	_, err = db.Exec("create role if not exists test_role_2")
+	dsn_with_role := fmt.Sprintf("%s&role=test_role", dsn)
+	db2, err := sql.Open("databend", dsn_with_role)
+	err = db2.QueryRow("select current_role()").Scan(&result)
 	r.NoError(err)
-	//defer s.db.Exec("drop role if exists test_role_2")
-	_, err = db.Exec("set role 'test_role_2'")
-	r.NoError(err)
-	err = db.QueryRow("select current_role()").Scan(&result)
-	r.NoError(err)
-	// skip now
-	//r.Equal("test_role_2", result)
+	r.Equal("test_role", result)
 }
 
 func (s *DatabendTestSuite) TestSessionConfig() {
