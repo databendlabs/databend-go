@@ -23,7 +23,7 @@ func TestTnx(t *testing.T) {
 	assert.NoError(t, err)
 	rows, err := tx1.Query("select 1")
 	assert.NoError(t, err)
-	assert.Equal(t, true, rows.Next())
+	assert.True(t, rows.Next())
 	rows.Close()
 
 	rows2, err := db2.Query(selectT)
@@ -63,7 +63,8 @@ func TestTnx(t *testing.T) {
 	}
 
 	// test rollback
-	db1.Exec("DROP table  t;")
+	_, err = db1.Exec("DROP table  t;")
+	assert.NoError(t, err)
 	_, err = db1.Exec("CREATE OR REPLACE TABLE t(c int);")
 	assert.NoError(t, err)
 	tx1, err = db1.Begin()

@@ -11,8 +11,8 @@ func TestConnectionError(t *testing.T) {
 	r := require.New(t)
 
 	db, err := sql.Open("databend", "databend://root:123456@localhost:12345")
-	r.Nil(err)
+	r.NoError(err)
 
 	err = db.Ping()
-	r.NotNil(err)
+	r.Error(err)
 }

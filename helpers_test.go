@@ -23,7 +23,7 @@ func TestGetTableFromInsertQuery(t *testing.T) {
 	for i := range wrongArgs {
 		table, err := getTableFromInsertQuery(wrongArgs[i])
 		assert.Error(t, err)
-		assert.Equal(t, "", table)
+		assert.Empty(t, table)
 	}
 }
 

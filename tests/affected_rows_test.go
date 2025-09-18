@@ -18,11 +18,11 @@ func TestAffectedRows(t *testing.T) {
 	assert.NoError(t, err, "create affected table failed")
 	affectedRows, err := updateTable(dsn)
 	assert.NoError(t, err, "update table failed")
-	assert.Equal(t, affectedRows, int64(2))
+	assert.Equal(t, int64(2), affectedRows)
 
 	affectedRowsDelete, err := deleteTable(dsn)
 	assert.NoError(t, err, "delete table failed")
-	assert.Equal(t, affectedRowsDelete, int64(2))
+	assert.Equal(t, int64(2), affectedRowsDelete)
 
 	defer cleanupTable(dsn)
 }
