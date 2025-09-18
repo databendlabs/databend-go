@@ -39,7 +39,9 @@ func (s *DatabendTestSuite) TestChangeRole() {
 	err := db.QueryRow("select version()").Scan(&result)
 	r.NoError(err)
 	_, err = db.Exec("drop role if exists test_role")
+	r.NoError(err)
 	_, err = db.Exec("drop role if exists test_role_2")
+	r.NoError(err)
 	println(result)
 	_, err = db.Exec("create role if not exists test_role")
 	r.NoError(err)
@@ -56,6 +58,7 @@ func (s *DatabendTestSuite) TestChangeRole() {
 
 	dsn_with_role := fmt.Sprintf("%s&role=test_role", dsn)
 	db2, err := sql.Open("databend", dsn_with_role)
+	r.NoError(err)
 	err = db2.QueryRow("select current_role()").Scan(&result)
 	r.NoError(err)
 	r.Equal("test_role", result)

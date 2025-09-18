@@ -34,11 +34,11 @@ func DeregisterTLSConfig(key string) {
 	tlsConfigLock.Unlock()
 }
 
-func getTLSConfigClone(key string) (config *tls.Config) {
-	tlsConfigLock.RLock()
-	if v, ok := tlsConfigRegistry[key]; ok {
-		config = v.Clone()
-	}
-	tlsConfigLock.RUnlock()
-	return
-}
+//func getTLSConfigClone(key string) (config *tls.Config) {
+//	tlsConfigLock.RLock()
+//	if v, ok := tlsConfigRegistry[key]; ok {
+//		config = v.Clone()
+//	}
+//	tlsConfigLock.RUnlock()
+//	return
+//}
