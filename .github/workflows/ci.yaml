@@ -20,6 +20,9 @@ jobs:
         with:
           go-version: "1.24"
 
+      - name: testifylint
+        run: go run github.com/Antonboom/testifylint@latest ./...
+
       - name: Unittest
         run: |
           make test
