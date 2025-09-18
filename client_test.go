@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"encoding/json"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/google/uuid"
@@ -67,7 +68,7 @@ func TestMakeHeadersQueryID(t *testing.T) {
 	queryId := uuid.NewString()
 	ctx := context.WithValue(context.Background(), ContextKeyQueryID, queryId)
 	headers, err := c.makeHeaders(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []string{queryId}, headers["X-Databend-Query-Id"])
 }
 

@@ -118,9 +118,9 @@ func (s *DatabendTestSuite) TestVersion() {
 	defer db.Close()
 
 	rows, err := db.Query("select version()")
-	s.NoError(err)
+	s.r.NoError(err)
 	result, err := scanValues(rows)
-	s.NoError(err)
+	s.r.NoError(err)
 	s.T().Logf("connected to databend: %s\n", result)
 }
 

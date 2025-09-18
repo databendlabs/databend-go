@@ -3,6 +3,7 @@ package tests
 import (
 	"database/sql"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,16 +13,16 @@ import (
 
 func TestAffectedRows(t *testing.T) {
 	err := selectExec(dsn)
-	assert.NoError(t, err, "select exec failed")
+	require.NoError(t, err, "select exec failed")
 
 	err = createAffectedTable(dsn)
-	assert.NoError(t, err, "create affected table failed")
+	require.NoError(t, err, "create affected table failed")
 	affectedRows, err := updateTable(dsn)
-	assert.NoError(t, err, "update table failed")
+	require.NoError(t, err, "update table failed")
 	assert.Equal(t, int64(2), affectedRows)
 
 	affectedRowsDelete, err := deleteTable(dsn)
-	assert.NoError(t, err, "delete table failed")
+	require.NoError(t, err, "delete table failed")
 	assert.Equal(t, int64(2), affectedRowsDelete)
 
 	defer cleanupTable(dsn)
