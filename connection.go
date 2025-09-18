@@ -94,7 +94,7 @@ func (dc *DatabendConn) BeginTx(
 }
 
 func (dc *DatabendConn) cleanup() {
-	dc.rest.Logout(dc.ctx)
+	_ = dc.rest.Logout(dc.ctx)
 	dc.rest = nil
 	dc.cfg = nil
 }

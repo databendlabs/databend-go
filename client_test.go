@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"encoding/json"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/google/uuid"
@@ -19,11 +20,11 @@ func TestMakeHeadersUserPassword(t *testing.T) {
 		sessionState: &SessionState{Role: "role1"},
 	}
 	headers, err := c.makeHeaders(context.Background())
-	assert.Nil(t, err)
-	assert.Equal(t, headers["Authorization"], []string{"Basic cm9vdDpyb290"})
-	assert.Equal(t, headers["X-Databend-Tenant"], []string{"default"})
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"Basic cm9vdDpyb290"}, headers["Authorization"])
+	assert.Equal(t, []string{"default"}, headers["X-Databend-Tenant"])
 	session := c.getSessionState()
-	assert.Equal(t, session.Role, "role1")
+	assert.Equal(t, "role1", session.Role)
 }
 
 func TestMakeHeadersAccessToken(t *testing.T) {
@@ -35,10 +36,10 @@ func TestMakeHeadersAccessToken(t *testing.T) {
 	}
 	ctx := checkQueryID(context.Background())
 	headers, err := c.makeHeaders(ctx)
-	assert.Nil(t, err)
-	assert.Equal(t, headers["Authorization"], []string{"Bearer abc123"})
-	assert.Equal(t, headers["X-Databend-Tenant"], []string{"tn3ftqihs"})
-	assert.Equal(t, headers["X-Databend-Warehouse"], []string{"small-abc"})
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"Bearer abc123"}, headers["Authorization"])
+	assert.Equal(t, []string{"tn3ftqihs"}, headers["X-Databend-Tenant"])
+	assert.Equal(t, []string{"small-abc"}, headers["X-Databend-Warehouse"])
 	assert.NotEmptyf(t, headers["X-Databend-Query-Id"], "Query ID is not empty")
 }
 
@@ -67,8 +68,8 @@ func TestMakeHeadersQueryID(t *testing.T) {
 	queryId := uuid.NewString()
 	ctx := context.WithValue(context.Background(), ContextKeyQueryID, queryId)
 	headers, err := c.makeHeaders(ctx)
-	assert.Nil(t, err)
-	assert.Equal(t, headers["X-Databend-Query-Id"], []string{queryId})
+	require.NoError(t, err)
+	assert.Equal(t, []string{queryId}, headers["X-Databend-Query-Id"])
 }
 
 func TestDoQuery(t *testing.T) {
@@ -98,6 +99,6 @@ func TestDoQuery(t *testing.T) {
 	ctx := context.WithValue(context.Background(), ContextKeyQueryID, queryId)
 	resp, err := c.StartQuery(ctx, "SELECT 1", []driver.Value{})
 	assert.NoError(t, err)
-	assert.Equal(t, gotQueryID, "mockid1")
+	assert.Equal(t, "mockid1", gotQueryID)
 	assert.Equal(t, resp.ID, queryId)
 }

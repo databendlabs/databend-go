@@ -7,14 +7,14 @@ import (
 )
 
 type databendStmt struct {
-	dc      *DatabendConn
-	closed  int32
-	prefix  string
-	pattern string
-	index   []int
-	args    [][]driver.Value
-	query   string
-	batch   Batch
+	dc *DatabendConn
+	//closed  int32
+	//prefix  string
+	//pattern string
+	//index   []int
+	//args    [][]driver.Value
+	query string
+	batch Batch
 }
 
 func (stmt *databendStmt) Close() error {

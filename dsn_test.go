@@ -15,7 +15,7 @@ func TestParseDSNWithEncodedChars(t *testing.T) {
 	password := "pa$$?word:abc@123"
 	dsn := fmt.Sprintf("databend+https://%s:%s@host:443/db?param1=value1&param2=value2", url.QueryEscape(username), url.QueryEscape(password))
 	cfg, err := ParseDSN(dsn)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, username, cfg.User)
 	assert.Equal(t, password, cfg.Password)
@@ -25,7 +25,7 @@ func TestParseDSNWithEncodedChars(t *testing.T) {
 func TestParseDSNWithSpecialChars(t *testing.T) {
 	dsn := "databend+https://use%#$^&r:pa$$?word@host:443/db?param1=value1&param2=value2"
 	cfg, err := ParseDSN(dsn)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, "use%#$^&r", cfg.User)
 	assert.Equal(t, "pa$$?word", cfg.Password)
@@ -38,7 +38,7 @@ func TestParseDSNWithSpecialChars(t *testing.T) {
 func TestFormatDSN(t *testing.T) {
 	dsn := "databend+https://username:password@tn3ftqihs.ch.aws-us-east-2.default.databend.com/test?role=test_role&empty_field_as=null&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&warehouse=wh&sessionParam1=sessionValue1"
 	cfg, err := ParseDSN(dsn)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, "wh", cfg.Warehouse)
 	assert.Equal(t, "tn3ftqihs.ch.aws-us-east-2.default.databend.com:443", cfg.Host)
@@ -53,7 +53,7 @@ func TestFormatDSN(t *testing.T) {
 
 	dsn1 := cfg.FormatDSN()
 	cfg1, err := ParseDSN(dsn1)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, cfg, cfg1)
 }
 
@@ -95,7 +95,7 @@ func TestParseDSN(t *testing.T) {
 
 		cfg, err := ParseDSN(dsn)
 		assert.Equal(t, "string", cfg.EmptyFieldAs)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "/tmp/file1", cfg.AccessTokenFile)
 	})
 
@@ -114,7 +114,7 @@ func TestParseDSN(t *testing.T) {
 
 		for _, test := range tests {
 			cfg, err := ParseDSN(test)
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			assert.Equal(t, "username", cfg.User)
 			assert.Equal(t, "password", cfg.Password)

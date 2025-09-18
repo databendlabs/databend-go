@@ -41,5 +41,5 @@ func (s *DatabendTestSuite) TestQueryNull() {
 	err = row.Scan(&val)
 	s.r.NoError(err)
 	s.r.False(val.Valid)
-	s.r.Equal("", val.String)
+	s.r.Empty(val.String)
 }
