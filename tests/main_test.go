@@ -12,7 +12,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"github.com/test-go/testify/suite"
+	"github.com/stretchr/testify/suite"
 
 	dc "github.com/datafuselabs/databend-go"
 )
