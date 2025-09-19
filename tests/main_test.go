@@ -308,8 +308,7 @@ func (s *DatabendTestSuite) TestExec() {
 		s.r.NoError(err)
 		s.r.NotNil(result)
 		n, _ := result.RowsAffected()
-		println("result", n)
-		s.r.Equal(1, n)
+		s.r.Equal(int64(1), n)
 
 		if len(tc.query2) == 0 {
 			continue

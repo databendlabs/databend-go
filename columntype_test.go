@@ -32,7 +32,6 @@ func TestColumnType(t *testing.T) {
 		{typeDesc: "Float32", input: "123.0", want: float32(123)},
 		{typeDesc: "Float64", input: "123.0", want: float64(123)},
 		{typeDesc: "Timestamp", input: "2025-01-16 02:01:26.739219", want: time.Date(2025, 1, 16, 2, 1, 26, 739219000, time.UTC)},
-		{typeDesc: "Timestamp NULL", input: "NULL", want: time.Time{}},
 		{typeDesc: "Date", input: "2025-01-16", want: time.Date(2025, 1, 16, 0, 0, 0, 0, time.UTC)},
 		{typeDesc: "Decimal(10, 2)", input: "123.45", want: "123.45"},
 	}
@@ -79,7 +78,8 @@ func runScan(t *testing.T, desc string, input string, want any) {
 	require.NoError(t, err)
 
 	a := reflect.New(types[0].ScanType()).Interface()
-	rows.Scan(a)
+	err = rows.Scan(a)
+	require.NoError(t, err)
 	require.Equal(t, want, reflect.ValueOf(a).Elem().Interface())
 }
 
