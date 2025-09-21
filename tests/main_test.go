@@ -3,10 +3,10 @@ package tests
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +31,16 @@ const (
 		t   DateTime)`
 	createTable2 = `create table %s (a string);`
 )
+
+type Table1 struct {
+	I64     int64
+	Int64   uint64
+	Float64 float64
+	String  string
+	A8      []int8
+	Date    time.Time
+	Time    time.Time
+}
 
 var (
 	dsn = "http://root@localhost:8000?presign=on"
@@ -140,16 +150,17 @@ func (s *DatabendTestSuite) TestQuoteStringQuery() {
 	m := make(map[string]string, 0)
 	m["message"] = "this is action 'with quote string'"
 	x, err := json.Marshal(m)
+	quotedString := string(x)
 	s.r.NoError(err)
-	_, err = db.Exec(fmt.Sprintf("insert into %s values(?)", s.table2), string(x))
+	_, err = db.Exec(fmt.Sprintf("insert into %s values(?)", s.table2), quotedString)
 	s.r.NoError(err)
 	rows, err := db.Query(fmt.Sprintf("select * from %s", s.table2))
 	s.r.NoError(err)
-	for rows.Next() {
-		var t string
-		_ = rows.Scan(&t)
-		s.r.Equal(string(x), t)
-	}
+
+	s.r.True(rows.Next())
+	var t string
+	_ = rows.Scan(&t)
+	s.r.Equal(quotedString, t)
 }
 
 func (s *DatabendTestSuite) TestDesc() {
@@ -168,12 +179,11 @@ func (s *DatabendTestSuite) TestBasicSelect() {
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
 	query := "SELECT ?"
-	result, err := db.Exec(query, []interface{}{1}...)
+	result, err := db.Exec(query, 1)
 	s.r.NoError(err)
 
 	affected, err := result.RowsAffected()
 	s.r.NoError(err)
-	// s.r.ErrorIs(err, dc.ErrNoRowsAffected)
 	s.r.Equal(int64(0), affected)
 }
 
@@ -190,7 +200,7 @@ func (s *DatabendTestSuite) TestSelectMultiPage() {
 	v := -1
 	for i := 0; i < n; i++ {
 		s.r.True(rows.Next())
-		rows.Scan(&v)
+		s.r.NoError(rows.Scan(&v))
 		s.r.Equal(v, i)
 	}
 	s.r.False(rows.Next())
@@ -252,13 +262,19 @@ func (s *DatabendTestSuite) TestDDL() {
 		_, err := db.Exec(ddl)
 		s.NoError(err)
 	}
+	rows, err := db.Query(`SELECT u64 from data where i64=?`, -3)
+	s.r.NoError(err)
+	s.r.True(rows.Next())
+	var r int32
+	s.r.NoError(rows.Scan(&r))
+	s.r.Equal(int32(3), r)
 }
 
 func (s *DatabendTestSuite) TestExec() {
 	testCases := []struct {
-		query  string
-		query2 string
-		args   []interface{}
+		insertQuery string
+		query2      string
+		args        []interface{}
 	}{
 		{
 			fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table),
@@ -287,10 +303,12 @@ func (s *DatabendTestSuite) TestExec() {
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
 	for _, tc := range testCases {
-		result, err := db.Exec(tc.query, tc.args...)
-		s.T().Logf("query: %s, args: %v\n", tc.query, tc.args)
+		result, err := db.Exec(tc.insertQuery, tc.args...)
+		s.T().Logf("query: %s, args: %v\n", tc.insertQuery, tc.args)
 		s.r.NoError(err)
 		s.r.NotNil(result)
+		n, _ := result.RowsAffected()
+		s.r.Equal(int64(1), n)
 
 		if len(tc.query2) == 0 {
 			continue
@@ -378,13 +396,6 @@ func (s *DatabendTestSuite) TestLongExec() {
 	}
 }
 
-func getNullableType(t reflect.Type) reflect.Type {
-	if t.Kind() == reflect.Ptr {
-		return t.Elem()
-	}
-	return t
-}
-
 func scanValues(rows *sql.Rows) (interface{}, error) {
 	var err error
 	var result [][]interface{}
@@ -395,7 +406,7 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 	vals := make([]any, len(ct))
 	for rows.Next() {
 		for i := range ct {
-			vals[i] = &dc.NullableValue{}
+			vals[i] = &NullableValue{}
 		}
 		err = rows.Scan(vals...)
 		if err != nil {
@@ -403,7 +414,7 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 		}
 		values := make([]interface{}, len(ct))
 		for i, p := range vals {
-			val, err := p.(*dc.NullableValue).Value()
+			val, err := p.(*NullableValue).Value()
 			if err != nil {
 				return nil, fmt.Errorf("failed to get value: %w", err)
 			}
@@ -415,4 +426,19 @@ func scanValues(rows *sql.Rows) (interface{}, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+type NullableValue struct {
+	val any
+}
+
+// Scan implements the [Scanner] interface.
+func (nv *NullableValue) Scan(value any) error {
+	nv.val = value
+	return nil
+}
+
+// Value implements the [driver.Valuer] interface.
+func (nv NullableValue) Value() (driver.Value, error) {
+	return nv.val, nil
 }

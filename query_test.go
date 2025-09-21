@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_SessionState(t *testing.T) {
+func TestSessionState(t *testing.T) {
 	ss := &SessionState{
 		Database:       "db1",
 		Role:           "",
