@@ -11,7 +11,7 @@ import (
 var (
 	escaper          = strings.NewReplacer(`\`, `\\`, `'`, `\'`)
 	dateFormat       = "2006-01-02"
-	timeFormat       = "2006-01-02 15:04:05"
+	timeFormat       = "2006-01-02 15:04:05.000000-07:00"
 	dateTime64Format = "2006-01-02 15:04:05.999999999"
 )
 
