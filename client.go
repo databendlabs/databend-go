@@ -532,6 +532,7 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 
 func (c *APIClient) StartQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
 	q, err := buildQuery(query, args)
+	logger.Debugf("start query: ", q)
 	if err != nil {
 		return nil, err
 	}
