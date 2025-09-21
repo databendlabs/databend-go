@@ -32,6 +32,16 @@ const (
 	createTable2 = `create table %s (a string);`
 )
 
+type Table1 struct {
+	I64     int64
+	Int64   uint64
+	Float64 float64
+	String  string
+	A8      []int8
+	Date    time.Time
+	Time    time.Time
+}
+
 var (
 	dsn = "http://root@localhost:8000?presign=on"
 )
@@ -252,13 +262,19 @@ func (s *DatabendTestSuite) TestDDL() {
 		_, err := db.Exec(ddl)
 		s.NoError(err)
 	}
+	rows, err := db.Query(`SELECT u64 from data where i64=?`, -3)
+	s.r.NoError(err)
+	s.r.True(rows.Next())
+	var r int32
+	s.r.NoError(rows.Scan(&r))
+	s.r.Equal(int32(3), r)
 }
 
 func (s *DatabendTestSuite) TestExec() {
 	testCases := []struct {
-		query  string
-		query2 string
-		args   []interface{}
+		insertQuery string
+		query2      string
+		args        []interface{}
 	}{
 		{
 			fmt.Sprintf("INSERT INTO %s (i64) VALUES (?)", s.table),
@@ -287,8 +303,8 @@ func (s *DatabendTestSuite) TestExec() {
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
 	for _, tc := range testCases {
-		result, err := db.Exec(tc.query, tc.args...)
-		s.T().Logf("query: %s, args: %v\n", tc.query, tc.args)
+		result, err := db.Exec(tc.insertQuery, tc.args...)
+		s.T().Logf("query: %s, args: %v\n", tc.insertQuery, tc.args)
 		s.r.NoError(err)
 		s.r.NotNil(result)
 		n, _ := result.RowsAffected()
@@ -307,42 +323,6 @@ func (s *DatabendTestSuite) TestExec() {
 
 		s.r.NoError(rows.Close())
 	}
-}
-
-func (s *DatabendTestSuite) TestTime() {
-	db := sql.OpenDB(s.cfg)
-	defer db.Close()
-	insertSql := fmt.Sprintf("INSERT INTO %s (t) VALUES ('%s')", s.table, "2020-10-10")
-	_, err := db.Exec(insertSql)
-	s.r.NoError(err)
-	selectSql := fmt.Sprintf("select t from %s", s.table)
-	rows, err := db.Query(selectSql)
-	//var val *sql.NullTime
-	// var val *time.Time
-	var val time.Time
-	s.r.True(rows.Next())
-	err = rows.Scan(&val)
-	s.r.NoError(err)
-	s.T().Log(val)
-	s.r.NoError(err)
-}
-
-func (s *DatabendTestSuite) TestTimeNull() {
-	db := sql.OpenDB(s.cfg)
-	defer db.Close()
-	insertSql := fmt.Sprintf("INSERT INTO %s (t) VALUES (null)", s.table)
-	_, err := db.Exec(insertSql)
-	s.r.NoError(err)
-	selectSql := fmt.Sprintf("select t from %s", s.table)
-	rows, err := db.Query(selectSql)
-	//var val sql.NullTime
-	//var val *time.Time
-	var val time.Time
-	s.r.True(rows.Next())
-	err = rows.Scan(&val)
-	s.r.NoError(err)
-	s.T().Log(val)
-	s.r.NoError(err)
 }
 
 func (s *DatabendTestSuite) TestServerError() {
