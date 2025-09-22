@@ -1,6 +1,6 @@
 module github.com/datafuselabs/databend-go
 
-go 1.18
+go 1.24.0
 
 require (
 	github.com/BurntSushi/toml v1.2.1
@@ -10,6 +10,7 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0
+	golang.org/x/mod v0.28.0
 )
 
 require (

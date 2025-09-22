@@ -4,10 +4,15 @@ import (
 	"database/sql"
 	"fmt"
 	dc "github.com/datafuselabs/databend-go"
+	"golang.org/x/mod/semver"
 	"time"
 )
 
-func (s *DatabendTestSuite) TestTypes2() {
+func (s *DatabendTestSuite) TestTypes() {
+	if semver.Compare(driverVersion, "v0.8.4") < 0 {
+		return
+	}
+
 	columns := "i64, d, t"
 	input := Table1{
 		I64:  164,

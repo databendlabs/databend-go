@@ -43,7 +43,8 @@ type Table1 struct {
 }
 
 var (
-	dsn = "http://root@localhost:8000?presign=on"
+	dsn           = "http://root@localhost:8000?presign=on"
+	driverVersion = ""
 )
 
 func init() {
@@ -51,6 +52,14 @@ func init() {
 	if s != "" {
 		dsn = s
 	}
+	driverVersion = os.Getenv("DATABEND_GO_VERSION")
+	if driverVersion == "" {
+		driverVersion = "100.0.0"
+	}
+	if strings.HasPrefix(driverVersion, "v") {
+		driverVersion = fmt.Sprintf("v%s", driverVersion)
+	}
+
 	// databend default
 	// dsn = "http://root:@localhost:8000?presign=on"
 
