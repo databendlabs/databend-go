@@ -23,8 +23,10 @@ func (s *DatabendTestSuite) TestTypes() {
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
 
+	result, err := db.Exec("set timezone='UTC'")
+	s.r.NoError(err)
 	insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (?, ?, ?)", s.table, columns)
-	result, err := db.Exec(insertSQL,
+	result, err = db.Exec(insertSQL,
 		input.I64,
 		dc.Date(input.Date),
 		input.Time,
