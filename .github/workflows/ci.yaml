@@ -10,6 +10,12 @@ on:
 
 jobs:
   test:
+    strategy:
+      fail-fast: false
+      matrix:
+        server-version:
+          - "nightly"
+          - "v1.2.790"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -27,6 +33,31 @@ jobs:
       - name: Integration Test
         env:
           TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?sslmode=disable"
+          DATABEND_VERSION: ${{ matrix.server-version }}
+        run: |
+          make integration
+
+  # to avoid block pr of databend
+  test-test-compact:
+    strategy:
+      fail-fast: false
+      matrix:
+        driver-version:
+          - "v0.8.3"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Integration Test
+        env:
+          TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?sslmode=disable"
+          DATABEND_GO_VERSION: ${{ matrix.driver-version }}
         run: |
           make integration
 
@@ -45,7 +76,7 @@ jobs:
             const body = {
               msg_type: 'text',
               content: {
-                text: '⚠️ Databend JDBC Integration Tests Failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+                text: '⚠️ Databend GO Integration Tests Failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
               }
             }
             const response = await fetch(process.env.WEBHOOK_URL, {

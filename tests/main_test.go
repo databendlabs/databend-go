@@ -45,6 +45,7 @@ type Table1 struct {
 var (
 	dsn           = "http://root@localhost:8000?presign=on"
 	driverVersion = ""
+	serverVersion = ""
 )
 
 func init() {
@@ -52,19 +53,26 @@ func init() {
 	if s != "" {
 		dsn = s
 	}
-	driverVersion = os.Getenv("DATABEND_GO_VERSION")
-	if driverVersion == "" {
-		driverVersion = "100.0.0"
-	}
-	if strings.HasPrefix(driverVersion, "v") {
-		driverVersion = fmt.Sprintf("v%s", driverVersion)
-	}
+
+	serverVersion = getVersion("DATABEND_VERSION")
+	driverVersion = getVersion("DATABEND_GO_VERSION")
 
 	// databend default
 	// dsn = "http://root:@localhost:8000?presign=on"
 
 	// add user databend by uncommenting corresponding [[query.users]] section scripts/ci/deploy/config/databend-query-node-1.toml
 	//dsn = "http://databend:databend@localhost:8000?presign=on"
+}
+
+func getVersion(name string) string {
+	v := os.Getenv(name)
+	if v == "" || v == "nightly" {
+		v = "v100.0.0"
+	}
+	if !strings.HasPrefix(v, "v") {
+		v = fmt.Sprintf("v%s", v)
+	}
+	return v
 }
 
 func TestDatabendSuite(t *testing.T) {
