@@ -148,7 +148,7 @@ func (r *nextRows) Next(dest []driver.Value) error {
 		r.latestRow = lineData
 	}
 
-	for j := range lineData {
+	for j := range dest {
 		val := lineData[j]
 		if val == nil {
 			dest[j] = nil
