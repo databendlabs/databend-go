@@ -3,11 +3,11 @@ package godatabend
 import (
 	"context"
 	"database/sql/driver"
-	"errors"
-	"fmt"
 	"io"
 	"reflect"
 	"sync/atomic"
+
+	"github.com/pkg/errors"
 )
 
 var rowsHack = false
@@ -46,7 +46,7 @@ func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse)
 		response = nextResponse
 		if response.Error != nil {
 			_ = dc.rest.CloseQuery(ctx, response)
-			return nil, fmt.Errorf("query error: %+v", response.Error)
+			return nil, errors.Errorf("query error: %+v", response.Error)
 		}
 	}
 	return response, nil
@@ -66,7 +66,7 @@ func parse_schema(fields *[]DataField, opts *ColumnTypeOptions) (*resultSchema, 
 		schema.columns = append(schema.columns, field.Name)
 		parser, err := NewColumnType(field.Type, opts)
 		if err != nil {
-			return nil, fmt.Errorf("newTextRows: failed to create a data parser for the type '%s': %w", field.Type, err)
+			return nil, errors.Wrapf(err, "newTextRows: failed to create a data parser for the type '%s'", field.Type)
 		}
 		schema.types = append(schema.types, parser)
 	}
@@ -75,6 +75,10 @@ func parse_schema(fields *[]DataField, opts *ColumnTypeOptions) (*resultSchema, 
 }
 
 func (dc *DatabendConn) newNextRows(ctx context.Context, resp *QueryResponse) (*nextRows, error) {
+	if len(resp.Data) != 0 && (resp.Schema == nil || len(*resp.Schema) != len(resp.Data[0])) {
+		return nil, errors.New("newNextRows: internal error, data and schema not match")
+	}
+
 	schema, err := parse_schema(resp.Schema, dc.columnTypeOptions())
 	if err != nil {
 		return nil, err
@@ -123,6 +127,10 @@ func (r *nextRows) doClose() error {
 }
 
 func (r *nextRows) Next(dest []driver.Value) error {
+	if len(dest) != len(r.columns) {
+		return errors.New("query error: Next dest must has same size as the Columns() are wide")
+	}
+
 	if atomic.LoadInt32(&r.isClosed) == 1 || r.respData == nil {
 		// If user already called Rows.Close(), Rows.Next() will not get here.
 		// Get here only because we doClose() internally,
@@ -147,19 +155,21 @@ func (r *nextRows) Next(dest []driver.Value) error {
 	if rowsHack {
 		r.latestRow = lineData
 	}
+	if len(lineData) != len(r.columns) {
+		return errors.New("query error: internal error, data and schema not match")
+	}
 
-	for j := range dest {
-		val := lineData[j]
+	for i, val := range lineData {
 		if val == nil {
-			dest[j] = nil
+			dest[i] = nil
 			continue
 		}
-		v, err := r.types[j].Parse(*val)
+		v, err := r.types[i].Parse(*val)
 		if err != nil {
-			r.dc.log("fail to parse field", j, ", error: ", err)
+			r.dc.log("fail to parse field", i, ", error: ", err)
 			return err
 		}
-		dest[j] = v
+		dest[i] = v
 	}
 	return nil
 }
@@ -185,12 +195,11 @@ func (r *nextRows) ColumnTypeNullable(index int) (bool, bool) {
 var _ driver.RowsColumnTypeLength = (*nextRows)(nil)
 
 func (r *nextRows) ColumnTypeLength(index int) (length int64, ok bool) {
-	return 0, false
+	return r.types[index].Length()
 }
 
 var _ driver.RowsColumnTypePrecisionScale = (*nextRows)(nil)
 
 func (r *nextRows) ColumnTypePrecisionScale(index int) (int64, int64, bool) {
-	// TODO: implement this
-	return 0, 0, false
+	return r.types[index].PrecisionScale()
 }
