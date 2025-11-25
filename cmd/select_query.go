@@ -3,14 +3,19 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"reflect"
 
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 
 	dc "github.com/datafuselabs/databend-go"
 )
+
+func fatalf(format string, args ...interface{}) {
+	slog.Error(fmt.Sprintf(format, args...))
+	os.Exit(1)
+}
 
 // getDSN constructs a DSN based on the test connection parameters
 func getDSN() (string, *dc.Config, error) {
@@ -19,7 +24,7 @@ func getDSN() (string, *dc.Config, error) {
 			return value
 		}
 		if failOnMissing {
-			log.Fatalf("%v environment variable is not set.", k)
+			fatalf("%v environment variable is not set.", k)
 		}
 		return ""
 	}
@@ -46,12 +51,12 @@ func getDSN() (string, *dc.Config, error) {
 func main() {
 	dsn, cfg, err := getDSN()
 	if err != nil {
-		log.Fatalf("failed to create DSN from Config: %v, err: %v", cfg, err)
+		fatalf("failed to create DSN from Config: %v, err: %v", cfg, err)
 	}
 
 	db, err := sql.Open("databend", dsn)
 	if err != nil {
-		log.Fatalf("failed to connect. %v, err: %v", dsn, err)
+		fatalf("failed to connect. %v, err: %v", dsn, err)
 	}
 	err = db.Ping()
 	if err != nil {
@@ -61,7 +66,7 @@ func main() {
 	query := "DESC books"
 	rows, err := db.Query(query) // no cancel is allowed
 	if err != nil {
-		log.Fatalf("failed to run a query. %v, err: %v", query, err)
+		fatalf("failed to run a query. %v, err: %v", query, err)
 	}
 	res, err := scanValues(rows)
 	if err != nil {

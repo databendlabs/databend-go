@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
+	"os"
 	"path"
 	"runtime"
-	"time"
-
-	rlog "github.com/sirupsen/logrus"
+	"strings"
+	"sync"
 )
 
 type contextKey string
@@ -22,12 +23,19 @@ const SFSessionUserKey contextKey = "LOG_USER"
 // LogKeys these keys in context should be included in logging messages when using logger.WithContext
 var LogKeys = [...]contextKey{DBSessionIDKey, SFSessionUserKey}
 
-// DBLogger Databend logger interface to expose FieldLogger defined in logrus
+// ContextLogger represents a logger that already captured desired context.
+type ContextLogger interface {
+	Infoln(args ...interface{})
+}
+
+// DBLogger Databend logger interface backed by slog.
 type DBLogger interface {
-	rlog.Ext1FieldLogger
+	Debugf(format string, args ...interface{})
+	Error(args ...interface{})
+	Info(args ...interface{})
 	SetLogLevel(level string) error
-	WithContext(ctx context.Context) *rlog.Entry
 	SetOutput(output io.Writer)
+	WithContext(ctx context.Context) ContextLogger
 }
 
 // DBCallerPrettyfier to provide base file name and function name from calling frame used in SFLogger
@@ -36,263 +44,130 @@ func DBCallerPrettyfier(frame *runtime.Frame) (string, string) {
 }
 
 type defaultLogger struct {
-	inner *rlog.Logger
+	mu        sync.RWMutex
+	levelVar  *slog.LevelVar
+	handlerFn func(io.Writer) slog.Handler
+	inner     *slog.Logger
+	output    io.Writer
+}
+
+// CreateDefaultLogger return a new instance of logger with default config
+func CreateDefaultLogger() DBLogger {
+	levelVar := &slog.LevelVar{}
+	levelVar.Set(slog.LevelInfo)
+
+	replaceAttr := func(groups []string, attr slog.Attr) slog.Attr {
+		if attr.Key == slog.SourceKey {
+			if src, ok := attr.Value.Any().(*slog.Source); ok && src != nil {
+				frame := &runtime.Frame{
+					Function: src.Function,
+					File:     src.File,
+					Line:     src.Line,
+				}
+				function, location := DBCallerPrettyfier(frame)
+				attr.Value = slog.StringValue(strings.TrimSpace(function + " " + location))
+			}
+		}
+		return attr
+	}
+
+	handlerFn := func(w io.Writer) slog.Handler {
+		if w == nil {
+			w = os.Stdout
+		}
+		return slog.NewTextHandler(w, &slog.HandlerOptions{
+			AddSource:   true,
+			Level:       levelVar,
+			ReplaceAttr: replaceAttr,
+		})
+	}
+
+	dLogger := &defaultLogger{
+		levelVar:  levelVar,
+		handlerFn: handlerFn,
+		output:    os.Stdout,
+	}
+	dLogger.inner = slog.New(handlerFn(dLogger.output))
+	return dLogger
+}
+
+func (log *defaultLogger) getLogger() *slog.Logger {
+	log.mu.RLock()
+	defer log.mu.RUnlock()
+	return log.inner
 }
 
 // SetLogLevel set logging level for calling defaultLogger
 func (log *defaultLogger) SetLogLevel(level string) error {
-	actualLevel, err := rlog.ParseLevel(level)
+	lvl, err := parseLevel(level)
 	if err != nil {
 		return err
 	}
-	log.inner.SetLevel(actualLevel)
+	log.levelVar.Set(lvl)
 	return nil
 }
 
-// WithContext return Entry to include fields in context
-func (log *defaultLogger) WithContext(ctx context.Context) *rlog.Entry {
-	fields := context2Fields(ctx)
-	return log.inner.WithFields(*fields)
+func parseLevel(level string) (slog.Level, error) {
+	switch strings.ToLower(level) {
+	case "trace":
+		fallthrough
+	case "debug":
+		return slog.LevelDebug, nil
+	case "info":
+		return slog.LevelInfo, nil
+	case "warn", "warning":
+		return slog.LevelWarn, nil
+	case "error":
+		return slog.LevelError, nil
+	case "dpanic", "panic", "fatal":
+		return slog.LevelError, nil
+	default:
+		return slog.LevelInfo, fmt.Errorf("unknown log level: %s", level)
+	}
 }
 
-// CreateDefaultLogger return a new instance of SFLogger with default config
-func CreateDefaultLogger() DBLogger {
-	var rLogger = rlog.New()
-	var formatter = rlog.TextFormatter{CallerPrettyfier: DBCallerPrettyfier}
-	rLogger.SetReportCaller(true)
-	rLogger.SetFormatter(&formatter)
-	var ret = defaultLogger{inner: rLogger}
-	return &ret //(&ret).(*SFLogger)
-}
-
-// WithField allocates a new entry and adds a field to it.
-// Debug, Print, Info, Warn, Error, Fatal or Panic must be then applied to
-// this new returned entry.
-// If you want multiple fields, use `WithFields`.
-func (log *defaultLogger) WithField(key string, value interface{}) *rlog.Entry {
-	return log.inner.WithField(key, value)
-
-}
-
-// Adds a struct of fields to the log entry. All it does is call `WithField` for
-// each `Field`.
-func (log *defaultLogger) WithFields(fields rlog.Fields) *rlog.Entry {
-	return log.inner.WithFields(fields)
-}
-
-// Add an error as single field to the log entry.  All it does is call
-// `WithError` for the given `error`.
-func (log *defaultLogger) WithError(err error) *rlog.Entry {
-	return log.inner.WithError(err)
-}
-
-// Overrides the time of the log entry.
-func (log *defaultLogger) WithTime(t time.Time) *rlog.Entry {
-	return log.inner.WithTime(t)
-}
-
-func (log *defaultLogger) Logf(level rlog.Level, format string, args ...interface{}) {
-	log.inner.Logf(level, format, args...)
-}
-
-func (log *defaultLogger) Tracef(format string, args ...interface{}) {
-	log.inner.Tracef(format, args...)
-}
-
-func (log *defaultLogger) Debugf(format string, args ...interface{}) {
-	log.inner.Debugf(format, args...)
-}
-
-func (log *defaultLogger) Infof(format string, args ...interface{}) {
-	log.inner.Infof(format, args...)
-}
-
-func (log *defaultLogger) Printf(format string, args ...interface{}) {
-	log.inner.Printf(format, args...)
-}
-
-func (log *defaultLogger) Warnf(format string, args ...interface{}) {
-	log.inner.Warnf(format, args...)
-}
-
-func (log *defaultLogger) Warningf(format string, args ...interface{}) {
-	log.inner.Warningf(format, args...)
-}
-
-func (log *defaultLogger) Errorf(format string, args ...interface{}) {
-	log.inner.Errorf(format, args...)
-}
-
-func (log *defaultLogger) Fatalf(format string, args ...interface{}) {
-	log.inner.Fatalf(format, args...)
-}
-
-func (log *defaultLogger) Panicf(format string, args ...interface{}) {
-	log.inner.Panicf(format, args...)
-}
-
-func (log *defaultLogger) Log(level rlog.Level, args ...interface{}) {
-	log.inner.Log(level, args...)
-}
-
-func (log *defaultLogger) LogFn(level rlog.Level, fn rlog.LogFunction) {
-	log.inner.LogFn(level, fn)
-}
-
-func (log *defaultLogger) Trace(args ...interface{}) {
-	log.inner.Trace(args...)
-}
-
-func (log *defaultLogger) Debug(args ...interface{}) {
-	log.inner.Debug(args...)
+// WithContext return a ContextLogger to include fields in context
+func (log *defaultLogger) WithContext(ctx context.Context) ContextLogger {
+	base := log.getLogger()
+	attrs := context2Attrs(ctx)
+	if len(attrs) > 0 {
+		args := make([]interface{}, len(attrs))
+		for i := range attrs {
+			args[i] = attrs[i]
+		}
+		base = base.With(args...)
+	}
+	return &contextLogger{inner: base}
 }
 
 func (log *defaultLogger) Info(args ...interface{}) {
-	log.inner.Info(args...)
-}
-
-func (log *defaultLogger) Print(args ...interface{}) {
-	log.inner.Print(args...)
-}
-
-func (log *defaultLogger) Warn(args ...interface{}) {
-	log.inner.Warn(args...)
-}
-
-func (log *defaultLogger) Warning(args ...interface{}) {
-	log.inner.Warning(args...)
+	log.getLogger().Info(fmt.Sprint(args...))
 }
 
 func (log *defaultLogger) Error(args ...interface{}) {
-	log.inner.Error(args...)
+	log.getLogger().Error(fmt.Sprint(args...))
 }
 
-func (log *defaultLogger) Fatal(args ...interface{}) {
-	log.inner.Fatal(args...)
+func (log *defaultLogger) Debugf(format string, args ...interface{}) {
+	log.getLogger().Debug(fmt.Sprintf(format, args...))
 }
 
-func (log *defaultLogger) Panic(args ...interface{}) {
-	log.inner.Panic(args...)
-}
-
-func (log *defaultLogger) TraceFn(fn rlog.LogFunction) {
-	log.inner.TraceFn(fn)
-}
-
-func (log *defaultLogger) DebugFn(fn rlog.LogFunction) {
-	log.inner.DebugFn(fn)
-}
-
-func (log *defaultLogger) InfoFn(fn rlog.LogFunction) {
-	log.inner.InfoFn(fn)
-}
-
-func (log *defaultLogger) PrintFn(fn rlog.LogFunction) {
-	log.inner.PrintFn(fn)
-}
-
-func (log *defaultLogger) WarnFn(fn rlog.LogFunction) {
-	log.inner.PrintFn(fn)
-}
-
-func (log *defaultLogger) WarningFn(fn rlog.LogFunction) {
-	log.inner.WarningFn(fn)
-}
-
-func (log *defaultLogger) ErrorFn(fn rlog.LogFunction) {
-	log.inner.ErrorFn(fn)
-}
-
-func (log *defaultLogger) FatalFn(fn rlog.LogFunction) {
-	log.inner.FatalFn(fn)
-}
-
-func (log *defaultLogger) PanicFn(fn rlog.LogFunction) {
-	log.inner.PanicFn(fn)
-}
-
-func (log *defaultLogger) Logln(level rlog.Level, args ...interface{}) {
-	log.inner.Logln(level, args...)
-}
-
-func (log *defaultLogger) Traceln(args ...interface{}) {
-	log.inner.Traceln(args...)
-}
-
-func (log *defaultLogger) Debugln(args ...interface{}) {
-	log.inner.Debugln(args...)
-}
-
-func (log *defaultLogger) Infoln(args ...interface{}) {
-	log.inner.Infoln(args...)
-}
-
-func (log *defaultLogger) Println(args ...interface{}) {
-	log.inner.Println(args...)
-}
-
-func (log *defaultLogger) Warnln(args ...interface{}) {
-	log.inner.Warnln(args...)
-}
-
-func (log *defaultLogger) Warningln(args ...interface{}) {
-	log.inner.Warningln(args...)
-}
-
-func (log *defaultLogger) Errorln(args ...interface{}) {
-	log.inner.Errorln(args...)
-}
-
-func (log *defaultLogger) Fatalln(args ...interface{}) {
-	log.inner.Fatalln(args...)
-}
-
-func (log *defaultLogger) Panicln(args ...interface{}) {
-	log.inner.Panicln(args...)
-}
-
-func (log *defaultLogger) Exit(code int) {
-	log.inner.Exit(code)
-}
-
-// SetLevel sets the logger level.
-func (log *defaultLogger) SetLevel(level rlog.Level) {
-	log.inner.SetLevel(level)
-}
-
-// GetLevel returns the logger level.
-func (log *defaultLogger) GetLevel() rlog.Level {
-	return log.inner.GetLevel()
-}
-
-// AddHook adds a hook to the logger hooks.
-func (log *defaultLogger) AddHook(hook rlog.Hook) {
-	log.inner.AddHook(hook)
-
-}
-
-// IsLevelEnabled checks if the log level of the logger is greater than the level param
-func (log *defaultLogger) IsLevelEnabled(level rlog.Level) bool {
-	return log.inner.IsLevelEnabled(level)
-}
-
-// SetFormatter sets the logger formatter.
-func (log *defaultLogger) SetFormatter(formatter rlog.Formatter) {
-	log.inner.SetFormatter(formatter)
-}
-
-// SetOutput sets the logger output.
 func (log *defaultLogger) SetOutput(output io.Writer) {
-	log.inner.SetOutput(output)
+	if output == nil {
+		return
+	}
+	log.mu.Lock()
+	log.output = output
+	log.inner = slog.New(log.handlerFn(output))
+	log.mu.Unlock()
 }
 
-func (log *defaultLogger) SetReportCaller(reportCaller bool) {
-	log.inner.SetReportCaller(reportCaller)
-}
-
-// SetLogger set a new logger of SFLogger interface for godatabend
-func SetLogger(inLogger *DBLogger) {
-	logger = *inLogger //.(*defaultLogger)
+// SetLogger set a new logger of defaultLogger interface for godatabend
+func SetLogger(inLogger DBLogger) {
+	if inLogger == nil {
+		return
+	}
+	logger = inLogger
 }
 
 // GetLogger return logger that is not public
@@ -300,16 +175,34 @@ func GetLogger() DBLogger {
 	return logger
 }
 
-func context2Fields(ctx context.Context) *rlog.Fields {
-	var fields = rlog.Fields{}
+func context2Attrs(ctx context.Context) []slog.Attr {
+	attrs := make([]slog.Attr, 0, len(LogKeys))
 	if ctx == nil {
-		return &fields
+		return attrs
 	}
 
 	for i := 0; i < len(LogKeys); i++ {
 		if ctx.Value(LogKeys[i]) != nil {
-			fields[string(LogKeys[i])] = ctx.Value(LogKeys[i])
+			attrs = append(attrs, slog.Any(string(LogKeys[i]), ctx.Value(LogKeys[i])))
 		}
 	}
-	return &fields
+	return attrs
+}
+
+type contextLogger struct {
+	inner *slog.Logger
+}
+
+func (c *contextLogger) Infoln(args ...interface{}) {
+	if c == nil || c.inner == nil {
+		return
+	}
+	c.inner.Info(formatLine(args...))
+}
+
+func formatLine(args ...interface{}) string {
+	if len(args) == 0 {
+		return ""
+	}
+	return strings.TrimSuffix(fmt.Sprintln(args...), "\n")
 }
