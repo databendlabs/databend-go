@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/mod/semver"
 	"time"
 
 	dc "github.com/datafuselabs/databend-go"
 )
 
 func (s *DatabendTestSuite) TestResumeQueryWithSessionState() {
+	if semver.Compare(driverVersion, "v0.9.0") < 0 {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -48,6 +52,9 @@ func (s *DatabendTestSuite) TestResumeQueryWithSessionState() {
 }
 
 func (s *DatabendTestSuite) TestSessionSettingLoadWithState() {
+	if semver.Compare(driverVersion, "v0.9.0") < 0 {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
