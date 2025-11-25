@@ -38,7 +38,11 @@ func (c *APIClient) WithState(state *APIClientState) *APIClient {
 }
 
 func (c *APIClient) GetState() *APIClientState {
-	sessionStateJson, _ := c.sessionStateRaw.MarshalJSON()
+	var sessionStateStr string
+	if c.sessionStateRaw != nil {
+		sessionStateJson, _ := c.sessionStateRaw.MarshalJSON()
+		sessionStateStr = string(sessionStateJson)
+	}
 	cookies := make(map[string]*http.Cookie)
 	for _, cookie := range c.cli.Jar.Cookies(nil) {
 		cookies[cookie.Name] = cookie
@@ -47,7 +51,7 @@ func (c *APIClient) GetState() *APIClientState {
 		SessionID:    c.SessionID,
 		RouteHint:    c.routeHint,
 		NodeID:       c.nodeID,
-		SessionState: string(sessionStateJson),
+		SessionState: sessionStateStr,
 		Cookies:      cookies,
 	}
 }
