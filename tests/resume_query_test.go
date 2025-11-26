@@ -1,3 +1,6 @@
+//go:build !resume_query_skip
+// +build !resume_query_skip
+
 package tests
 
 import (

@@ -12,3 +12,6 @@ vet: ## Run go vet against code.
 
 integration:
 	make -C tests integration
+
+compat:
+	make -C tests compat
