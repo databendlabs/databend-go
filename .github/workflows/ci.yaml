@@ -38,7 +38,7 @@ jobs:
           make integration
 
   # to avoid block pr of databend
-  test-test-compact:
+  test-compact:
     strategy:
       fail-fast: false
       matrix:
@@ -54,12 +54,12 @@ jobs:
         with:
           go-version: "1.24"
 
-      - name: Integration Test
+      - name: Compat Test
         env:
           TEST_DATABEND_DSN: "databend://databend:databend@localhost:8000/default?sslmode=disable"
           DATABEND_GO_VERSION: ${{ matrix.driver-version }}
         run: |
-          make integration
+          make compat
 
   notify:
     if: failure()
