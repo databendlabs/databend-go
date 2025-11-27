@@ -3,7 +3,7 @@ import os
 import sys
 from itertools import zip_longest
 
-TARGET_VERSION = "v0.9.0"
+TARGET_VERSION = "v0.9.1"
 SKIP_TAG = "-tags resume_query_skip"
 
 

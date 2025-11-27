@@ -23,7 +23,7 @@ func (tx *databendTx) Commit() (err error) {
 	}
 	// compatible with old server version
 	if tx.dc.rest.sessionState.TxnState != "" {
-		_, err = tx.dc.exec(tx.dc.ctx, "COMMIT")
+		_, err = tx.dc.exec(tx.dc.ctx, "COMMIT", nil)
 		if err != nil {
 			return
 		}
@@ -35,7 +35,7 @@ func (tx *databendTx) Rollback() (err error) {
 	if tx.dc == nil || tx.dc.rest == nil {
 		return driver.ErrBadConn
 	}
-	_, err = tx.dc.exec(tx.dc.ctx, "ROLLBACK")
+	_, err = tx.dc.exec(tx.dc.ctx, "ROLLBACK", nil)
 	if err != nil {
 		return
 	}
