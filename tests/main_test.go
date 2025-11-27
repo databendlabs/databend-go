@@ -120,6 +120,7 @@ func (s *DatabendTestSuite) SetupTest() {
 	s.table = fmt.Sprintf("test_%s_%d", tName, time.Now().Unix())
 	// t.Logf("setup test with table %s", s.table)
 	s.table2 = fmt.Sprintf("test_%s_%d", tName, time.Now().Unix()+1)
+	s.replaceTable = fmt.Sprintf("test_%s_%d", tName, time.Now().Unix()+2)
 
 	_, err := db.Exec(fmt.Sprintf(createTable, s.table))
 	s.r.NoError(err)
