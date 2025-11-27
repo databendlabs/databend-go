@@ -81,10 +81,11 @@ func TestDatabendSuite(t *testing.T) {
 
 type DatabendTestSuite struct {
 	suite.Suite
-	cfg    *dc.Config
-	table  string
-	table2 string
-	r      *require.Assertions
+	cfg          *dc.Config
+	table        string
+	table2       string
+	replaceTable string
+	r            *require.Assertions
 }
 
 func (s *DatabendTestSuite) SetupSuite() {
@@ -119,10 +120,13 @@ func (s *DatabendTestSuite) SetupTest() {
 	s.table = fmt.Sprintf("test_%s_%d", tName, time.Now().Unix())
 	// t.Logf("setup test with table %s", s.table)
 	s.table2 = fmt.Sprintf("test_%s_%d", tName, time.Now().Unix()+1)
+	s.replaceTable = fmt.Sprintf("test_%s_%d", tName, time.Now().Unix()+2)
 
 	_, err := db.Exec(fmt.Sprintf(createTable, s.table))
 	s.r.NoError(err)
 	_, err = db.Exec(fmt.Sprintf(createTable2, s.table2))
+	s.r.NoError(err)
+	_, err = db.Exec(fmt.Sprintf(createTable, s.replaceTable))
 	s.r.NoError(err)
 }
 
@@ -136,6 +140,8 @@ func (s *DatabendTestSuite) TearDownTest() {
 	_, err := db.Exec(fmt.Sprintf("DROP TABLE %s", s.table))
 	s.r.NoError(err)
 	_, err = db.Exec(fmt.Sprintf("DROP TABLE %s", s.table2))
+	s.r.NoError(err)
+	_, err = db.Exec(fmt.Sprintf("DROP TABLE %s", s.replaceTable))
 	s.r.NoError(err)
 }
 
@@ -237,6 +243,36 @@ func (s *DatabendTestSuite) TestBatchInsert() {
 	for i := 0; i < 10; i++ {
 		_, err = batch.Exec(
 			"1234",
+			"2345",
+			"3.1415",
+			"test",
+			"test2",
+			"[4, 5, 6]",
+			"[1, 2, 3]",
+			"2021-01-01",
+			"2021-01-01 00:00:00",
+		)
+		r.NoError(err)
+	}
+
+	err = scope.Commit()
+	r.NoError(err)
+}
+
+func (s *DatabendTestSuite) TestBatchReplaceInto() {
+	r := require.New(s.T())
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
+
+	scope, err := db.Begin()
+	r.NoError(err)
+
+	batch, err := scope.Prepare(fmt.Sprintf("REPLACE INTO %s ON(i64) VALUES", s.replaceTable))
+	r.NoError(err)
+
+	for i := 0; i < 10; i++ {
+		_, err = batch.Exec(
+			i,
 			"2345",
 			"3.1415",
 			"test",
