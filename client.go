@@ -83,9 +83,9 @@ func (c *APIClient) NewDefaultCopyOptions() map[string]string {
 type APIClient struct {
 	SessionID string
 	QuerySeq  int64
-	NodeID    string
-	cli       *http.Client
-	rows      *nextRows
+
+	cli  *http.Client
+	rows *nextRows
 
 	apiEndpoint string
 	host        string
@@ -102,6 +102,7 @@ type APIClient struct {
 	// used for guiding the preferred route for the next following http requests, this is useful for
 	// some cases like query pagination & multi-statements transaction.
 	routeHint string
+	nodeID    string
 
 	statsTracker      QueryStatsTracker
 	accessTokenLoader AccessTokenLoader
@@ -242,14 +243,14 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 	httpReq = httpReq.WithContext(ctx)
 
 	headers, err := c.makeHeaders(ctx)
-	if needSticky && len(c.NodeID) != 0 {
-		headers.Set(DatabendQueryStickyNode, c.NodeID)
+	if needSticky && len(c.nodeID) != 0 {
+		headers.Set(DatabendQueryStickyNode, c.nodeID)
 	}
 	if err != nil {
 		return errors.Wrap(err, "failed to make request headers")
 	}
-	if method == "GET" && len(c.NodeID) != 0 {
-		headers.Set(DatabendQueryIDNode, c.NodeID)
+	if method == "GET" && len(c.nodeID) != 0 {
+		headers.Set(DatabendQueryIDNode, c.nodeID)
 	}
 	headers.Set(contentType, jsonContentType)
 	headers.Set(accept, jsonContentType)
@@ -512,7 +513,7 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	)
 
 	if len(resp.NodeID) != 0 {
-		c.NodeID = resp.NodeID
+		c.nodeID = resp.NodeID
 	}
 	c.trackStats(&resp)
 	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
