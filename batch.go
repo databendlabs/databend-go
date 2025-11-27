@@ -16,7 +16,7 @@ import (
 )
 
 // \x60 represents a backtick
-var httpInsertRe = regexp.MustCompile(`(?i)^(?:INSERT|REPLACE) INTO\s+\x60?([\w.^\(]+)\x60?\s*(\([^\)]*\))?(?:\s+ON\s*\([^\)]*\))?\s+VALUES`)
+var httpInsertRe = regexp.MustCompile(`(?i)^\s*(?:INSERT|REPLACE) INTO\s+\x60?([\w.^\(]+)\x60?(?:\s*\([^\)]*\))?(?:\s+ON\s*\([^\)]*\))?(?:\s*\([^\)]*\))?\s+VALUES`)
 
 type Batch interface {
 	AppendToFile(v []driver.Value) error
