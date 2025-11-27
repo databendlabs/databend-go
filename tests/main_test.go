@@ -272,7 +272,7 @@ func (s *DatabendTestSuite) TestBatchReplaceInto() {
 
 	for i := 0; i < 10; i++ {
 		_, err = batch.Exec(
-			"1234",
+			i,
 			"2345",
 			"3.1415",
 			"test",
