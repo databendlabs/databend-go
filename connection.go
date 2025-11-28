@@ -38,9 +38,10 @@ func (dc *DatabendConn) columnTypeOptions() *ColumnTypeOptions {
 	return opts
 }
 
-func (dc *DatabendConn) exec(ctx context.Context, query string, placeholders *[]int, args ...driver.Value) (driver.Result, error) {
+func (dc *DatabendConn) exec(ctx context.Context, query string, placeholders *[]int, args []driver.Value) (driver.Result, error) {
 	ctx = checkQueryID(ctx)
-	queryResponse, err := dc.rest.QuerySync(ctx, query, placeholders, args)
+	query, err := buildQuery(query, args, placeholders)
+	queryResponse, err := dc.rest.QuerySync(ctx, query)
 	if err != nil {
 		return emptyResult, err
 	}
@@ -53,9 +54,10 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, placeholders *[]
 	return newDatabendResult(affectedRows, 0), nil
 }
 
-func (dc *DatabendConn) query(ctx context.Context, query string, placeholders *[]int, args ...driver.Value) (rows driver.Rows, err error) {
+func (dc *DatabendConn) query(ctx context.Context, query string, placeholders *[]int, args []driver.Value) (rows driver.Rows, err error) {
 	ctx = checkQueryID(ctx)
-	r0, err := dc.rest.StartQuery(ctx, query, placeholders, args)
+	query, err = buildQuery(query, args, placeholders)
+	r0, err := dc.rest.StartQuery(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
@@ -86,7 +88,7 @@ func (dc *DatabendConn) BeginTx(
 	if dc.rest == nil {
 		return nil, driver.ErrBadConn
 	}
-	if _, err := dc.exec(ctx, "BEGIN", nil); err != nil {
+	if _, err := dc.exec(ctx, "BEGIN", nil, nil); err != nil {
 		return nil, err
 	}
 	return &databendTx{dc}, nil
@@ -169,7 +171,7 @@ func (dc *DatabendConn) ExecContext(ctx context.Context, query string, args []dr
 	for i, arg := range args {
 		values[i] = arg.Value
 	}
-	return dc.exec(ctx, query, nil, values...)
+	return dc.exec(ctx, query, nil, values)
 }
 
 func (dc *DatabendConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
@@ -177,7 +179,25 @@ func (dc *DatabendConn) QueryContext(ctx context.Context, query string, args []d
 	for i, arg := range args {
 		values[i] = arg.Value
 	}
-	return dc.query(ctx, query, nil, values...)
+	return dc.query(ctx, query, nil, values)
+}
+
+func (dc *DatabendConn) ExecBatch(ctx context.Context, query string, rows [][]driver.Value) (driver.Result, error) {
+	batch, err := dc.prepareBatch(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	for _, args := range rows {
+		err = batch.AppendToFile(args)
+		if err != nil {
+			return nil, err
+		}
+	}
+	err = batch.BatchInsert()
+	if err != nil {
+		return nil, err
+	}
+	return newDatabendResult(int64(len(rows)), 0), nil
 }
 
 // ExecuteBatch applies batch prepared statement if it exists

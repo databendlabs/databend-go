@@ -38,10 +38,10 @@ func (s *DatabendTestSuite) TestResumeQueryWithSessionState() {
 
 	const settingKey = "max_result_rows"
 	const settingValue = 3
-	_, err := firstClient.QuerySync(ctx, fmt.Sprintf("SET %s = %d", settingKey, settingValue), nil, nil)
+	_, err := firstClient.QuerySync(ctx, fmt.Sprintf("SET %s = %d", settingKey, settingValue))
 	s.Require().NoError(err)
 
-	startResp, err := firstClient.StartQuery(ctx, "SELECT number FROM numbers(5)", nil, nil)
+	startResp, err := firstClient.StartQuery(ctx, "SELECT number FROM numbers(5)")
 	s.Require().NoError(err)
 	s.Require().NotNil(startResp)
 	s.Require().NotEmpty(startResp.NextURI)
@@ -80,7 +80,7 @@ func (s *DatabendTestSuite) TestSessionSettingLoadWithState() {
 	const settingKey = "max_result_rows"
 	const settingValue = 5
 
-	_, err := client.QuerySync(ctx, fmt.Sprintf("SET %s = %d", settingKey, settingValue), nil, nil)
+	_, err := client.QuerySync(ctx, fmt.Sprintf("SET %s = %d", settingKey, settingValue))
 	s.Require().NoError(err)
 
 	state := getState(reflect.ValueOf(client))
@@ -88,7 +88,7 @@ func (s *DatabendTestSuite) TestSessionSettingLoadWithState() {
 
 	client2 := dc.NewAPIClientFromConfig(s.cfg)
 	withState(reflect.ValueOf(client2), state)
-	resp, err := client2.QuerySync(ctx, fmt.Sprintf("SELECT value FROM system.settings WHERE name = '%s'", settingKey), nil, nil)
+	resp, err := client2.QuerySync(ctx, fmt.Sprintf("SELECT value FROM system.settings WHERE name = '%s'", settingKey))
 	s.Require().NoError(err)
 	s.Require().Greater(len(resp.Data), 0)
 	s.Require().Greater(len(resp.Data[0]), 0)
@@ -112,7 +112,7 @@ func (s *DatabendTestSuite) TestResumeQueryWithoutStateFails() {
 	client := dc.NewAPIClientFromConfig(s.cfg)
 	client.MaxRowsPerPage = 1
 
-	startResp, err := client.StartQuery(ctx, "SELECT number FROM numbers(5)", nil, nil)
+	startResp, err := client.StartQuery(ctx, "SELECT number FROM numbers(5)")
 	s.Require().NoError(err)
 	s.Require().NotNil(startResp)
 

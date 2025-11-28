@@ -44,7 +44,7 @@ type Table1 struct {
 }
 
 var (
-	dsn           = "http://root@localhost:8000?presign=on"
+	dsn           = "http://root@localhost:8000?presigned_url_disabled=false"
 	driverVersion = ""
 	serverVersion = ""
 )
@@ -54,6 +54,7 @@ func init() {
 	if s != "" {
 		dsn = s
 	}
+	println(dsn)
 
 	serverVersion = getVersion("DATABEND_VERSION")
 	driverVersion = getVersion("DATABEND_GO_VERSION")
@@ -224,19 +225,23 @@ func (s *DatabendTestSuite) TestSelectMultiPage() {
 	s.r.False(rows.Next())
 }
 
-func (s *DatabendTestSuite) TestBatchInsert() {
+func (s *DatabendTestSuite) TestBatchInsertOld() {
+	if semver.Compare(driverVersion, "v0.9.0") > 0 {
+		return
+	}
+
 	r := require.New(s.T())
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
 
-	scope, err := db.Begin()
+	txn, err := db.Begin()
 	r.NoError(err)
 
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s VALUES", s.table))
+	stmt, err := txn.Prepare(fmt.Sprintf("INSERT INTO %s VALUES", s.table))
 	r.NoError(err)
 
 	for i := 0; i < 10; i++ {
-		_, err = batch.Exec(
+		_, err = stmt.Exec(
 			"1234",
 			"2345",
 			"3.1415",
@@ -250,7 +255,7 @@ func (s *DatabendTestSuite) TestBatchInsert() {
 		r.NoError(err)
 	}
 
-	err = scope.Commit()
+	err = txn.Commit()
 	r.NoError(err)
 }
 

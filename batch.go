@@ -60,10 +60,12 @@ func (b *httpBatch) BatchInsert() error {
 			b.conn.log("delete batch insert file failed: ", err)
 		}
 	}()
+
 	stage, err := b.UploadToStage(context.Background())
 	if err != nil {
 		return errors.Wrap(err, "upload to stage failed")
 	}
+
 	_, err = b.conn.rest.InsertWithStage(b.ctx, b.query, stage, nil, nil)
 	if err != nil {
 		return errors.Wrap(err, "insert with stage failed")

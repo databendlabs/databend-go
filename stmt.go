@@ -21,7 +21,7 @@ func (stmt *databendStmt) NumInput() int {
 }
 
 func (stmt *databendStmt) Exec(args []driver.Value) (driver.Result, error) {
-	return stmt.dc.exec(context.Background(), stmt.query, &stmt.placeholders, args...)
+	return stmt.dc.exec(context.Background(), stmt.query, &stmt.placeholders, args)
 }
 
 func (stmt *databendStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
@@ -29,11 +29,11 @@ func (stmt *databendStmt) ExecContext(ctx context.Context, args []driver.NamedVa
 	for i, arg := range args {
 		values[i] = arg.Value
 	}
-	return stmt.dc.exec(ctx, stmt.query, &stmt.placeholders, values...)
+	return stmt.dc.exec(ctx, stmt.query, &stmt.placeholders, values)
 }
 
 func (stmt *databendStmt) Query(args []driver.Value) (driver.Rows, error) {
-	return stmt.dc.query(context.Background(), stmt.query, &stmt.placeholders, args...)
+	return stmt.dc.query(context.Background(), stmt.query, &stmt.placeholders, args)
 }
 
 func (stmt *databendStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
@@ -41,5 +41,5 @@ func (stmt *databendStmt) QueryContext(ctx context.Context, args []driver.NamedV
 	for i, arg := range args {
 		values[i] = arg.Value
 	}
-	return stmt.dc.query(ctx, stmt.query, &stmt.placeholders, values...)
+	return stmt.dc.query(ctx, stmt.query, &stmt.placeholders, values)
 }
