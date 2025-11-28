@@ -44,7 +44,7 @@ type Table1 struct {
 }
 
 var (
-	dsn           = "http://root@localhost:8000?presigned_url_disabled=true"
+	dsn           = "http://root@localhost:8000?presigned_url_disabled=false"
 	driverVersion = ""
 	serverVersion = ""
 )
@@ -233,26 +233,27 @@ func (s *DatabendTestSuite) TestPrepare() {
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
 
-	txn, err := db.Begin()
+	stmt, err := db.Prepare(fmt.Sprintf("INSERT INTO %s VALUES (?)", s.table2))
+	r.NoError(err)
+	res, err := stmt.Exec("a")
+	r.NoError(err)
+	n, err := res.RowsAffected()
+	r.NoError(err)
+	r.Equal(n, int64(1))
+	r.NoError(err)
+	_, err = stmt.Exec("b")
+	r.NoError(err)
+	_, err = stmt.Exec("b")
 	r.NoError(err)
 
-	stmt, err := txn.Prepare(fmt.Sprintf("INSERT INTO %s VALUES (?)", s.table2))
-	r.NoError(err)
-	_, err = stmt.Exec(10)
-	r.NoError(err)
-	_, err = stmt.Exec(11)
-	r.NoError(err)
-	_, err = stmt.Exec(11)
+	stmt, err = db.Prepare(fmt.Sprintf("SELECT count(*) FROM %s WHERE a = ?", s.table2))
 	r.NoError(err)
 
-	stmt, err = db.Prepare(fmt.Sprintf("SELECT count(*) FROM %s WHERE id = ?", s.table2))
-	r.NoError(err)
-
-	rows, err := stmt.Query(11)
+	rows, err := stmt.Query("b")
 	r.NoError(err)
 	result, err := scanValues(rows)
 	r.NoError(err)
-	r.Equal([][]interface{}{{2}}, result)
+	r.Equal([][]interface{}{{"2"}}, result)
 }
 
 func (s *DatabendTestSuite) TestBatchInsertOld() {
