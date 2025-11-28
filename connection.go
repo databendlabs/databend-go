@@ -39,6 +39,9 @@ func (dc *DatabendConn) columnTypeOptions() *ColumnTypeOptions {
 func (dc *DatabendConn) exec(ctx context.Context, query string, placeholders *[]int, args []driver.Value) (driver.Result, error) {
 	ctx = checkQueryID(ctx)
 	query, err := buildQuery(query, args, placeholders)
+	if err != nil {
+		return emptyResult, err
+	}
 	queryResponse, err := dc.rest.QuerySync(ctx, query)
 	if err != nil {
 		return emptyResult, err

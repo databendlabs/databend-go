@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	errStmtCosed = errors.New("stmt is already closed")
+	errStmtClosed = errors.New("stmt is already closed")
 )
 
 type databendStmt struct {
@@ -28,14 +28,14 @@ func (stmt *databendStmt) NumInput() int {
 
 func (stmt *databendStmt) Exec(args []driver.Value) (driver.Result, error) {
 	if stmt.closed {
-		return nil, errStmtCosed
+		return nil, errStmtClosed
 	}
 	return stmt.dc.exec(context.Background(), stmt.query, &stmt.placeholders, args)
 }
 
 func (stmt *databendStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
 	if stmt.closed {
-		return nil, errStmtCosed
+		return nil, errStmtClosed
 	}
 	values := make([]driver.Value, len(args))
 	for i, arg := range args {
@@ -46,14 +46,14 @@ func (stmt *databendStmt) ExecContext(ctx context.Context, args []driver.NamedVa
 
 func (stmt *databendStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if stmt.closed {
-		return nil, errStmtCosed
+		return nil, errStmtClosed
 	}
 	return stmt.dc.query(context.Background(), stmt.query, &stmt.placeholders, args)
 }
 
 func (stmt *databendStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
 	if stmt.closed {
-		return nil, errStmtCosed
+		return nil, errStmtClosed
 	}
 	values := make([]driver.Value, len(args))
 	for i, arg := range args {
