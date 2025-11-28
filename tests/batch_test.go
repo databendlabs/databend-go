@@ -35,22 +35,13 @@ func (s *DatabendTestSuite) TestBatchInsert() {
 		{int64(1), 1.2},
 		{int64(2), 2.2},
 	}
-
-	err = conn.Raw(func(rawConn interface{}) error {
-		bendConn := rawConn.(*godatabend.DatabendConn)
-		query := fmt.Sprintf("insert into %s values", tableName)
-		r, err := bendConn.ExecBatch(context.Background(), query, batch)
-		if err != nil {
-			return err
-		}
-		n, err := r.RowsAffected()
-		s.r.Equal(n, int64(2))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
+	query := fmt.Sprintf("insert into %s values", tableName)
+	stmt, err := godatabend.PrepareBatch(query)
+	r, err := stmt.ExecBatch(context.Background(), conn, batch)
 	s.r.NoError(err)
+	n, err := r.RowsAffected()
+	s.r.NoError(err)
+	s.r.Equal(n, int64(2))
 
 	rows, err := db.Query("select * from " + tableName)
 	s.r.NoError(err)

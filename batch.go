@@ -3,6 +3,7 @@ package godatabend
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/csv"
 	"fmt"
@@ -17,6 +18,32 @@ import (
 
 // \x60 represents a backtick
 var httpInsertRe = regexp.MustCompile(`(?i)^INSERT INTO\s+\x60?([\w.^\(]+)\x60?\s*(\([^\)]*\))? VALUES`)
+
+type BatchStmt struct {
+	query string
+}
+
+func PrepareBatch(query string) (stmt *BatchStmt, err error) {
+	stmt = &BatchStmt{
+		query: query,
+	}
+	return stmt, nil
+}
+
+func (stmt *BatchStmt) ExecBatch(ctx context.Context, conn *sql.Conn, rows [][]driver.Value) (result driver.Result, err error) {
+	err = conn.Raw(func(rawConn interface{}) error {
+		bendConn := rawConn.(*DatabendConn)
+		result, err = bendConn.ExecBatch(ctx, stmt.query, rows)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
 
 type Batch interface {
 	AppendToFile(v []driver.Value) error

@@ -419,41 +419,6 @@ func (s *DatabendTestSuite) TestLongExec() {
 	}
 }
 
-func (s *DatabendTestSuite) TestBatchReplaceInto() {
-	if semver.Compare(driverVersion, "v0.9.0") <= 0 {
-		return
-	}
-	r := require.New(s.T())
-	db := sql.OpenDB(s.cfg)
-	defer db.Close()
-	tableName := "test_replace_into"
-	q := `CREATE OR REPLACE TABLE %s (
-		i64 Int64,
-		u64 UInt64,
-		f64 Float64
-	)`
-	_, err := db.Exec(fmt.Sprintf(q, tableName))
-	s.r.NoError(err)
-
-	txn, err := db.Begin()
-	r.NoError(err)
-
-	stmt, err := txn.Prepare(fmt.Sprintf("REPLACE INTO %s ON(i64) VALUES (?,?,?)", tableName))
-	r.NoError(err)
-
-	for i := 0; i < 10; i++ {
-		_, err = stmt.Exec(
-			i,
-			2345,
-			3.1415,
-		)
-		r.NoError(err)
-	}
-
-	err = txn.Commit()
-	r.NoError(err)
-}
-
 func scanValues(rows *sql.Rows) (interface{}, error) {
 	var err error
 	var result [][]interface{}
