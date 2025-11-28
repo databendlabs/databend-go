@@ -53,7 +53,7 @@ type Batch interface {
 func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (Batch, error) {
 	matches := httpInsertRe.FindStringSubmatch(query)
 	if len(matches) < 2 {
-		return nil, errors.New("cannot get table name from query")
+		return nil, errors.New("PrepareBatch only support INSERT/REPLACE")
 	}
 	csvFileName := fmt.Sprintf("%s/%s.csv", os.TempDir(), uuid.NewString())
 
@@ -100,16 +100,29 @@ func (b *httpBatch) BatchInsert() error {
 	return nil
 }
 
-func (b *httpBatch) AppendToFile(v []driver.Value) error {
+func (b *httpBatch) AppendToFile(row []driver.Value) error {
 	csvFile, err := os.OpenFile(b.batchFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
 	defer csvFile.Close()
 
-	lineData := make([]string, 0, len(v))
-	for i := range v {
-		lineData = append(lineData, fmt.Sprintf("%v", v[i]))
+	lineData := make([]string, 0, len(row))
+	for _, v := range row {
+		var s string
+		switch v.(type) {
+		case string:
+			s = v.(string)
+		case time.Time:
+			s = v.(time.Time).Format(timeFormat)
+		default:
+			bytes, err := textEncode.Encode(v)
+			if err != nil {
+				return err
+			}
+			s = string(bytes)
+		}
+		lineData = append(lineData, s)
 	}
 	writer := csv.NewWriter(csvFile)
 	err = writer.Write(lineData)

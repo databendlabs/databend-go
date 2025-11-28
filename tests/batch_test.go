@@ -10,6 +10,7 @@ import (
 	"fmt"
 	godatabend "github.com/datafuselabs/databend-go"
 	"golang.org/x/mod/semver"
+	"time"
 )
 
 func (s *DatabendTestSuite) TestBatchInsert() {
@@ -23,7 +24,11 @@ func (s *DatabendTestSuite) TestBatchInsert() {
 	tableName := "test_batch_insert"
 	q := `CREATE OR REPLACE TABLE %s (
 		i64 Int64,
-		f64 Float64
+		f64 Float64,
+		s   String,
+		a8  Array(UInt8),
+		d   Date,
+		t   DateTime
 	)`
 	_, err := db.Exec(fmt.Sprintf(q, tableName))
 	s.r.NoError(err)
@@ -31,9 +36,10 @@ func (s *DatabendTestSuite) TestBatchInsert() {
 	conn, err := db.Conn(context.Background())
 	s.r.NoError(err)
 
+	time1 := time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC)
 	batch := [][]driver.Value{
-		{int64(1), 1.2},
-		{int64(2), 2.2},
+		{1, 1.2, "s1", "[1, 2, 3]", "2021-01-01", "2021-01-01 00:00:00"},
+		{2, 2.2, "s1", []int{1, 2, 3}, time1, time1},
 	}
 	query := fmt.Sprintf("insert into %s values", tableName)
 	stmt, err := godatabend.PrepareBatch(query)
@@ -43,11 +49,18 @@ func (s *DatabendTestSuite) TestBatchInsert() {
 	s.r.NoError(err)
 	s.r.Equal(n, int64(2))
 
-	rows, err := db.Query("select * from " + tableName)
+	rows, err := db.Query("select * from " + tableName + " where i64 = 2")
 	s.r.NoError(err)
 	result, err := scanValues(rows)
 	s.r.NoError(err)
-	exp := [][]interface{}{{"1", "1.2"}, {"2", "2.2"}}
+	exp := [][]interface{}{{
+		"2",
+		"2.2",
+		"s1",
+		"[1,2,3]",
+		time1,
+		time1,
+	}}
 	s.r.Equal(exp, result)
 	_ = rows.Close()
 
