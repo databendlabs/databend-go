@@ -20,14 +20,12 @@ const (
 )
 
 type DatabendConn struct {
-	ctx         context.Context
-	cfg         *Config
-	cancel      context.CancelFunc
-	closed      int32
-	logger      *log.Logger
-	rest        *APIClient
-	batchMode   bool
-	batchInsert func() error
+	ctx    context.Context
+	cfg    *Config
+	cancel context.CancelFunc
+	closed int32
+	logger *log.Logger
+	rest   *APIClient
 }
 
 func (dc *DatabendConn) columnTypeOptions() *ColumnTypeOptions {
@@ -57,6 +55,9 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, placeholders *[]
 func (dc *DatabendConn) query(ctx context.Context, query string, placeholders *[]int, args []driver.Value) (rows driver.Rows, err error) {
 	ctx = checkQueryID(ctx)
 	query, err = buildQuery(query, args, placeholders)
+	if err != nil {
+		return nil, err
+	}
 	r0, err := dc.rest.StartQuery(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
@@ -198,17 +199,6 @@ func (dc *DatabendConn) ExecBatch(ctx context.Context, query string, rows [][]dr
 		return nil, err
 	}
 	return newDatabendResult(int64(len(rows)), 0), nil
-}
-
-// ExecuteBatch applies batch prepared statement if it exists
-func (dc *DatabendConn) ExecuteBatch() (err error) {
-	if dc.batchInsert == nil {
-		return nil
-	}
-	defer func() {
-		dc.batchInsert = nil
-	}()
-	return dc.batchInsert()
 }
 
 // checkQueryID checks if query_id exists in context, if not, generate a new one
