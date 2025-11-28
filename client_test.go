@@ -2,7 +2,6 @@ package godatabend
 
 import (
 	"context"
-	"database/sql/driver"
 	"encoding/json"
 	"testing"
 
@@ -97,7 +96,7 @@ func TestDoQuery(t *testing.T) {
 	}
 	queryId := "mockid1"
 	ctx := context.WithValue(context.Background(), ContextKeyQueryID, queryId)
-	resp, err := c.StartQuery(ctx, "SELECT 1", []driver.Value{})
+	resp, err := c.StartQuery(ctx, "SELECT 1")
 	assert.NoError(t, err)
 	assert.Equal(t, "mockid1", gotQueryID)
 	assert.Equal(t, resp.ID, queryId)
