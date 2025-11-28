@@ -18,16 +18,15 @@ func buildQuery(query string, args []driver.Value, placeholders *[]int) (string,
 			return "", err
 		}
 		return q, nil
-	} else {
-		if len(args) > 0 && args[0] != nil {
-			result, err := interpolateParams(query, args)
-			if err != nil {
-				return result, errors.Wrap(err, "buildRequest: failed to interpolate params")
-			}
-			return result, nil
-		}
-		return query, nil
 	}
+	if len(args) > 0 && args[0] != nil {
+		result, err := interpolateParams(query, args)
+		if err != nil {
+			return result, errors.Wrap(err, "buildRequest: failed to interpolate params")
+		}
+		return result, nil
+	}
+	return query, nil
 }
 
 func placeholders(query string) []int {
