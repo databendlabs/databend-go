@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/mod/semver"
 	"os"
 	"strings"
 	"testing"
@@ -43,7 +44,7 @@ type Table1 struct {
 }
 
 var (
-	dsn           = "http://root@localhost:8000?presign=on"
+	dsn           = "http://root@localhost:8000?presigned_url_disabled=false"
 	driverVersion = ""
 	serverVersion = ""
 )
@@ -223,19 +224,55 @@ func (s *DatabendTestSuite) TestSelectMultiPage() {
 	s.r.False(rows.Next())
 }
 
-func (s *DatabendTestSuite) TestBatchInsert() {
+func (s *DatabendTestSuite) TestPrepare() {
+	if semver.Compare(driverVersion, "v0.9.0") <= 0 {
+		return
+	}
+
 	r := require.New(s.T())
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
 
-	scope, err := db.Begin()
+	stmt, err := db.Prepare(fmt.Sprintf("INSERT INTO %s VALUES (?)", s.table2))
+	r.NoError(err)
+	res, err := stmt.Exec("a")
+	r.NoError(err)
+	n, err := res.RowsAffected()
+	r.NoError(err)
+	r.Equal(n, int64(1))
+	r.NoError(err)
+	_, err = stmt.Exec("b")
+	r.NoError(err)
+	_, err = stmt.Exec("b")
 	r.NoError(err)
 
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s VALUES", s.table))
+	stmt, err = db.Prepare(fmt.Sprintf("SELECT count(*) FROM %s WHERE a = ?", s.table2))
+	r.NoError(err)
+
+	rows, err := stmt.Query("b")
+	r.NoError(err)
+	result, err := scanValues(rows)
+	r.NoError(err)
+	r.Equal([][]interface{}{{"2"}}, result)
+}
+
+func (s *DatabendTestSuite) TestBatchInsertOld() {
+	if semver.Compare(driverVersion, "v0.9.0") > 0 {
+		return
+	}
+
+	r := require.New(s.T())
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
+
+	txn, err := db.Begin()
+	r.NoError(err)
+
+	stmt, err := txn.Prepare(fmt.Sprintf("INSERT INTO %s VALUES", s.table))
 	r.NoError(err)
 
 	for i := 0; i < 10; i++ {
-		_, err = batch.Exec(
+		_, err = stmt.Exec(
 			"1234",
 			"2345",
 			"3.1415",
@@ -249,7 +286,7 @@ func (s *DatabendTestSuite) TestBatchInsert() {
 		r.NoError(err)
 	}
 
-	err = scope.Commit()
+	err = txn.Commit()
 	r.NoError(err)
 }
 

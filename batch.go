@@ -3,6 +3,7 @@ package godatabend
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/csv"
 	"fmt"
@@ -16,7 +17,33 @@ import (
 )
 
 // \x60 represents a backtick
-var httpInsertRe = regexp.MustCompile(`(?i)^INSERT INTO\s+\x60?([\w.^\(]+)\x60?\s*(\([^\)]*\))? VALUES`)
+var httpInsertRe = regexp.MustCompile(`(?i)^\s*(?:INSERT|REPLACE) INTO\s+\x60?([\w.^\(]+)\x60?(?:\s*\([^\)]*\))?(?:\s+ON\s*\([^\)]*\))?(?:\s*\([^\)]*\))?\s+VALUES`)
+
+type BatchStmt struct {
+	query string
+}
+
+func PrepareBatch(query string) (stmt *BatchStmt, err error) {
+	stmt = &BatchStmt{
+		query: query,
+	}
+	return stmt, nil
+}
+
+func (stmt *BatchStmt) ExecBatch(ctx context.Context, conn *sql.Conn, rows [][]driver.Value) (result driver.Result, err error) {
+	err = conn.Raw(func(rawConn interface{}) error {
+		bendConn := rawConn.(*DatabendConn)
+		result, err = bendConn.ExecBatch(ctx, stmt.query, rows)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
 
 type Batch interface {
 	AppendToFile(v []driver.Value) error
@@ -26,7 +53,7 @@ type Batch interface {
 func (dc *DatabendConn) prepareBatch(ctx context.Context, query string) (Batch, error) {
 	matches := httpInsertRe.FindStringSubmatch(query)
 	if len(matches) < 2 {
-		return nil, errors.New("cannot get table name from query")
+		return nil, errors.New("PrepareBatch only support INSERT/REPLACE")
 	}
 	csvFileName := fmt.Sprintf("%s/%s.csv", os.TempDir(), uuid.NewString())
 
@@ -60,10 +87,12 @@ func (b *httpBatch) BatchInsert() error {
 			b.conn.log("delete batch insert file failed: ", err)
 		}
 	}()
+
 	stage, err := b.UploadToStage(context.Background())
 	if err != nil {
 		return errors.Wrap(err, "upload to stage failed")
 	}
+
 	_, err = b.conn.rest.InsertWithStage(b.ctx, b.query, stage, nil, nil)
 	if err != nil {
 		return errors.Wrap(err, "insert with stage failed")
@@ -71,16 +100,29 @@ func (b *httpBatch) BatchInsert() error {
 	return nil
 }
 
-func (b *httpBatch) AppendToFile(v []driver.Value) error {
+func (b *httpBatch) AppendToFile(row []driver.Value) error {
 	csvFile, err := os.OpenFile(b.batchFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
 	defer csvFile.Close()
 
-	lineData := make([]string, 0, len(v))
-	for i := range v {
-		lineData = append(lineData, fmt.Sprintf("%v", v[i]))
+	lineData := make([]string, 0, len(row))
+	for _, v := range row {
+		var s string
+		switch v.(type) {
+		case string:
+			s = v.(string)
+		case time.Time:
+			s = v.(time.Time).Format(timeFormat)
+		default:
+			bytes, err := textEncode.Encode(v)
+			if err != nil {
+				return err
+			}
+			s = string(bytes)
+		}
+		lineData = append(lineData, s)
 	}
 	writer := csv.NewWriter(csvFile)
 	err = writer.Write(lineData)

@@ -1,51 +1,63 @@
 package godatabend
 
 import (
+	"context"
 	"database/sql/driver"
+	"errors"
+)
 
-	"github.com/pkg/errors"
+var (
+	errStmtClosed = errors.New("stmt is already closed")
 )
 
 type databendStmt struct {
-	dc *DatabendConn
-	//closed  int32
-	//prefix  string
-	//pattern string
-	//index   []int
-	//args    [][]driver.Value
-	query string
-	batch Batch
+	dc           *DatabendConn
+	query        string
+	placeholders []int
+	closed       bool
 }
 
 func (stmt *databendStmt) Close() error {
-	logger.WithContext(stmt.dc.ctx).Infoln("Stmt.Close")
-	return stmt.dc.Close()
+	stmt.closed = true
+	return nil
 }
 
 func (stmt *databendStmt) NumInput() int {
-	logger.WithContext(stmt.dc.ctx).Infoln("Stmt.NumInput")
-	return -1
+	return len(stmt.placeholders)
 }
 
 func (stmt *databendStmt) Exec(args []driver.Value) (driver.Result, error) {
-	//1. trans args to csv file
-	err := stmt.batch.AppendToFile(args)
-	if err != nil {
-		return nil, err
+	if stmt.closed {
+		return nil, errStmtClosed
 	}
-
-	return driver.RowsAffected(0), nil
+	return stmt.dc.exec(context.Background(), stmt.query, &stmt.placeholders, args)
 }
 
-//func (stmt *databendStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
-//	values := make([]driver.Value, 0, len(args))
-//	for _, v := range args {
-//		values = append(values, v.Value)
-//	}
-//	return stmt.Exec(values)
-//}
+func (stmt *databendStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+	if stmt.closed {
+		return nil, errStmtClosed
+	}
+	values := make([]driver.Value, len(args))
+	for i, arg := range args {
+		values[i] = arg.Value
+	}
+	return stmt.dc.exec(ctx, stmt.query, &stmt.placeholders, values)
+}
 
 func (stmt *databendStmt) Query(args []driver.Value) (driver.Rows, error) {
-	logger.WithContext(stmt.dc.ctx).Infoln("Stmt.Query")
-	return nil, errors.New("only Exec method supported in batch mode")
+	if stmt.closed {
+		return nil, errStmtClosed
+	}
+	return stmt.dc.query(context.Background(), stmt.query, &stmt.placeholders, args)
+}
+
+func (stmt *databendStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+	if stmt.closed {
+		return nil, errStmtClosed
+	}
+	values := make([]driver.Value, len(args))
+	for i, arg := range args {
+		values[i] = arg.Value
+	}
+	return stmt.dc.query(ctx, stmt.query, &stmt.placeholders, values)
 }

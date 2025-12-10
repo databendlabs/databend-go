@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"database/sql/driver"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -436,19 +435,8 @@ func (c *APIClient) PollUntilQueryEnd(ctx context.Context, resp *QueryResponse) 
 	return resp, nil
 }
 
-func buildQuery(query string, params []driver.Value) (string, error) {
-	if len(params) > 0 && params[0] != nil {
-		result, err := interpolateParams(query, params)
-		if err != nil {
-			return result, errors.Wrap(err, "buildRequest: failed to interpolate params")
-		}
-		return result, nil
-	}
-	return query, nil
-}
-
-func (c *APIClient) QuerySync(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
-	resp, err := c.StartQuery(ctx, query, args)
+func (c *APIClient) QuerySync(ctx context.Context, query string) (*QueryResponse, error) {
+	resp, err := c.StartQuery(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -531,14 +519,10 @@ func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest
 	return &resp, nil
 }
 
-func (c *APIClient) StartQuery(ctx context.Context, query string, args []driver.Value) (*QueryResponse, error) {
-	q, err := buildQuery(query, args)
-	logger.Debugf("start query: ", q)
-	if err != nil {
-		return nil, err
-	}
+func (c *APIClient) StartQuery(ctx context.Context, query string) (*QueryResponse, error) {
+	logger.Debugf("start query: ", query)
 	request := QueryRequest{
-		SQL:        q,
+		SQL:        query,
 		Pagination: c.getPaginationConfig(),
 		Session:    c.getSessionStateRaw(),
 	}
@@ -632,7 +616,7 @@ func (c *APIClient) UploadToStage(ctx context.Context, stage *StageLocation, inp
 
 func (c *APIClient) GetPresignedURL(ctx context.Context, stage *StageLocation) (*PresignedResponse, error) {
 	presignUploadSQL := fmt.Sprintf("PRESIGN UPLOAD %s", stage)
-	resp, err := c.QuerySync(ctx, presignUploadSQL, nil)
+	resp, err := c.QuerySync(ctx, presignUploadSQL)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query presign url")
 	}

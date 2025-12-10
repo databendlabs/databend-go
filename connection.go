@@ -15,20 +15,17 @@ import (
 
 const (
 	accept          = "Accept"
-	authorization   = "Authorization"
 	contentType     = "Content-Type"
 	jsonContentType = "application/json; charset=utf-8"
 )
 
 type DatabendConn struct {
-	ctx         context.Context
-	cfg         *Config
-	cancel      context.CancelFunc
-	closed      int32
-	logger      *log.Logger
-	rest        *APIClient
-	batchMode   bool
-	batchInsert func() error
+	ctx    context.Context
+	cfg    *Config
+	cancel context.CancelFunc
+	closed int32
+	logger *log.Logger
+	rest   *APIClient
 }
 
 func (dc *DatabendConn) columnTypeOptions() *ColumnTypeOptions {
@@ -39,9 +36,13 @@ func (dc *DatabendConn) columnTypeOptions() *ColumnTypeOptions {
 	return opts
 }
 
-func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.Value) (driver.Result, error) {
+func (dc *DatabendConn) exec(ctx context.Context, query string, placeholders *[]int, args []driver.Value) (driver.Result, error) {
 	ctx = checkQueryID(ctx)
-	queryResponse, err := dc.rest.QuerySync(ctx, query, args)
+	query, err := buildQuery(query, args, placeholders)
+	if err != nil {
+		return emptyResult, err
+	}
+	queryResponse, err := dc.rest.QuerySync(ctx, query)
 	if err != nil {
 		return emptyResult, err
 	}
@@ -54,9 +55,13 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, args ...driver.V
 	return newDatabendResult(affectedRows, 0), nil
 }
 
-func (dc *DatabendConn) query(ctx context.Context, query string, args ...driver.Value) (rows driver.Rows, err error) {
+func (dc *DatabendConn) query(ctx context.Context, query string, placeholders *[]int, args []driver.Value) (rows driver.Rows, err error) {
 	ctx = checkQueryID(ctx)
-	r0, err := dc.rest.StartQuery(ctx, query, args)
+	query, err = buildQuery(query, args, placeholders)
+	if err != nil {
+		return nil, err
+	}
+	r0, err := dc.rest.StartQuery(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
@@ -87,7 +92,7 @@ func (dc *DatabendConn) BeginTx(
 	if dc.rest == nil {
 		return nil, driver.ErrBadConn
 	}
-	if _, err := dc.exec(ctx, "BEGIN"); err != nil {
+	if _, err := dc.exec(ctx, "BEGIN", nil, nil); err != nil {
 		return nil, err
 	}
 	return &databendTx{dc}, nil
@@ -111,21 +116,16 @@ func (dc *DatabendConn) Prepare(query string) (driver.Stmt, error) {
 	return dc.PrepareContext(dc.ctx, query)
 }
 
-func (dc *DatabendConn) prepare(ctx context.Context, query string) (*databendStmt, error) {
+func (dc *DatabendConn) prepare(_ context.Context, query string) (*databendStmt, error) {
 	logger.WithContext(dc.ctx).Infoln("Prepare")
 	if dc.rest == nil {
 		return nil, driver.ErrBadConn
 	}
-	batch, err := dc.prepareBatch(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	dc.batchInsert = batch.BatchInsert
-	dc.batchMode = true
+	placeholders := placeholders(query)
 	stmt := &databendStmt{
-		dc:    dc,
-		query: query,
-		batch: batch,
+		dc:           dc,
+		query:        query,
+		placeholders: placeholders,
 	}
 	return stmt, nil
 }
@@ -175,7 +175,7 @@ func (dc *DatabendConn) ExecContext(ctx context.Context, query string, args []dr
 	for i, arg := range args {
 		values[i] = arg.Value
 	}
-	return dc.exec(ctx, query, values...)
+	return dc.exec(ctx, query, nil, values)
 }
 
 func (dc *DatabendConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
@@ -183,18 +183,25 @@ func (dc *DatabendConn) QueryContext(ctx context.Context, query string, args []d
 	for i, arg := range args {
 		values[i] = arg.Value
 	}
-	return dc.query(ctx, query, values...)
+	return dc.query(ctx, query, nil, values)
 }
 
-// ExecuteBatch applies batch prepared statement if it exists
-func (dc *DatabendConn) ExecuteBatch() (err error) {
-	if dc.batchInsert == nil {
-		return nil
+func (dc *DatabendConn) ExecBatch(ctx context.Context, query string, rows [][]driver.Value) (driver.Result, error) {
+	batch, err := dc.prepareBatch(ctx, query)
+	if err != nil {
+		return nil, err
 	}
-	defer func() {
-		dc.batchInsert = nil
-	}()
-	return dc.batchInsert()
+	for _, args := range rows {
+		err = batch.AppendToFile(args)
+		if err != nil {
+			return nil, err
+		}
+	}
+	err = batch.BatchInsert()
+	if err != nil {
+		return nil, err
+	}
+	return newDatabendResult(int64(len(rows)), 0), nil
 }
 
 // checkQueryID checks if query_id exists in context, if not, generate a new one
