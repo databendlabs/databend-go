@@ -56,7 +56,9 @@ func (s *DatabendTestSuite) TestBatchInsert() {
 	s.r.NoError(err)
 	s.r.Equal(n, int64(2))
 
-	rows, err := db.Query("select * from " + tableName + " where i64 = 2")
+	//_, err = db.Exec("set global timezone = 'Asia/Shanghai'")
+	//s.r.NoError(err)
+	rows, err := db.Query("settings(timezone='UTC') select * from " + tableName + " where i64 = 2")
 	s.r.NoError(err)
 	result, err := scanValues(rows)
 	s.r.NoError(err)
