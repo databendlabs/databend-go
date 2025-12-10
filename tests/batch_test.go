@@ -33,12 +33,12 @@ func (s *DatabendTestSuite) TestBatchInsert() {
 	_, err := db.Exec(fmt.Sprintf(q, tableName))
 	s.r.NoError(err)
 
-	rs, err := db.Query("show settings like 'timezone'")
+	rs, err := db.Query("select value from system.settings where name='timezone'")
 	s.r.NoError(err)
 	rs.Next()
 	var tz string
 	rs.Scan(&tz)
-	println("timezone for TestBatchInsert is: ", tz)
+	println("timezone for TestBatchInsert is:", tz)
 
 	conn, err := db.Conn(context.Background())
 	s.r.NoError(err)
