@@ -32,15 +32,21 @@ type DataField struct {
 	Type string `json:"type"`
 }
 
+type Settings struct {
+	TimeZone             string `json:"timezone"`
+	GeometryOutputFormat string `json:"geometry_output_format"`
+}
+
 type QueryResponse struct {
-	ID      string           `json:"id"`
-	NodeID  string           `json:"node_id"`
-	Session *json.RawMessage `json:"session"`
-	Schema  *[]DataField     `json:"schema"`
-	Data    [][]*string      `json:"data"`
-	State   string           `json:"state"`
-	Error   *QueryError      `json:"error"`
-	Stats   *QueryStats      `json:"stats"`
+	ID       string           `json:"id"`
+	NodeID   string           `json:"node_id"`
+	Session  *json.RawMessage `json:"session"`
+	Settings *Settings        `json:"settings"`
+	Schema   *[]DataField     `json:"schema"`
+	Data     [][]*string      `json:"data"`
+	State    string           `json:"state"`
+	Error    *QueryError      `json:"error"`
+	Stats    *QueryStats      `json:"stats"`
 	// TODO: Affect rows
 	StatsURI string `json:"stats_uri"`
 	FinalURI string `json:"final_uri"`

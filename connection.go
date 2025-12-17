@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -28,9 +29,11 @@ type DatabendConn struct {
 	rest   *APIClient
 }
 
-func (dc *DatabendConn) columnTypeOptions() *ColumnTypeOptions {
+func (dc *DatabendConn) columnTypeOptions(location *time.Location) *ColumnTypeOptions {
 	opts := defaultColumnTypeOptions()
-	if dc.cfg.Location != nil {
+	if location != nil {
+		opts.SetTimezone(location)
+	} else if dc.cfg.Location != nil {
 		opts.SetTimezone(dc.cfg.Location)
 	}
 	return opts

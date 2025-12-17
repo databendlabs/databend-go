@@ -6,6 +6,7 @@ import (
 	"io"
 	"reflect"
 	"sync/atomic"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -74,17 +75,24 @@ func parse_schema(fields *[]DataField, opts *ColumnTypeOptions) (*resultSchema, 
 	return schema, nil
 }
 
-func (dc *DatabendConn) newNextRows(ctx context.Context, resp *QueryResponse) (*nextRows, error) {
+func (dc *DatabendConn) newNextRows(ctx context.Context, resp *QueryResponse) (rows *nextRows, err error) {
 	if len(resp.Data) != 0 && (resp.Schema == nil || len(*resp.Schema) != len(resp.Data[0])) {
 		return nil, errors.New("newNextRows: internal error, data and schema not match")
 	}
+	var location *time.Location
+	if resp.Settings != nil && resp.Settings.TimeZone != "" {
+		location, err = time.LoadLocation(resp.Settings.TimeZone)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	schema, err := parse_schema(resp.Schema, dc.columnTypeOptions())
+	schema, err := parse_schema(resp.Schema, dc.columnTypeOptions(location))
 	if err != nil {
 		return nil, err
 	}
 
-	rows := &nextRows{
+	rows = &nextRows{
 		dc:           dc,
 		ctx:          ctx,
 		respData:     resp,
