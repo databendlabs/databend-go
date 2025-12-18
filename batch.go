@@ -115,6 +115,8 @@ func (b *httpBatch) AppendToFile(row []driver.Value) error {
 			s = v.(string)
 		case time.Time:
 			s = v.(time.Time).Format(timeFormat)
+		case date:
+			s = time.Time(v.(date)).Format(dateFormat)
 		default:
 			bytes, err := textEncode.Encode(v)
 			if err != nil {
