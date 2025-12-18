@@ -161,7 +161,7 @@ func (cfg *Config) AddParams(params map[string]string) (err error) {
 	if ok1 {
 		if ok2 {
 			if location != timezone {
-				return fmt.Errorf("bad DSN: location(%s) != timezone(%s)", location, timezone)
+				return fmt.Errorf("bad DSN: location(%s) conflict with timezone(%s)", location, timezone)
 			}
 		} else {
 			params["timezone"] = location
