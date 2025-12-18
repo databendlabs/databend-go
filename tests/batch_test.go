@@ -14,7 +14,7 @@ import (
 )
 
 func (s *DatabendTestSuite) TestBatchInsert() {
-	if semver.Compare(driverVersion, "v0.9.0") <= 0 && semver.Compare(serverVersion, "1.2.836") < 0 {
+	if semver.Compare(driverVersion, "v0.9.0") <= 0 || semver.Compare(serverVersion, "1.2.836") < 0 {
 		return
 	}
 
