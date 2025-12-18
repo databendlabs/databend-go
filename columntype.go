@@ -135,7 +135,6 @@ func (c timestampColumnType) Desc() *TypeDesc {
 }
 
 type dateColumnType struct {
-	tz *time.Location
 	columnTypeDefault
 	isNullable
 }
@@ -144,7 +143,8 @@ func (c dateColumnType) Parse(s string) (driver.Value, error) {
 	if c.checkNull(s) {
 		return nil, nil
 	}
-	return time.ParseInLocation("2006-01-02", s, c.tz)
+	// always return Time with location UTC
+	return time.Parse("2006-01-02", s)
 }
 
 func (c dateColumnType) ScanType() reflect.Type {
@@ -225,7 +225,7 @@ func NewColumnType(dbType string, opts *ColumnTypeOptions) (ColumnType, error) {
 	case "Timestamp":
 		return &timestampColumnType{isNullable: nullable, tz: opts.timezone}, nil
 	case "Date":
-		return &dateColumnType{isNullable: nullable, tz: opts.timezone}, nil
+		return &dateColumnType{isNullable: nullable}, nil
 	case "Decimal":
 		precision, err := strconv.ParseInt(desc.Args[0].Name, 10, 64)
 		if err != nil {
