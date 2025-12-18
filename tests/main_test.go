@@ -450,7 +450,7 @@ func (s *DatabendTestSuite) TestLongExec() {
 	}
 }
 
-func scanValues(rows *sql.Rows) (interface{}, error) {
+func scanValues(rows *sql.Rows) ([][]interface{}, error) {
 	var err error
 	var result [][]interface{}
 	ct, err := rows.ColumnTypes()
