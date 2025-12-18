@@ -112,3 +112,13 @@ type tuple struct {
 func (t tuple) Value() (driver.Value, error) {
 	return textEncode.Encode(t)
 }
+
+func Interval(t time.Duration) driver.Valuer {
+	return interval(t)
+}
+
+type interval time.Duration
+
+func (d interval) Value() (driver.Value, error) {
+	return []byte(quote(strconv.FormatInt(time.Duration(d).Microseconds(), 10))), nil
+}
