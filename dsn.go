@@ -154,6 +154,22 @@ func (cfg *Config) FormatDSN() string {
 
 func (cfg *Config) AddParams(params map[string]string) (err error) {
 	cfg.makeDefaultConfigValue()
+
+	// treat location as an alias of timezone
+	location, ok1 := params["location"]
+	timezone, ok2 := params["timezone"]
+	if ok1 {
+		if ok2 {
+			if location != timezone {
+				return fmt.Errorf("bad DSN: location(%s) != timezone(%s)", location, timezone)
+			}
+		} else {
+			params["timezone"] = location
+		}
+	} else if ok2 {
+		params["location"] = timezone
+	}
+
 	for k, v := range params {
 		switch k {
 		case "timeout":
