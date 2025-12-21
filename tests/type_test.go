@@ -137,3 +137,61 @@ func (s *DatabendTestSuite) TestTimestamp() {
 		})
 	}
 }
+
+func (s *DatabendTestSuite) TestTimestampTz() {
+	if semver.Compare(driverVersion, "v0.9.0") <= 0 || semver.Compare(serverVersion, "1.2.844") < 0 {
+		return
+	}
+
+	type testCase struct {
+		name string
+		// scan should get Time with location in settings
+		setting *time.Location
+		data    *time.Location
+	}
+	locShanghai, _ := time.LoadLocation("Asia/Shanghai")
+	locLos, _ := time.LoadLocation("America/Los_Angeles")
+	input := time.Date(2025, 1, 16, 2, 1, 26, 739219000, locLos)
+
+	testCases := []testCase{
+		{name: "1", setting: time.UTC},
+		{name: "2", setting: locShanghai},
+	}
+
+	for i, tc := range testCases {
+		s.Run(tc.name, func() {
+			db := sql.OpenDB(s.cfg)
+			defer db.Close()
+
+			tableName := fmt.Sprintf("test_tz_%s_%d", s.table, i)
+			result, err := db.Exec(fmt.Sprintf("create or replace table %s (t Timestamp_TZ)", tableName))
+			s.r.NoError(err)
+
+			result, err = db.Exec(fmt.Sprintf("set timezone='%v'", tc.setting.String()))
+			s.r.NoError(err)
+
+			insertSQL := fmt.Sprintf("INSERT INTO %s VALUES (?)", tableName)
+			result, err = db.Exec(insertSQL, input)
+			s.r.NoError(err)
+			n, err := result.RowsAffected()
+			s.r.NoError(err)
+			s.r.Equal(int64(1), n)
+
+			selectSQL := fmt.Sprintf("select * from %s", tableName)
+			rows, err := db.Query(selectSQL)
+			s.r.NoError(err)
+			s.r.True(rows.Next())
+			s.r.NoError(err)
+
+			var output time.Time
+			err = rows.Scan(&output)
+			s.r.NoError(err)
+
+			s.r.Equal(input.UnixMicro(), output.UnixMicro())
+			name, offset := output.Zone()
+			s.r.Equal(-8*3600, offset)
+			s.r.Equal("", name)
+			s.r.NoError(rows.Close())
+		})
+	}
+}

@@ -134,6 +134,31 @@ func (c timestampColumnType) Desc() *TypeDesc {
 	return &TypeDesc{Name: "Timestamp", Nullable: bool(c.isNullable)}
 }
 
+type timestampTzColumnType struct {
+	columnTypeDefault
+	isNullable
+}
+
+func (c timestampTzColumnType) Parse(s string) (driver.Value, error) {
+	if c.checkNull(s) {
+		return nil, nil
+	}
+	println(s)
+	return time.Parse("2006-01-02 15:04:05.999999 -0700", s)
+}
+
+func (c timestampTzColumnType) ScanType() reflect.Type {
+	return reflectTypeTime
+}
+
+func (c timestampTzColumnType) DatabaseTypeName() string {
+	return c.wrapName("Timestamp_Tz")
+}
+
+func (c timestampTzColumnType) Desc() *TypeDesc {
+	return &TypeDesc{Name: "Timestamp_Tz", Nullable: bool(c.isNullable)}
+}
+
 type dateColumnType struct {
 	columnTypeDefault
 	isNullable
@@ -224,6 +249,8 @@ func NewColumnType(dbType string, opts *ColumnTypeOptions) (ColumnType, error) {
 		return &simpleColumnType{dbType: nullable.wrapName(desc.Name), scanType: reflectTypeFloat64, nullable: desc.Nullable, parseNull: parseNull}, nil
 	case "Timestamp":
 		return &timestampColumnType{isNullable: nullable, tz: opts.timezone}, nil
+	case "Timestamp_Tz":
+		return &timestampTzColumnType{isNullable: nullable}, nil
 	case "Date":
 		return &dateColumnType{isNullable: nullable}, nil
 	case "Decimal":
