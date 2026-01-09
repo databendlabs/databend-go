@@ -110,13 +110,13 @@ func (b *httpBatch) AppendToFile(row []driver.Value) error {
 	lineData := make([]string, 0, len(row))
 	for _, v := range row {
 		var s string
-		switch v.(type) {
+		switch v := v.(type) {
 		case string:
-			s = v.(string)
+			s = v
 		case time.Time:
-			s = v.(time.Time).Format(timeFormat)
+			s = v.Format(timeFormat)
 		case date:
-			s = time.Time(v.(date)).Format(dateFormat)
+			s = time.Time(v).Format(dateFormat)
 		default:
 			bytes, err := textEncode.Encode(v)
 			if err != nil {
