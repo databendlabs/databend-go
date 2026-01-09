@@ -342,9 +342,10 @@ func (c *APIClient) authMethod() AuthMethod {
 func (c *APIClient) makeHeaders(ctx context.Context) (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
-	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", version))
+	pkgVersion := strings.TrimSpace(version)
+	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", pkgVersion))
 	if userAgent, ok := ctx.Value(ContextUserAgentID).(string); ok {
-		headers.Set(UserAgent, fmt.Sprintf("databend-go/%s/%s", version, userAgent))
+		headers.Set(UserAgent, fmt.Sprintf("databend-go/%s/%s", pkgVersion, userAgent))
 	}
 	if c.tenant != "" {
 		headers.Set(DatabendTenantHeader, c.tenant)
