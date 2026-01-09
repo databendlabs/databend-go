@@ -24,15 +24,18 @@ func (c *APIClient) WithState(state *APIClientState) *APIClient {
 		c.cli.Jar.SetCookies(nil, []*http.Cookie{{Name: name, Value: cookie.Value}})
 	}
 	if state.SessionState != "" {
+		var sessionStateRaw json.RawMessage
 		var sessionState SessionState
-		err := json.Unmarshal([]byte(state.SessionState), &sessionState)
+		err := json.Unmarshal([]byte(state.SessionState), &sessionStateRaw)
+		if err != nil {
+			return c
+		}
+		c.sessionStateRaw = &sessionStateRaw
+		err = json.Unmarshal([]byte(state.SessionState), &sessionState)
 		if err != nil {
 			return c
 		}
 		c.sessionState = &sessionState
-		sessionStateRawJson, _ := json.Marshal(sessionState)
-		sessionStateRaw := json.RawMessage(sessionStateRawJson)
-		c.sessionStateRaw = &sessionStateRaw
 	}
 	return c
 }
