@@ -41,5 +41,6 @@ var logger = CreateDefaultLogger()
 
 func init() {
 	sql.Register("databend", DatabendDriver{})
+	sql.Register("lake", DatabendDriver{})
 	_ = logger.SetLogLevel("error")
 }
