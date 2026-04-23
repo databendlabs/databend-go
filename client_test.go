@@ -3,6 +3,7 @@ package godatabend
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/google/uuid"
@@ -100,4 +101,32 @@ func TestDoQuery(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "mockid1", gotQueryID)
 	assert.Equal(t, resp.ID, queryId)
+}
+
+func TestClientStateRoundTripRestoresQuerySeq(t *testing.T) {
+	c := APIClient{
+		SessionID:    "session-1",
+		QuerySeq:     7,
+		routeHint:    "route-1",
+		nodeID:       "node-1",
+		sessionState: &SessionState{Settings: map[string]string{"max_result_rows": "5"}},
+	}
+	sessionStateRaw, err := json.Marshal(c.sessionState)
+	require.NoError(t, err)
+	raw := json.RawMessage(sessionStateRaw)
+	c.sessionStateRaw = &raw
+	c.cli = NewAPIHttpClientFromConfig(NewConfig())
+	c.cli.Jar.SetCookies(nil, []*http.Cookie{{Name: "session_id", Value: "cookie-session"}})
+
+	state := c.GetState()
+	require.NotNil(t, state)
+	assert.Equal(t, int64(7), state.QuerySeq)
+
+	restored := NewAPIClientFromConfig(NewConfig())
+	restored.WithState(state)
+	assert.Equal(t, "session-1", restored.SessionID)
+	assert.Equal(t, int64(7), restored.QuerySeq)
+
+	restored.NextQuery()
+	assert.Equal(t, "session-1.8", restored.GetQueryID())
 }

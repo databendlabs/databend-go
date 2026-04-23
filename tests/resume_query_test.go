@@ -115,6 +115,9 @@ func (s *DatabendTestSuite) TestResumeQueryWithoutStateFails() {
 	startResp, err := client.StartQuery(ctx, "SELECT number FROM numbers(5)")
 	s.Require().NoError(err)
 	s.Require().NotNil(startResp)
+	defer func() {
+		s.NoError(client.CloseQuery(context.Background(), startResp))
+	}()
 
 	client2 := dc.NewAPIClientFromConfig(s.cfg)
 	client2.MaxRowsPerPage = 1
