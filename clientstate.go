@@ -7,6 +7,7 @@ import (
 
 type APIClientState struct {
 	SessionID    string
+	QuerySeq     int64
 	RouteHint    string
 	NodeID       string
 	SessionState string
@@ -18,6 +19,7 @@ func (c *APIClient) WithState(state *APIClientState) *APIClient {
 		return c
 	}
 	c.SessionID = state.SessionID
+	c.QuerySeq = state.QuerySeq
 	c.routeHint = state.RouteHint
 	c.nodeID = state.NodeID
 	for name, cookie := range state.Cookies {
@@ -52,6 +54,7 @@ func (c *APIClient) GetState() *APIClientState {
 	}
 	return &APIClientState{
 		SessionID:    c.SessionID,
+		QuerySeq:     c.QuerySeq,
 		RouteHint:    c.routeHint,
 		NodeID:       c.nodeID,
 		SessionState: sessionStateStr,
