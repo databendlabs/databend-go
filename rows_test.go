@@ -2,6 +2,7 @@ package godatabend
 
 import (
 	"context"
+	"database/sql/driver"
 	"reflect"
 	"testing"
 
@@ -32,6 +33,30 @@ func TestTextRows(t *testing.T) {
 	assert.Equal(t, reflect.TypeOf(""), rows.ColumnTypeScanType(2))
 	assert.Equal(t, "Int32", rows.ColumnTypeDatabaseTypeName(0))
 	assert.Equal(t, "String", rows.ColumnTypeDatabaseTypeName(2))
+}
+
+func TestNextRowsUsesTypedRowsWithoutTextData(t *testing.T) {
+	dc := &DatabendConn{
+		cfg: &Config{},
+	}
+	rows, err := dc.newNextRows(context.Background(), &QueryResponse{
+		typedRows: [][]driver.Value{{"7", "alice"}},
+		Schema: &[]DataField{
+			{Name: "age", Type: "Int32"},
+			{Name: "name", Type: "String"},
+		},
+		State: "Succeeded",
+	})
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	dest := make([]driver.Value, 2)
+	if !assert.NoError(t, rows.Next(dest)) {
+		return
+	}
+	assert.Equal(t, "7", dest[0])
+	assert.Equal(t, "alice", dest[1])
 }
 
 func strPtr(s string) *string {

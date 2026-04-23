@@ -31,7 +31,7 @@ func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse)
 	if response.Error != nil {
 		return nil, response.Error
 	}
-	for !response.ReadFinished() && len(response.Data) == 0 && response.Error == nil {
+	for !response.ReadFinished() && response.bufferedRowCount() == 0 && response.Error == nil {
 		nextResponse, err := dc.rest.PollQuery(ctx, response.NextURI)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -78,6 +78,14 @@ func parse_schema(fields *[]DataField, opts *ColumnTypeOptions) (*resultSchema, 
 func (dc *DatabendConn) newNextRows(ctx context.Context, resp *QueryResponse) (rows *nextRows, err error) {
 	if len(resp.Data) != 0 && (resp.Schema == nil || len(*resp.Schema) != len(resp.Data[0])) {
 		return nil, errors.New("newNextRows: internal error, data and schema not match")
+	}
+	if resp.typedRows == nil {
+		if err := materializeJSONQueryRows(resp); err != nil {
+			return nil, err
+		}
+	}
+	if len(resp.typedRows) != 0 && (resp.Schema == nil || len(*resp.Schema) != len(resp.typedRows[0])) {
+		return nil, errors.New("newNextRows: internal error, typed data and schema not match")
 	}
 	var location *time.Location
 	if resp.Settings != nil && resp.Settings.TimeZone != "" {
@@ -145,7 +153,7 @@ func (r *nextRows) Next(dest []driver.Value) error {
 		// only when call Rows.Next() again after it return false.
 		return io.EOF
 	}
-	if len(r.respData.Data) == 0 {
+	if r.respData.bufferedRowCount() == 0 {
 		var err error
 		r.respData, err = waitForData(r.ctx, r.dc, r.respData)
 		if err != nil {
@@ -153,16 +161,32 @@ func (r *nextRows) Next(dest []driver.Value) error {
 		}
 	}
 
-	if len(r.respData.Data) == 0 {
+	if r.respData.bufferedRowCount() == 0 {
 		_ = r.doClose()
 		return io.EOF
 	}
 
-	lineData := r.respData.Data[0]
-	r.respData.Data = r.respData.Data[1:]
+	var lineData []*string
+	if len(r.respData.Data) > 0 {
+		lineData = r.respData.Data[0]
+		r.respData.Data = r.respData.Data[1:]
+	}
 	if rowsHack {
 		r.latestRow = lineData
 	}
+	var typedRow []driver.Value
+	if len(r.respData.typedRows) > 0 {
+		typedRow = r.respData.typedRows[0]
+		r.respData.typedRows = r.respData.typedRows[1:]
+	}
+	if len(typedRow) != 0 {
+		if len(typedRow) != len(r.columns) {
+			return errors.New("query error: internal error, typed data and schema not match")
+		}
+		copy(dest, typedRow)
+		return nil
+	}
+
 	if len(lineData) != len(r.columns) {
 		return errors.New("query error: internal error, data and schema not match")
 	}

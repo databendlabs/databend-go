@@ -18,6 +18,7 @@ func (c *APIClient) WithState(state *APIClientState) *APIClient {
 	if state == nil {
 		return c
 	}
+	c.stateRestored = true
 	c.SessionID = state.SessionID
 	c.QuerySeq = state.QuerySeq
 	c.routeHint = state.RouteHint
