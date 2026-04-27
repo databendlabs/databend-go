@@ -1,6 +1,7 @@
 package godatabend
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -38,15 +39,16 @@ type Settings struct {
 }
 
 type QueryResponse struct {
-	ID       string           `json:"id"`
-	NodeID   string           `json:"node_id"`
-	Session  *json.RawMessage `json:"session"`
-	Settings *Settings        `json:"settings"`
-	Schema   *[]DataField     `json:"schema"`
-	Data     [][]*string      `json:"data"`
-	State    string           `json:"state"`
-	Error    *QueryError      `json:"error"`
-	Stats    *QueryStats      `json:"stats"`
+	ID        string           `json:"id"`
+	NodeID    string           `json:"node_id"`
+	Session   *json.RawMessage `json:"session"`
+	Settings  *Settings        `json:"settings"`
+	Schema    *[]DataField     `json:"schema"`
+	Data      [][]*string      `json:"data"`
+	typedRows [][]driver.Value
+	State     string      `json:"state"`
+	Error     *QueryError `json:"error"`
+	Stats     *QueryStats `json:"stats"`
 	// TODO: Affect rows
 	StatsURI string `json:"stats_uri"`
 	FinalURI string `json:"final_uri"`
@@ -56,6 +58,41 @@ type QueryResponse struct {
 
 func (r *QueryResponse) ReadFinished() bool {
 	return r.NextURI == "" || strings.Contains(r.NextURI, "/final")
+}
+
+func (r *QueryResponse) bufferedRowCount() int {
+	if r == nil {
+		return 0
+	}
+	if r.typedRows != nil {
+		return len(r.typedRows)
+	}
+	return len(r.Data)
+}
+
+func (r *QueryResponse) cellValue(rowIdx, colIdx int) (driver.Value, bool) {
+	if r == nil {
+		return nil, false
+	}
+	if len(r.typedRows) > rowIdx && len(r.typedRows[rowIdx]) > colIdx {
+		return r.typedRows[rowIdx][colIdx], true
+	}
+	if len(r.Data) > rowIdx && len(r.Data[rowIdx]) > colIdx && r.Data[rowIdx][colIdx] != nil {
+		return *r.Data[rowIdx][colIdx], true
+	}
+	return nil, false
+}
+
+func (r *QueryResponse) cellString(rowIdx, colIdx int) (string, bool) {
+	value, ok := r.cellValue(rowIdx, colIdx)
+	if !ok || value == nil {
+		return "", false
+	}
+	text, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	return text, true
 }
 
 type QueryStats struct {
@@ -81,6 +118,8 @@ type QueryRequest struct {
 	Session    *json.RawMessage  `json:"session,omitempty"`
 	SQL        string            `json:"sql"`
 	Pagination *PaginationConfig `json:"pagination,omitempty"`
+	// ArrowResultVersionMax requests Arrow HTTP result transport when set.
+	ArrowResultVersionMax *int64 `json:"arrow_result_version_max,omitempty"`
 
 	// Default to true
 	// StringFields  bool  `json:"string_fields,omitempty"`
@@ -133,9 +172,9 @@ type ServerInfo struct {
 func parseAffectedRows(queryResp *QueryResponse) (int64, error) {
 	// the schema can be `number of rows inserted`, `number of rows deleted`, `number of rows updated` when sql start with  `insert`, `delete`, `update`
 	if queryResp.Schema != nil && len(*queryResp.Schema) > 0 && strings.Contains((*queryResp.Schema)[0].Name, "number of rows") {
-		if len(queryResp.Data) > 0 && len(queryResp.Data[0]) > 0 && queryResp.Data[0][0] != nil {
+		if value, ok := queryResp.cellString(0, 0); ok {
 			var affectedRows int64
-			if err := json.Unmarshal([]byte(*queryResp.Data[0][0]), &affectedRows); err != nil {
+			if err := json.Unmarshal([]byte(value), &affectedRows); err != nil {
 				return 0, fmt.Errorf("failed to parse affected rows: %w", err)
 			}
 			return affectedRows, nil

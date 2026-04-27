@@ -89,6 +89,20 @@ func TestFormatDSNWithParams(t *testing.T) {
 	assert.Contains(t, dsn, "param2=value2")
 }
 
+func TestParseDSNWithQueryResultFormat(t *testing.T) {
+	cfg, err := ParseDSN("databend+http://root:@localhost:8000/default?query_result_format=arrow")
+	require.NoError(t, err)
+	assert.Equal(t, QueryResultFormatArrow, cfg.QueryResultFormat)
+}
+
+func TestFormatDSNWithQueryResultFormat(t *testing.T) {
+	cfg := NewConfig()
+	cfg.QueryResultFormat = QueryResultFormatArrow
+
+	dsn := cfg.FormatDSN()
+	assert.Contains(t, dsn, "query_result_format=arrow")
+}
+
 func TestParseDSN(t *testing.T) {
 	t.Run("test simple dns parse", func(t *testing.T) {
 		dsn := "databend+http://app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&access_token_file=/tmp/file1"

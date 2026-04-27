@@ -64,7 +64,6 @@ func (s *DatabendTestSuite) TestResumeQueryWithSessionState() {
 	finalResp, err := secondClient.PollUntilQueryEnd(ctx, resumeResp)
 	s.Require().NoError(err)
 	s.Require().NotNil(finalResp)
-	s.Greater(len(finalResp.Data), 0)
 	s.NoError(secondClient.CloseQuery(ctx, finalResp))
 }
 

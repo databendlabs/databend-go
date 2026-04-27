@@ -17,6 +17,11 @@ const (
 	SSL_MODE_DISABLE = "disable"
 )
 
+const (
+	QueryResultFormatJSON  = "json"
+	QueryResultFormatArrow = "arrow"
+)
+
 // Config is a set of configuration parameters
 type Config struct {
 	Tenant    string // Tenant
@@ -59,14 +64,16 @@ type Config struct {
 	// databend version should >= v1.2.345-nightly
 	EmptyFieldAs        string
 	EnableOpenTelemetry bool
+	QueryResultFormat   string
 }
 
 // NewConfig creates a new config with default values
 func NewConfig() *Config {
 	return &Config{
-		Host:     fmt.Sprintf("%s:443", defaultDomain),
-		Location: time.UTC,
-		Params:   make(map[string]string),
+		Host:              fmt.Sprintf("%s:443", defaultDomain),
+		Location:          time.UTC,
+		Params:            make(map[string]string),
+		QueryResultFormat: QueryResultFormatJSON,
 	}
 }
 
@@ -134,6 +141,9 @@ func (cfg *Config) FormatDSN() string {
 	}
 	if cfg.EnableOpenTelemetry {
 		query.Set("enable_otel", "true")
+	}
+	if cfg.QueryResultFormat != "" && cfg.QueryResultFormat != QueryResultFormatJSON {
+		query.Set("query_result_format", cfg.QueryResultFormat)
 	}
 	if cfg.PresignedURLDisabled {
 		query.Set("presigned_url_disabled", "1")
@@ -207,6 +217,8 @@ func (cfg *Config) AddParams(params map[string]string) (err error) {
 			cfg.SSLMode = v
 		case "enable_otel":
 			cfg.EnableOpenTelemetry, err = strconv.ParseBool(v)
+		case "query_result_format":
+			cfg.QueryResultFormat, err = normalizeQueryResultFormat(v)
 		case "default_format", "query", "database":
 			return fmt.Errorf("unknown option '%s'", k)
 		default:
@@ -220,6 +232,20 @@ func (cfg *Config) AddParams(params map[string]string) (err error) {
 func (cfg *Config) makeDefaultConfigValue() {
 	if cfg.EmptyFieldAs == "" {
 		cfg.EmptyFieldAs = "string"
+	}
+	if cfg.QueryResultFormat == "" {
+		cfg.QueryResultFormat = QueryResultFormatJSON
+	}
+}
+
+func normalizeQueryResultFormat(v string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", QueryResultFormatJSON:
+		return QueryResultFormatJSON, nil
+	case QueryResultFormatArrow:
+		return QueryResultFormatArrow, nil
+	default:
+		return "", fmt.Errorf("invalid query_result_format: %s", v)
 	}
 }
 

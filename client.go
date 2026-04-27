@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/avast/retry-go"
@@ -111,6 +112,13 @@ type APIClient struct {
 	MaxRowsPerPage       int64
 	PresignedURLDisabled bool
 	EmptyFieldAs         string
+	queryResultFormat    string
+	stateRestored        bool
+
+	httpArrowCapabilityMu      sync.Mutex
+	httpArrowCapabilityChecked bool
+	httpArrowEnabled           bool
+	serverVersion              string
 
 	// only used for testing mocks
 	doRequestFunc func(method, path string, req interface{}, resp interface{}) error
@@ -205,6 +213,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		MaxRowsPerPage:       cfg.MaxRowsPerPage,
 		PresignedURLDisabled: cfg.PresignedURLDisabled,
 		EmptyFieldAs:         cfg.EmptyFieldAs,
+		queryResultFormat:    cfg.QueryResultFormat,
 	}
 }
 
@@ -415,8 +424,12 @@ func (c *APIClient) applySessionState(response *QueryResponse) {
 }
 
 func (c *APIClient) PollUntilQueryEnd(ctx context.Context, resp *QueryResponse) (*QueryResponse, error) {
+	return c.pollUntilQueryEndWithTransport(ctx, resp, queryTransportAuto)
+}
+
+func (c *APIClient) pollUntilQueryEndWithTransport(ctx context.Context, resp *QueryResponse, transport queryTransport) (*QueryResponse, error) {
 	for !resp.ReadFinished() {
-		nextResponse, err := c.PollQuery(ctx, resp.NextURI)
+		nextResponse, err := c.pollQueryWithTransport(ctx, resp.NextURI, transport)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				// context might be canceled due to timeout or canceled. if it's canceled, we need call
@@ -427,17 +440,27 @@ func (c *APIClient) PollUntilQueryEnd(ctx context.Context, resp *QueryResponse) 
 			return nil, err
 		}
 		data := resp.Data
+		typedRows := resp.typedRows
 		resp = nextResponse
 		if resp.Error != nil {
 			return nil, errors.Wrap(resp.Error, "query page has error")
 		}
 		resp.Data = append(data, resp.Data...)
+		resp.typedRows = append(typedRows, resp.typedRows...)
 	}
 	return resp, nil
 }
 
 func (c *APIClient) QuerySync(ctx context.Context, query string) (*QueryResponse, error) {
-	resp, err := c.StartQuery(ctx, query)
+	return c.querySyncWithTransport(ctx, query, queryTransportAuto)
+}
+
+func (c *APIClient) querySyncWithTransport(ctx context.Context, query string, transport queryTransport) (*QueryResponse, error) {
+	if transport == queryTransportAuto && c.stateRestored && c.queryResultFormat == QueryResultFormatArrow {
+		transport = queryTransportJSON
+	}
+
+	resp, err := c.startQuery(ctx, query, transport)
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +470,7 @@ func (c *APIClient) QuerySync(ctx context.Context, query string) (*QueryResponse
 	if resp.Error != nil {
 		return nil, fmt.Errorf("query error: %+v", resp.Error)
 	}
-	return c.PollUntilQueryEnd(ctx, resp)
+	return c.pollUntilQueryEndWithTransport(ctx, resp, transport)
 }
 
 func (c *APIClient) doRetry(f retry.RetryableFunc, t RequestType) error {
@@ -484,70 +507,158 @@ func (c *APIClient) doRetry(f retry.RetryableFunc, t RequestType) error {
 }
 
 func (c *APIClient) startQueryRequest(ctx context.Context, request *QueryRequest) (*QueryResponse, error) {
-	c.NextQuery()
-	// fmt.Printf("start query %v %v\n", c.GetQueryID(), request.SQL)
+	return c.startQueryRequestWithTransport(ctx, request, queryTransportAuto)
+}
 
-	if !c.inActiveTransaction() {
-		c.routeHint = randRouteHint()
+func (c *APIClient) finalizeQueryResponse(resp *QueryResponse, respHeaders http.Header, err error) (*QueryResponse, error) {
+	if err == nil {
+		if materializeErr := materializeJSONQueryRows(resp); materializeErr != nil {
+			return nil, errors.Wrap(materializeErr, "failed to materialize query rows")
+		}
 	}
-
-	path := "/v1/query"
-	var (
-		resp        QueryResponse
-		respHeaders http.Header
-	)
-	err := c.doRetry(func() error {
-		return c.doRequest(ctx, "POST", path, request, c.NeedSticky(), &resp, &respHeaders)
-	}, Query,
-	)
-
-	if len(resp.NodeID) != 0 {
+	if resp != nil && len(resp.NodeID) != 0 {
 		c.nodeID = resp.NodeID
 	}
-	c.trackStats(&resp)
+	c.trackStats(resp)
 	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
 	// e.g. transaction state need to be updated if commit fail
-	c.applySessionState(&resp)
+	c.applySessionState(resp)
 	// save route hint for the next following http requests
 	if len(respHeaders) > 0 && len(respHeaders.Get(DatabendRouteHintHeader)) > 0 {
 		c.routeHint = respHeaders.Get(DatabendRouteHintHeader)
 	}
-	if resp.Error != nil {
+	if resp != nil && resp.Error != nil {
 		return nil, errors.Wrap(resp.Error, "query error")
 	} else if err != nil {
 		return nil, errors.Wrap(err, "failed to do query request")
 	}
-	return &resp, nil
+	return resp, nil
+}
+
+func (c *APIClient) startQueryRequestWithTransport(ctx context.Context, request *QueryRequest, transport queryTransport) (*QueryResponse, error) {
+	c.NextQuery()
+	// fmt.Printf("start query %v %v\n", c.GetQueryID(), request.SQL)
+	if !c.inActiveTransaction() {
+		c.routeHint = randRouteHint()
+	}
+
+	var (
+		resp        *QueryResponse
+		respHeaders http.Header
+		err         error
+	)
+	useArrow := false
+	switch transport {
+	case queryTransportArrow:
+		useArrow = true
+	case queryTransportJSON:
+	default:
+		useArrow, err = c.usesHTTPArrowTransport(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	path := "/v1/query"
+	if useArrow {
+		requestCopy := *request
+		requestCopy.ArrowResultVersionMax = ptrInt64(httpArrowResultVersionMax)
+		err = c.doRetry(func() error {
+			rawResp, reqErr := c.doRequestRaw(ctx, "POST", path, &requestCopy, c.NeedSticky(), arrowStreamContentType)
+			if reqErr != nil {
+				return reqErr
+			}
+			respHeaders = rawResp.headers
+			resp, reqErr = decodeQueryResponse(rawResp)
+			return reqErr
+		}, Query)
+	} else {
+		var jsonResp QueryResponse
+		err = c.doRetry(func() error {
+			return c.doRequest(ctx, "POST", path, request, c.NeedSticky(), &jsonResp, &respHeaders)
+		}, Query)
+		resp = &jsonResp
+	}
+
+	return c.finalizeQueryResponse(resp, respHeaders, err)
+}
+
+func ptrInt64(v int64) *int64 {
+	return &v
 }
 
 func (c *APIClient) StartQuery(ctx context.Context, query string) (*QueryResponse, error) {
+	return c.startQuery(ctx, query, queryTransportAuto)
+}
+
+func (c *APIClient) startQuery(ctx context.Context, query string, transport queryTransport) (*QueryResponse, error) {
 	logger.Debugf("start query: ", query)
 	request := QueryRequest{
 		SQL:        query,
 		Pagination: c.getPaginationConfig(),
 		Session:    c.getSessionStateRaw(),
 	}
-	return c.startQueryRequest(ctx, &request)
+	return c.startQueryRequestWithTransport(ctx, &request, transport)
 }
 
 func (c *APIClient) PollQuery(ctx context.Context, nextURI string) (*QueryResponse, error) {
-	var result QueryResponse
-	err := c.doRetry(
-		func() error {
-			return c.doRequest(ctx, "GET", nextURI, nil, true, &result, nil)
-		},
-		Page,
+	return c.pollQueryWithTransport(ctx, nextURI, queryTransportAuto)
+}
+
+func (c *APIClient) pollQueryWithTransport(ctx context.Context, nextURI string, transport queryTransport) (*QueryResponse, error) {
+	var (
+		result *QueryResponse
+		err    error
 	)
+	if transport == queryTransportAuto && c.stateRestored && c.queryResultFormat == QueryResultFormatArrow {
+		transport = queryTransportArrow
+	}
+	useArrow := false
+	switch transport {
+	case queryTransportArrow:
+		useArrow = true
+	case queryTransportJSON:
+	default:
+		useArrow, err = c.usesHTTPArrowTransport(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if useArrow {
+		err = c.doRetry(func() error {
+			rawResp, reqErr := c.doRequestRaw(ctx, "GET", nextURI, nil, true, arrowStreamContentType)
+			if reqErr != nil {
+				return reqErr
+			}
+			result, reqErr = decodeQueryResponse(rawResp)
+			return reqErr
+		}, Page)
+	} else {
+		var jsonResp QueryResponse
+		err = c.doRetry(
+			func() error {
+				return c.doRequest(ctx, "GET", nextURI, nil, true, &jsonResp, nil)
+			},
+			Page,
+		)
+		result = &jsonResp
+	}
+	if err == nil {
+		if materializeErr := materializeJSONQueryRows(result); materializeErr != nil {
+			return nil, errors.Wrap(materializeErr, "failed to materialize query rows")
+		}
+	}
 	// try update session as long as resp is not nil, even if query failed (resp.Error != nil)
 	// e.g. transaction state need to be updated if commit fail
-	c.applySessionState(&result)
-	c.trackStats(&result)
-	if result.Error != nil {
+	c.applySessionState(result)
+	c.trackStats(result)
+	if result != nil && result.Error != nil {
 		return nil, errors.Wrap(result.Error, "query error")
 	} else if err != nil {
 		return nil, errors.Wrap(err, "failed to query page")
 	}
-	return &result, nil
+	return result, nil
 }
 
 func (c *APIClient) KillQuery(ctx context.Context, response *QueryResponse) error {
@@ -621,16 +732,20 @@ func (c *APIClient) GetPresignedURL(ctx context.Context, stage *StageLocation) (
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query presign url")
 	}
-	if len(resp.Data) < 1 || len(resp.Data[0]) < 2 {
-		return nil, errors.Errorf("generate presign url invalid response: %+v", resp.Data)
+	method, ok := resp.cellString(0, 0)
+	if !ok {
+		return nil, errors.Errorf("generate presign url invalid response")
 	}
-	if resp.Data[0][0] == nil || resp.Data[0][1] == nil || resp.Data[0][2] == nil {
-		return nil, errors.Errorf("generate presign url invalid response: %+v", resp.Data)
+	headersText, ok := resp.cellString(0, 1)
+	if !ok {
+		return nil, errors.Errorf("generate presign url invalid response")
 	}
-	method := *resp.Data[0][0]
-	url := *resp.Data[0][2]
+	url, ok := resp.cellString(0, 2)
+	if !ok {
+		return nil, errors.Errorf("generate presign url invalid response")
+	}
 	headers := map[string]string{}
-	err = json.Unmarshal([]byte(*resp.Data[0][1]), &headers)
+	err = json.Unmarshal([]byte(headersText), &headers)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal headers")
 	}
@@ -765,6 +880,9 @@ func (c *APIClient) Verify(ctx context.Context) error {
 	}
 	if c.user != "" && response.User != c.user {
 		return errors.Errorf("verify user mismatch, expected: %s, got: %s", c.user, response.User)
+	}
+	if _, err := c.usesHTTPArrowTransport(ctx); err != nil {
+		return err
 	}
 	return nil
 }

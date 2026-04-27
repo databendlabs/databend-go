@@ -15,9 +15,11 @@ import (
 )
 
 const (
-	accept          = "Accept"
-	contentType     = "Content-Type"
-	jsonContentType = "application/json; charset=utf-8"
+	accept                 = "Accept"
+	contentType            = "Content-Type"
+	jsonContentType        = "application/json; charset=utf-8"
+	jsonMediaType          = "application/json"
+	arrowStreamContentType = "application/vnd.apache.arrow.stream"
 )
 
 type DatabendConn struct {
