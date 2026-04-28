@@ -1,5 +1,7 @@
 TEST_DATABEND_DSN ?= databend://databend:databend@localhost:8000/default?sslmode=disable
 TEST_QUERY_RESULT_FORMAT ?= json
+TEST_SKIP_CASES ?=
+GO_TEST_SKIP_ARG := $(if $(strip $(TEST_SKIP_CASES)),-skip '$(TEST_SKIP_CASES)',)
 
 COMPAT_TEST_TAGS := $(strip $(shell python3 scripts/compat_tags.py))
 
@@ -28,11 +30,11 @@ down:
 	docker compose down
 
 integration: up
-	TEST_DATABEND_DSN='$(INTEGRATION_TEST_DSN)' go test -v -timeout 30m ./...
+	TEST_DATABEND_DSN='$(INTEGRATION_TEST_DSN)' go test -v -timeout 30m $(GO_TEST_SKIP_ARG) ./...
 
 
 compat: up
 	test -f go.mod || go mod init it
 	go get github.com/datafuselabs/databend-go@${DATABEND_GO_VERSION}
 	go get -t ./
-	TEST_DATABEND_DSN='$(TEST_DATABEND_DSN)' go test $(COMPAT_TEST_TAGS) -v -timeout 30m ./
+	TEST_DATABEND_DSN='$(TEST_DATABEND_DSN)' go test $(COMPAT_TEST_TAGS) -v -timeout 30m $(GO_TEST_SKIP_ARG) ./
