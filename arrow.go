@@ -109,37 +109,11 @@ func isHTTPArrowVersionSupported(version string) bool {
 	return true
 }
 
-func (c *APIClient) usesHTTPArrowTransport(ctx context.Context) (bool, error) {
+func (c *APIClient) usesHTTPArrowTransport() bool {
 	if c.queryResultFormat != QueryResultFormatArrow {
-		return false, nil
+		return false
 	}
-	return c.ensureHTTPArrowCapability(ctx)
-}
-
-func (c *APIClient) ensureHTTPArrowCapability(ctx context.Context) (bool, error) {
-	c.httpArrowCapabilityMu.Lock()
-	if c.httpArrowCapabilityChecked {
-		enabled := c.httpArrowEnabled
-		c.httpArrowCapabilityMu.Unlock()
-		return enabled, nil
-	}
-	c.httpArrowCapabilityMu.Unlock()
-
-	version, err := c.fetchServerVersion(contextWithoutQueryID{Context: ctx})
-	if err != nil {
-		return false, err
-	}
-	enabled := isHTTPArrowVersionSupported(version)
-
-	c.httpArrowCapabilityMu.Lock()
-	if !c.httpArrowCapabilityChecked {
-		c.serverVersion = version
-		c.httpArrowEnabled = enabled
-		c.httpArrowCapabilityChecked = true
-	}
-	enabled = c.httpArrowEnabled
-	c.httpArrowCapabilityMu.Unlock()
-	return enabled, nil
+	return c.httpArrowCapability()
 }
 
 func (c *APIClient) fetchServerVersion(ctx context.Context) (string, error) {

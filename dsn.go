@@ -65,6 +65,9 @@ type Config struct {
 	EmptyFieldAs        string
 	EnableOpenTelemetry bool
 	QueryResultFormat   string
+	LoginEnabled        bool
+
+	loginConfigured bool
 }
 
 // NewConfig creates a new config with default values
@@ -74,6 +77,8 @@ func NewConfig() *Config {
 		Location:          time.UTC,
 		Params:            make(map[string]string),
 		QueryResultFormat: QueryResultFormatJSON,
+		LoginEnabled:      true,
+		loginConfigured:   true,
 	}
 }
 
@@ -141,6 +146,9 @@ func (cfg *Config) FormatDSN() string {
 	}
 	if cfg.EnableOpenTelemetry {
 		query.Set("enable_otel", "true")
+	}
+	if !cfg.effectiveLoginEnabled() {
+		query.Set("login", "disable")
 	}
 	if cfg.QueryResultFormat != "" && cfg.QueryResultFormat != QueryResultFormatJSON {
 		query.Set("query_result_format", cfg.QueryResultFormat)
@@ -217,6 +225,16 @@ func (cfg *Config) AddParams(params map[string]string) (err error) {
 			cfg.SSLMode = v
 		case "enable_otel":
 			cfg.EnableOpenTelemetry, err = strconv.ParseBool(v)
+		case "login":
+			switch strings.ToLower(strings.TrimSpace(v)) {
+			case "", "enable":
+				cfg.LoginEnabled = true
+			case "disable":
+				cfg.LoginEnabled = false
+			default:
+				err = fmt.Errorf("invalid login: %s", v)
+			}
+			cfg.loginConfigured = true
 		case "query_result_format":
 			cfg.QueryResultFormat, err = normalizeQueryResultFormat(v)
 		case "default_format", "query", "database":
@@ -236,6 +254,16 @@ func (cfg *Config) makeDefaultConfigValue() {
 	if cfg.QueryResultFormat == "" {
 		cfg.QueryResultFormat = QueryResultFormatJSON
 	}
+}
+
+func (cfg *Config) effectiveLoginEnabled() bool {
+	if cfg == nil {
+		return true
+	}
+	if !cfg.loginConfigured {
+		return true
+	}
+	return cfg.LoginEnabled
 }
 
 func normalizeQueryResultFormat(v string) (string, error) {

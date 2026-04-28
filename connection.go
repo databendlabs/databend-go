@@ -149,6 +149,10 @@ func buildDatabendConn(ctx context.Context, config *Config) (*DatabendConn, erro
 	if config.Debug {
 		dc.logger = log.New(os.Stderr, "databend: ", log.LstdFlags)
 	}
+	if err := dc.rest.initializeConnectionInfo(ctx); err != nil {
+		_ = dc.rest.Logout(context.Background())
+		return nil, err
+	}
 	return dc, nil
 }
 

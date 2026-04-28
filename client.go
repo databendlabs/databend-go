@@ -114,11 +114,16 @@ type APIClient struct {
 	EmptyFieldAs         string
 	queryResultFormat    string
 	stateRestored        bool
+	loginEnabled         bool
 
 	httpArrowCapabilityMu      sync.Mutex
 	httpArrowCapabilityChecked bool
 	httpArrowEnabled           bool
 	serverVersion              string
+	sessionLoggedIn            bool
+
+	connectionInitMu          sync.Mutex
+	connectionInfoInitialized bool
 
 	// only used for testing mocks
 	doRequestFunc func(method, path string, req interface{}, resp interface{}) error
@@ -214,6 +219,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		PresignedURLDisabled: cfg.PresignedURLDisabled,
 		EmptyFieldAs:         cfg.EmptyFieldAs,
 		queryResultFormat:    cfg.QueryResultFormat,
+		loginEnabled:         cfg.effectiveLoginEnabled(),
 	}
 }
 
@@ -411,6 +417,86 @@ func (c *APIClient) getSessionState() *SessionState {
 	return c.sessionState
 }
 
+func (c *APIClient) initializeConnectionInfo(ctx context.Context) error {
+	if c.doRequestFunc != nil {
+		c.connectionInitMu.Lock()
+		c.connectionInfoInitialized = true
+		c.connectionInitMu.Unlock()
+		return nil
+	}
+	if c.stateRestored {
+		return nil
+	}
+
+	c.connectionInitMu.Lock()
+	defer c.connectionInitMu.Unlock()
+
+	if c.connectionInfoInitialized {
+		return nil
+	}
+
+	var (
+		version string
+		err     error
+	)
+	initCtx := contextWithoutQueryID{Context: ctx}
+	if c.loginEnabled {
+		version, err = c.login(initCtx)
+		if err != nil {
+			if !IsNotFound(err) {
+				return err
+			}
+			version, err = c.fetchServerVersion(initCtx)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		version, err = c.fetchServerVersion(initCtx)
+		if err != nil {
+			return err
+		}
+	}
+
+	c.setHTTPArrowCapability(version)
+	c.connectionInfoInitialized = true
+	return nil
+}
+
+func (c *APIClient) login(ctx context.Context) (string, error) {
+	var (
+		resp        LoginResponse
+		respHeaders http.Header
+	)
+	err := c.doRequest(ctx, "POST", "/v1/session/login", loginRequestFromSession(c.sessionState), false, &resp, &respHeaders)
+	if err != nil {
+		return "", err
+	}
+	if sessionID := respHeaders.Get(DatabendSessionIDHeader); sessionID != "" {
+		c.SessionID = sessionID
+	}
+	c.sessionLoggedIn = true
+	if resp.Version == "" {
+		return "", errors.New("server version response is empty")
+	}
+	return resp.Version, nil
+}
+
+func (c *APIClient) setHTTPArrowCapability(version string) {
+	c.httpArrowCapabilityMu.Lock()
+	defer c.httpArrowCapabilityMu.Unlock()
+
+	c.serverVersion = version
+	c.httpArrowEnabled = isHTTPArrowVersionSupported(version)
+	c.httpArrowCapabilityChecked = true
+}
+
+func (c *APIClient) httpArrowCapability() bool {
+	c.httpArrowCapabilityMu.Lock()
+	defer c.httpArrowCapabilityMu.Unlock()
+	return c.httpArrowEnabled
+}
+
 func (c *APIClient) inActiveTransaction() bool {
 	return c.sessionState != nil && strings.EqualFold(string(c.sessionState.TxnState), string(TxnStateActive))
 }
@@ -452,6 +538,9 @@ func (c *APIClient) pollUntilQueryEndWithTransport(ctx context.Context, resp *Qu
 }
 
 func (c *APIClient) QuerySync(ctx context.Context, query string) (*QueryResponse, error) {
+	if err := c.initializeConnectionInfo(ctx); err != nil {
+		return nil, err
+	}
 	return c.querySyncWithTransport(ctx, query, queryTransportAuto)
 }
 
@@ -553,10 +642,7 @@ func (c *APIClient) startQueryRequestWithTransport(ctx context.Context, request 
 		useArrow = true
 	case queryTransportJSON:
 	default:
-		useArrow, err = c.usesHTTPArrowTransport(ctx)
-		if err != nil {
-			return nil, err
-		}
+		useArrow = c.usesHTTPArrowTransport()
 	}
 
 	path := "/v1/query"
@@ -588,6 +674,9 @@ func ptrInt64(v int64) *int64 {
 }
 
 func (c *APIClient) StartQuery(ctx context.Context, query string) (*QueryResponse, error) {
+	if err := c.initializeConnectionInfo(ctx); err != nil {
+		return nil, err
+	}
 	return c.startQuery(ctx, query, queryTransportAuto)
 }
 
@@ -602,6 +691,9 @@ func (c *APIClient) startQuery(ctx context.Context, query string, transport quer
 }
 
 func (c *APIClient) PollQuery(ctx context.Context, nextURI string) (*QueryResponse, error) {
+	if err := c.initializeConnectionInfo(ctx); err != nil {
+		return nil, err
+	}
 	return c.pollQueryWithTransport(ctx, nextURI, queryTransportAuto)
 }
 
@@ -619,10 +711,7 @@ func (c *APIClient) pollQueryWithTransport(ctx context.Context, nextURI string, 
 		useArrow = true
 	case queryTransportJSON:
 	default:
-		useArrow, err = c.usesHTTPArrowTransport(ctx)
-		if err != nil {
-			return nil, err
-		}
+		useArrow = c.usesHTTPArrowTransport()
 	}
 
 	if useArrow {
@@ -855,6 +944,10 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 }
 
 func (c *APIClient) Verify(ctx context.Context) error {
+	if err := c.initializeConnectionInfo(ctx); err != nil {
+		return errors.Wrap(err, "initialize connection failed")
+	}
+
 	var response VerifyResponse
 	var err error
 
@@ -881,14 +974,11 @@ func (c *APIClient) Verify(ctx context.Context) error {
 	if c.user != "" && response.User != c.user {
 		return errors.Errorf("verify user mismatch, expected: %s, got: %s", c.user, response.User)
 	}
-	if _, err := c.usesHTTPArrowTransport(ctx); err != nil {
-		return err
-	}
 	return nil
 }
 
 func (c *APIClient) Logout(ctx context.Context) error {
-	if c.NeedKeepAlive() {
+	if c.sessionLoggedIn || c.NeedKeepAlive() {
 		return c.doRequest(ctx, "POST", "/v1/session/logout", nil, c.NeedSticky(), nil, nil)
 	}
 	return nil

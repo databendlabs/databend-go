@@ -5,6 +5,7 @@ const (
 	DatabendWarehouseHeader = "X-DATABEND-WAREHOUSE"
 	DatabendQueryIDHeader   = "X-DATABEND-QUERY-ID"
 	DatabendRouteHintHeader = "X-DATABEND-ROUTE-HINT"
+	DatabendSessionIDHeader = "X-DATABEND-SESSION-ID"
 	DatabendQueryIDNode     = "X-DATABEND-NODE-ID"
 	DatabendQueryStickyNode = "X-DATABEND-STICKY-NODE"
 	Authorization           = "Authorization"

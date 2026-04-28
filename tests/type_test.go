@@ -5,6 +5,7 @@ import (
 	"fmt"
 	databend "github.com/datafuselabs/databend-go"
 	"golang.org/x/mod/semver"
+	"reflect"
 	"time"
 )
 
@@ -194,4 +195,50 @@ func (s *DatabendTestSuite) TestTimestampTz() {
 			s.r.NoError(rows.Close())
 		})
 	}
+}
+
+func (s *DatabendTestSuite) TestDecimal() {
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
+
+	tableName := fmt.Sprintf("test_decimal_%s", s.table)
+	_, err := db.Exec(fmt.Sprintf("create or replace table %s (d Decimal(18, 4))", tableName))
+	s.r.NoError(err)
+	defer func() {
+		_, err := db.Exec(fmt.Sprintf("drop table %s", tableName))
+		s.r.NoError(err)
+	}()
+
+	result, err := db.Exec(fmt.Sprintf("insert into %s select cast(? as Decimal(18, 4))", tableName), "12345.6789")
+	s.r.NoError(err)
+
+	n, err := result.RowsAffected()
+	s.r.NoError(err)
+	s.r.Equal(int64(1), n)
+
+	rows, err := db.Query(fmt.Sprintf("select * from %s", tableName))
+	s.r.NoError(err)
+
+	columnTypes, err := rows.ColumnTypes()
+	s.r.NoError(err)
+	s.r.Len(columnTypes, 1)
+	s.r.Equal("Decimal(18, 4) NULL", columnTypes[0].DatabaseTypeName())
+	s.r.Equal(reflect.TypeOf(""), columnTypes[0].ScanType())
+	nullable, ok := columnTypes[0].Nullable()
+	s.r.True(ok)
+	s.r.True(nullable)
+
+	precision, scale, ok := columnTypes[0].DecimalSize()
+	s.r.True(ok)
+	s.r.Equal(int64(18), precision)
+	s.r.Equal(int64(4), scale)
+
+	s.r.True(rows.Next())
+
+	var output string
+	err = rows.Scan(&output)
+	s.r.NoError(err)
+	s.r.Equal("12345.6789", output)
+
+	s.r.NoError(rows.Close())
 }

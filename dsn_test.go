@@ -103,6 +103,27 @@ func TestFormatDSNWithQueryResultFormat(t *testing.T) {
 	assert.Contains(t, dsn, "query_result_format=arrow")
 }
 
+func TestNewConfigEnablesLogin(t *testing.T) {
+	cfg := NewConfig()
+	assert.True(t, cfg.LoginEnabled)
+	assert.True(t, cfg.effectiveLoginEnabled())
+}
+
+func TestParseDSNWithLoginDisabled(t *testing.T) {
+	cfg, err := ParseDSN("databend+http://root:@localhost:8000/default?login=disable")
+	require.NoError(t, err)
+	assert.False(t, cfg.LoginEnabled)
+	assert.False(t, cfg.effectiveLoginEnabled())
+}
+
+func TestFormatDSNWithLoginDisabled(t *testing.T) {
+	cfg := NewConfig()
+	cfg.LoginEnabled = false
+
+	dsn := cfg.FormatDSN()
+	assert.Contains(t, dsn, "login=disable")
+}
+
 func TestParseDSN(t *testing.T) {
 	t.Run("test simple dns parse", func(t *testing.T) {
 		dsn := "databend+http://app.databend.com:8000/test?tenant=tn&warehouse=wh&timeout=1s&wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&tls_config=tls-settings&access_token_file=/tmp/file1"

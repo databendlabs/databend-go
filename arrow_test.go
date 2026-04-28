@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -202,8 +201,9 @@ func TestQuerySyncUsesHTTPArrowAcrossPages(t *testing.T) {
 	}
 
 	var (
-		mu       sync.Mutex
-		requests []requestSnapshot
+		mu         sync.Mutex
+		requests   []requestSnapshot
+		loginCount int
 	)
 
 	pageResp := QueryResponse{
@@ -232,14 +232,16 @@ func TestQuerySyncUsesHTTPArrowAcrossPages(t *testing.T) {
 		{Name: "name", Type: arrow.BinaryTypes.String},
 	}, func(builder *arrowarray.RecordBuilder) {})
 
-	versionResp := QueryResponse{
-		ID:     "query-version",
-		Schema: &[]DataField{{Name: "version", Type: "String"}},
-		Data:   [][]*string{{strPtr("Databend Query v1.2.899-nightly")}},
-	}
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/v1/session/login":
+			mu.Lock()
+			loginCount++
+			mu.Unlock()
+
+			w.Header().Set(contentType, jsonMediaType)
+			w.Header().Set(DatabendSessionIDHeader, "session-login")
+			require.NoError(t, json.NewEncoder(w).Encode(LoginResponse{Version: "Databend Query v1.2.899-nightly"}))
 		case "/v1/query":
 			var req QueryRequest
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
@@ -254,11 +256,6 @@ func TestQuerySyncUsesHTTPArrowAcrossPages(t *testing.T) {
 			mu.Unlock()
 
 			w.Header().Set(contentType, jsonMediaType)
-			if req.SQL == "SELECT version()" {
-				require.NoError(t, json.NewEncoder(w).Encode(versionResp))
-				return
-			}
-
 			w.Header().Set(contentType, arrowStreamContentType)
 			_, err := w.Write(startPayload)
 			require.NoError(t, err)
@@ -295,32 +292,25 @@ func TestQuerySyncUsesHTTPArrowAcrossPages(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	require.Len(t, requests, 3)
-	assert.Equal(t, "SELECT version()", requests[0].SQL)
-	assert.Equal(t, jsonContentType, requests[0].Accept)
-	assert.False(t, requests[0].HasArrow)
+	assert.Equal(t, 1, loginCount)
+	require.Len(t, requests, 2)
+	assert.Equal(t, "SELECT 7, 'arrow'", requests[0].SQL)
+	assert.Equal(t, arrowStreamContentType, requests[0].Accept)
+	assert.True(t, requests[0].HasArrow)
+	assert.Equal(t, "session-login.1", requests[0].RequestID)
 
-	assert.Equal(t, "SELECT 7, 'arrow'", requests[1].SQL)
+	assert.Equal(t, "PAGE", requests[1].SQL)
 	assert.Equal(t, arrowStreamContentType, requests[1].Accept)
-	assert.True(t, requests[1].HasArrow)
-	assert.True(t, strings.HasSuffix(requests[1].RequestID, ".1"))
-
-	assert.Equal(t, "PAGE", requests[2].SQL)
-	assert.Equal(t, arrowStreamContentType, requests[2].Accept)
 }
 
 func TestQuerySyncFallsBackToJSONWhenArrowRequested(t *testing.T) {
 	var (
-		mu       sync.Mutex
-		accepts  []string
-		hasArrow []bool
+		mu         sync.Mutex
+		accepts    []string
+		hasArrow   []bool
+		loginCount int
 	)
 
-	versionResp := QueryResponse{
-		ID:     "query-version",
-		Schema: &[]DataField{{Name: "version", Type: "String"}},
-		Data:   [][]*string{{strPtr("Databend Query v1.2.899-nightly")}},
-	}
 	jsonResp := QueryResponse{
 		ID:     "query-user",
 		Schema: &[]DataField{{Name: "n", Type: "Int32"}},
@@ -328,24 +318,28 @@ func TestQuerySyncFallsBackToJSONWhenArrowRequested(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/query" {
+		switch r.URL.Path {
+		case "/v1/session/login":
+			mu.Lock()
+			loginCount++
+			mu.Unlock()
+
+			w.Header().Set(contentType, jsonMediaType)
+			require.NoError(t, json.NewEncoder(w).Encode(LoginResponse{Version: "Databend Query v1.2.899-nightly"}))
+		case "/v1/query":
+			var req QueryRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+
+			mu.Lock()
+			accepts = append(accepts, r.Header.Get(accept))
+			hasArrow = append(hasArrow, req.ArrowResultVersionMax != nil)
+			mu.Unlock()
+
+			w.Header().Set(contentType, jsonMediaType)
+			require.NoError(t, json.NewEncoder(w).Encode(jsonResp))
+		default:
 			http.NotFound(w, r)
-			return
 		}
-		var req QueryRequest
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
-
-		mu.Lock()
-		accepts = append(accepts, r.Header.Get(accept))
-		hasArrow = append(hasArrow, req.ArrowResultVersionMax != nil)
-		mu.Unlock()
-
-		w.Header().Set(contentType, jsonMediaType)
-		if req.SQL == "SELECT version()" {
-			require.NoError(t, json.NewEncoder(w).Encode(versionResp))
-			return
-		}
-		require.NoError(t, json.NewEncoder(w).Encode(jsonResp))
 	}))
 	defer server.Close()
 
@@ -361,11 +355,10 @@ func TestQuerySyncFallsBackToJSONWhenArrowRequested(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	require.Len(t, accepts, 2)
-	assert.Equal(t, jsonContentType, accepts[0])
-	assert.Equal(t, arrowStreamContentType, accepts[1])
-	assert.False(t, hasArrow[0])
-	assert.True(t, hasArrow[1])
+	assert.Equal(t, 1, loginCount)
+	require.Len(t, accepts, 1)
+	assert.Equal(t, arrowStreamContentType, accepts[0])
+	assert.True(t, hasArrow[0])
 }
 
 func TestQuerySyncUsesJSONForRestoredState(t *testing.T) {
