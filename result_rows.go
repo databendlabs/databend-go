@@ -9,7 +9,11 @@ import (
 
 func queryResponseColumnTypeOptions(settings *Settings) (*ColumnTypeOptions, error) {
 	opts := defaultColumnTypeOptions()
-	if settings == nil || settings.TimeZone == "" {
+	if settings == nil {
+		return opts, nil
+	}
+	opts.SetGeometryOutputFormat(settings.GeometryOutputFormat)
+	if settings.TimeZone == "" {
 		return opts, nil
 	}
 

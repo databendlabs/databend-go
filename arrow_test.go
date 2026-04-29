@@ -196,6 +196,71 @@ func TestDecodeArrowResponseMaterializesTimestampTZ(t *testing.T) {
 	assert.Equal(t, -8*3600, offset)
 }
 
+func TestDecodeArrowResponseMaterializesGeo(t *testing.T) {
+	textValue := `{"type":"Point","coordinates":[60,37]}`
+	binaryValue := []byte{1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 78, 64, 0, 0, 0, 0, 0, 128, 66, 64}
+
+	testCases := []struct {
+		name     string
+		field    arrow.Field
+		settings *Settings
+		input    []byte
+		want     any
+	}{
+		{
+			name: "geometry-wkb",
+			field: arrow.Field{
+				Name: "geom",
+				Type: arrow.BinaryTypes.LargeBinary,
+				Metadata: arrow.NewMetadata(
+					[]string{arrowExtensionKey},
+					[]string{arrowExtensionGeometry},
+				),
+			},
+			settings: &Settings{GeometryOutputFormat: "WKB"},
+			input:    binaryValue,
+			want:     binaryValue,
+		},
+		{
+			name: "geography-geojson",
+			field: arrow.Field{
+				Name: "geog",
+				Type: arrow.BinaryTypes.LargeBinary,
+				Metadata: arrow.NewMetadata(
+					[]string{arrowExtensionKey},
+					[]string{arrowExtensionGeography},
+				),
+			},
+			settings: &Settings{GeometryOutputFormat: "GEOJSON"},
+			input:    []byte(textValue),
+			want:     textValue,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := QueryResponse{
+				ID:       "query-geo",
+				Settings: tc.settings,
+				Schema:   &[]DataField{{Name: tc.field.Name, Type: dataTypeNameFromGeoExtension(tc.field)}},
+			}
+
+			payload := buildArrowPayload(t, resp, []arrow.Field{tc.field}, func(builder *arrowarray.RecordBuilder) {
+				builder.Field(0).(*arrowarray.BinaryBuilder).Append(tc.input)
+			})
+
+			decoded, err := decodeQueryResponse(&rawHTTPResponse{
+				headers: http.Header{contentType: []string{arrowStreamContentType}},
+				body:    payload,
+			})
+			require.NoError(t, err)
+			require.Len(t, decoded.typedRows, 1)
+			require.Len(t, decoded.typedRows[0], 1)
+			assert.Equal(t, tc.want, decoded.typedRows[0][0])
+		})
+	}
+}
+
 func TestQuerySyncUsesHTTPArrowAcrossPages(t *testing.T) {
 	type requestSnapshot struct {
 		SQL       string
@@ -508,6 +573,22 @@ func buildArrowPayload(t *testing.T, response QueryResponse, fields []arrow.Fiel
 	require.NoError(t, writer.Write(record))
 	require.NoError(t, writer.Close())
 	return buf.Bytes()
+}
+
+func dataTypeNameFromGeoExtension(field arrow.Field) string {
+	value, ok := field.Metadata.GetValue(arrowExtensionKey)
+	if !ok {
+		return ""
+	}
+
+	switch value {
+	case arrowExtensionGeometry:
+		return "Geometry"
+	case arrowExtensionGeography:
+		return "Geography"
+	default:
+		return ""
+	}
 }
 
 func testHTTPConfig(t *testing.T, rawURL string) *Config {

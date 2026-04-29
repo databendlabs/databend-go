@@ -109,6 +109,35 @@ func (c *simpleColumnType) ScanType() reflect.Type {
 	return c.scanType
 }
 
+type geoColumnType struct {
+	dbType string
+	format geoOutputFormat
+	columnTypeDefault
+	isNullable
+}
+
+func (c geoColumnType) Parse(s string) (driver.Value, error) {
+	if c.checkNull(s) {
+		return nil, nil
+	}
+	return materializeGeoFromString(c.dbType, s, c.format)
+}
+
+func (c geoColumnType) ScanType() reflect.Type {
+	if c.format.returnsBinary() {
+		return reflect.TypeOf([]byte(nil))
+	}
+	return reflectTypeString
+}
+
+func (c geoColumnType) DatabaseTypeName() string {
+	return c.wrapName(c.dbType)
+}
+
+func (c geoColumnType) Desc() *TypeDesc {
+	return &TypeDesc{Name: c.dbType, Nullable: bool(c.isNullable)}
+}
+
 type timestampColumnType struct {
 	tz *time.Location
 	columnTypeDefault
@@ -252,6 +281,8 @@ func NewColumnType(dbType string, opts *ColumnTypeOptions) (ColumnType, error) {
 		return &timestampTzColumnType{isNullable: nullable}, nil
 	case "Date":
 		return &dateColumnType{isNullable: nullable}, nil
+	case "Geometry", "Geography":
+		return &geoColumnType{dbType: desc.Name, format: opts.geometryOutputFormat, isNullable: nullable}, nil
 	case "Decimal":
 		precision, err := strconv.ParseInt(desc.Args[0].Name, 10, 64)
 		if err != nil {
@@ -268,14 +299,16 @@ func NewColumnType(dbType string, opts *ColumnTypeOptions) (ColumnType, error) {
 }
 
 type ColumnTypeOptions struct {
-	formatNullAsStr bool
-	timezone        *time.Location
+	formatNullAsStr      bool
+	timezone             *time.Location
+	geometryOutputFormat geoOutputFormat
 }
 
 func defaultColumnTypeOptions() *ColumnTypeOptions {
 	return &ColumnTypeOptions{
-		formatNullAsStr: false,
-		timezone:        time.UTC,
+		formatNullAsStr:      false,
+		timezone:             time.UTC,
+		geometryOutputFormat: geoOutputFormatGeoJSON,
 	}
 }
 
@@ -285,4 +318,8 @@ func (opt *ColumnTypeOptions) SetFormatNullAsStr(v bool) {
 
 func (opt *ColumnTypeOptions) SetTimezone(v *time.Location) {
 	opt.timezone = v
+}
+
+func (opt *ColumnTypeOptions) SetGeometryOutputFormat(v string) {
+	opt.geometryOutputFormat = parseGeoOutputFormat(v)
 }

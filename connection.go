@@ -31,12 +31,20 @@ type DatabendConn struct {
 	rest   *APIClient
 }
 
-func (dc *DatabendConn) columnTypeOptions(location *time.Location) *ColumnTypeOptions {
+func (dc *DatabendConn) columnTypeOptions(settings *Settings, location *time.Location) *ColumnTypeOptions {
 	opts := defaultColumnTypeOptions()
 	if location != nil {
 		opts.SetTimezone(location)
 	} else if dc.cfg.Location != nil {
 		opts.SetTimezone(dc.cfg.Location)
+	}
+	if dc.cfg != nil && dc.cfg.Params != nil {
+		if format, ok := dc.cfg.Params["geometry_output_format"]; ok {
+			opts.SetGeometryOutputFormat(format)
+		}
+	}
+	if settings != nil {
+		opts.SetGeometryOutputFormat(settings.GeometryOutputFormat)
 	}
 	return opts
 }

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	databend "github.com/datafuselabs/databend-go"
 	"golang.org/x/mod/semver"
@@ -240,5 +241,56 @@ func (s *DatabendTestSuite) TestDecimal() {
 	s.r.NoError(err)
 	s.r.Equal("12345.6789", output)
 
+	s.r.NoError(rows.Close())
+}
+
+func (s *DatabendTestSuite) TestGeo() {
+	if semver.Compare(driverVersion, "v0.9.0") <= 0 {
+		return
+	}
+
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
+
+	const (
+		wkbHex       = "01010000000000000000004e400000000000804240"
+		geometryWKT  = "POINT(60 37)"
+		geographyWKT = "POINT(60 37)"
+	)
+
+	rows, err := db.Query("settings(geometry_output_format='WKB') SELECT to_geometry('POINT(60 37)'), to_geography('POINT(60 37)')")
+	s.r.NoError(err)
+	s.r.True(rows.Next())
+
+	columnTypes, err := rows.ColumnTypes()
+	s.r.NoError(err)
+	s.r.Len(columnTypes, 2)
+	s.r.Equal("Geometry", columnTypes[0].DatabaseTypeName())
+	s.r.Equal("Geography", columnTypes[1].DatabaseTypeName())
+	s.r.Equal(reflect.TypeOf([]byte(nil)), columnTypes[0].ScanType())
+	s.r.Equal(reflect.TypeOf([]byte(nil)), columnTypes[1].ScanType())
+
+	var geomWKB, geogWKB []byte
+	err = rows.Scan(&geomWKB, &geogWKB)
+	s.r.NoError(err)
+	s.r.Equal(wkbHex, hex.EncodeToString(geomWKB))
+	s.r.Equal(wkbHex, hex.EncodeToString(geogWKB))
+	s.r.NoError(rows.Close())
+
+	rows, err = db.Query("settings(geometry_output_format='WKT') SELECT to_geometry('POINT(60 37)'), to_geography('POINT(60 37)')")
+	s.r.NoError(err)
+	s.r.True(rows.Next())
+
+	columnTypes, err = rows.ColumnTypes()
+	s.r.NoError(err)
+	s.r.Len(columnTypes, 2)
+	s.r.Equal(reflect.TypeOf(""), columnTypes[0].ScanType())
+	s.r.Equal(reflect.TypeOf(""), columnTypes[1].ScanType())
+
+	var geomText, geogText string
+	err = rows.Scan(&geomText, &geogText)
+	s.r.NoError(err)
+	s.r.Equal(geometryWKT, geomText)
+	s.r.Equal(geographyWKT, geogText)
 	s.r.NoError(rows.Close())
 }
