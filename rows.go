@@ -11,8 +11,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var rowsHack = false
-
 type resultSchema struct {
 	columns []string
 	types   []ColumnType
@@ -20,11 +18,10 @@ type resultSchema struct {
 
 type nextRows struct {
 	resultSchema
-	isClosed  int32
-	dc        *DatabendConn
-	ctx       context.Context
-	respData  *QueryResponse
-	latestRow []*string
+	isClosed int32
+	dc       *DatabendConn
+	ctx      context.Context
+	respData *QueryResponse
 }
 
 func waitForData(ctx context.Context, dc *DatabendConn, response *QueryResponse) (*QueryResponse, error) {
@@ -170,9 +167,6 @@ func (r *nextRows) Next(dest []driver.Value) error {
 	if len(r.respData.Data) > 0 {
 		lineData = r.respData.Data[0]
 		r.respData.Data = r.respData.Data[1:]
-	}
-	if rowsHack {
-		r.latestRow = lineData
 	}
 	var typedRow []driver.Value
 	if len(r.respData.typedRows) > 0 {
