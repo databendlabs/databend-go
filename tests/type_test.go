@@ -294,3 +294,38 @@ func (s *DatabendTestSuite) TestGeo() {
 	s.r.Equal(geographyWKT, geogText)
 	s.r.NoError(rows.Close())
 }
+
+func (s *DatabendTestSuite) TestBinary() {
+	if semver.Compare(driverVersion, "v0.9.0") <= 0 {
+		return
+	}
+
+	db := sql.OpenDB(s.cfg)
+	defer db.Close()
+
+	rows, err := db.Query("settings(binary_output_format='base64') SELECT to_binary('hello')")
+	s.r.NoError(err)
+	s.r.True(rows.Next())
+
+	columnTypes, err := rows.ColumnTypes()
+	s.r.NoError(err)
+	s.r.Len(columnTypes, 1)
+	s.r.Equal("Binary", columnTypes[0].DatabaseTypeName())
+	s.r.Equal(reflect.TypeOf([]byte(nil)), columnTypes[0].ScanType())
+
+	var raw []byte
+	err = rows.Scan(&raw)
+	s.r.NoError(err)
+	s.r.Equal([]byte("hello"), raw)
+	s.r.NoError(rows.Close())
+
+	rows, err = db.Query("settings(binary_output_format='base64') SELECT to_binary('hello')")
+	s.r.NoError(err)
+	s.r.True(rows.Next())
+
+	var text string
+	err = rows.Scan(&text)
+	s.r.NoError(err)
+	s.r.Equal("hello", text)
+	s.r.NoError(rows.Close())
+}

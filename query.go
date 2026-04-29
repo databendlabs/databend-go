@@ -36,6 +36,8 @@ type DataField struct {
 type Settings struct {
 	TimeZone             string `json:"timezone"`
 	GeometryOutputFormat string `json:"geometry_output_format"`
+	BinaryOutputFormat   string `json:"binary_output_format"`
+	HTTPJSONResultMode   string `json:"http_json_result_mode"`
 }
 
 type QueryResponse struct {

@@ -13,6 +13,8 @@ func queryResponseColumnTypeOptions(settings *Settings) (*ColumnTypeOptions, err
 		return opts, nil
 	}
 	opts.SetGeometryOutputFormat(settings.GeometryOutputFormat)
+	opts.SetBinaryOutputFormat(settings.BinaryOutputFormat)
+	opts.SetHTTPJSONResultMode(settings.HTTPJSONResultMode)
 	if settings.TimeZone == "" {
 		return opts, nil
 	}

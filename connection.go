@@ -42,9 +42,17 @@ func (dc *DatabendConn) columnTypeOptions(settings *Settings, location *time.Loc
 		if format, ok := dc.cfg.Params["geometry_output_format"]; ok {
 			opts.SetGeometryOutputFormat(format)
 		}
+		if format, ok := dc.cfg.Params["binary_output_format"]; ok {
+			opts.SetBinaryOutputFormat(format)
+		}
+		if mode, ok := dc.cfg.Params["http_json_result_mode"]; ok {
+			opts.SetHTTPJSONResultMode(mode)
+		}
 	}
 	if settings != nil {
 		opts.SetGeometryOutputFormat(settings.GeometryOutputFormat)
+		opts.SetBinaryOutputFormat(settings.BinaryOutputFormat)
+		opts.SetHTTPJSONResultMode(settings.HTTPJSONResultMode)
 	}
 	return opts
 }
