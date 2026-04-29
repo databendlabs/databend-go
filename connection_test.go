@@ -28,7 +28,7 @@ func TestBuildDatabendConnInitializesViaLogin(t *testing.T) {
 
 			w.Header().Set(contentType, jsonMediaType)
 			w.Header().Set(DatabendSessionIDHeader, "session-login")
-			require.NoError(t, json.NewEncoder(w).Encode(LoginResponse{Version: "Databend Query v1.2.899-nightly"}))
+			require.NoError(t, json.NewEncoder(w).Encode(LoginResponse{ServerMaxArrowResultVersion: ptrInt64(2)}))
 		case "/v1/session/logout":
 			mu.Lock()
 			logoutCount++
@@ -56,40 +56,22 @@ func TestBuildDatabendConnInitializesViaLogin(t *testing.T) {
 	assert.Equal(t, 1, logoutCount)
 }
 
-func TestBuildDatabendConnFallsBackToVersionQueryWhenLoginNotFound(t *testing.T) {
+func TestBuildDatabendConnDisablesArrowWhenLoginNotFound(t *testing.T) {
 	var (
-		mu                sync.Mutex
-		loginCount        int
-		versionQueryCount int
+		mu         sync.Mutex
+		loginCount int
 	)
 
-	versionResp := QueryResponse{
-		ID:     "query-version",
-		Schema: &[]DataField{{Name: "version", Type: "String"}},
-		Data:   [][]*string{{strPtr("Databend Query v1.2.898-nightly")}},
-	}
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v1/session/login":
-			mu.Lock()
-			loginCount++
-			mu.Unlock()
+		if r.URL.Path != "/v1/session/login" {
 			http.NotFound(w, r)
-		case "/v1/query":
-			var req QueryRequest
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
-			assert.Equal(t, "SELECT version()", req.SQL)
-
-			mu.Lock()
-			versionQueryCount++
-			mu.Unlock()
-
-			w.Header().Set(contentType, jsonMediaType)
-			require.NoError(t, json.NewEncoder(w).Encode(versionResp))
-		default:
-			http.NotFound(w, r)
+			return
 		}
+
+		mu.Lock()
+		loginCount++
+		mu.Unlock()
+		http.NotFound(w, r)
 	}))
 	defer server.Close()
 
@@ -104,43 +86,24 @@ func TestBuildDatabendConnFallsBackToVersionQueryWhenLoginNotFound(t *testing.T)
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Equal(t, 1, loginCount)
-	assert.Equal(t, 1, versionQueryCount)
 }
 
 func TestBuildDatabendConnSkipsLoginWhenDisabled(t *testing.T) {
 	var (
-		mu                sync.Mutex
-		loginCount        int
-		versionQueryCount int
+		mu         sync.Mutex
+		loginCount int
 	)
 
-	versionResp := QueryResponse{
-		ID:     "query-version",
-		Schema: &[]DataField{{Name: "version", Type: "String"}},
-		Data:   [][]*string{{strPtr("Databend Query v1.2.899-nightly")}},
-	}
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v1/session/login":
-			mu.Lock()
-			loginCount++
-			mu.Unlock()
+		if r.URL.Path != "/v1/session/login" {
 			http.NotFound(w, r)
-		case "/v1/query":
-			var req QueryRequest
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
-			assert.Equal(t, "SELECT version()", req.SQL)
-
-			mu.Lock()
-			versionQueryCount++
-			mu.Unlock()
-
-			w.Header().Set(contentType, jsonMediaType)
-			require.NoError(t, json.NewEncoder(w).Encode(versionResp))
-		default:
-			http.NotFound(w, r)
+			return
 		}
+
+		mu.Lock()
+		loginCount++
+		mu.Unlock()
+		http.NotFound(w, r)
 	}))
 	defer server.Close()
 
@@ -149,11 +112,10 @@ func TestBuildDatabendConnSkipsLoginWhenDisabled(t *testing.T) {
 	dc, err := buildDatabendConn(context.Background(), cfg)
 	require.NoError(t, err)
 
-	assert.True(t, dc.rest.httpArrowCapability())
+	assert.False(t, dc.rest.httpArrowCapability())
 	assert.True(t, dc.rest.connectionInfoInitialized)
 
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Equal(t, 0, loginCount)
-	assert.Equal(t, 1, versionQueryCount)
 }

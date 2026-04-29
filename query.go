@@ -207,5 +207,6 @@ func loginRequestFromSession(state *SessionState) *LoginRequest {
 }
 
 type LoginResponse struct {
-	Version string `json:"version"`
+	Version                     string `json:"version"`
+	ServerMaxArrowResultVersion *int64 `json:"server_max_arrow_result_version,omitempty"`
 }

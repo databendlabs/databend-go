@@ -119,7 +119,6 @@ type APIClient struct {
 	httpArrowCapabilityMu      sync.Mutex
 	httpArrowCapabilityChecked bool
 	httpArrowEnabled           bool
-	serverVersion              string
 	sessionLoggedIn            bool
 
 	connectionInitMu          sync.Mutex
@@ -435,59 +434,46 @@ func (c *APIClient) initializeConnectionInfo(ctx context.Context) error {
 		return nil
 	}
 
-	var (
-		version string
-		err     error
-	)
 	initCtx := contextWithoutQueryID{Context: ctx}
 	if c.loginEnabled {
-		version, err = c.login(initCtx)
+		resp, err := c.login(initCtx)
 		if err != nil {
 			if !IsNotFound(err) {
 				return err
 			}
-			version, err = c.fetchServerVersion(initCtx)
-			if err != nil {
-				return err
-			}
+			c.setHTTPArrowCapability(nil)
+		} else {
+			c.setHTTPArrowCapability(resp.ServerMaxArrowResultVersion)
 		}
 	} else {
-		version, err = c.fetchServerVersion(initCtx)
-		if err != nil {
-			return err
-		}
+		c.setHTTPArrowCapability(nil)
 	}
 
-	c.setHTTPArrowCapability(version)
 	c.connectionInfoInitialized = true
 	return nil
 }
 
-func (c *APIClient) login(ctx context.Context) (string, error) {
+func (c *APIClient) login(ctx context.Context) (*LoginResponse, error) {
 	var (
 		resp        LoginResponse
 		respHeaders http.Header
 	)
 	err := c.doRequest(ctx, "POST", "/v1/session/login", loginRequestFromSession(c.sessionState), false, &resp, &respHeaders)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if sessionID := respHeaders.Get(DatabendSessionIDHeader); sessionID != "" {
 		c.SessionID = sessionID
 	}
 	c.sessionLoggedIn = true
-	if resp.Version == "" {
-		return "", errors.New("server version response is empty")
-	}
-	return resp.Version, nil
+	return &resp, nil
 }
 
-func (c *APIClient) setHTTPArrowCapability(version string) {
+func (c *APIClient) setHTTPArrowCapability(maxArrowVersion *int64) {
 	c.httpArrowCapabilityMu.Lock()
 	defer c.httpArrowCapabilityMu.Unlock()
 
-	c.serverVersion = version
-	c.httpArrowEnabled = isHTTPArrowVersionSupported(version)
+	c.httpArrowEnabled = maxArrowVersion != nil && *maxArrowVersion >= httpArrowResultVersionMax
 	c.httpArrowCapabilityChecked = true
 }
 

@@ -21,20 +21,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHTTPArrowVersionSupport(t *testing.T) {
+func TestHTTPArrowCapabilityFromLoginMaxVersion(t *testing.T) {
 	testCases := []struct {
-		version string
-		want    bool
+		name string
+		max  *int64
+		want bool
 	}{
-		{version: "Databend Query v1.2.899-nightly", want: true},
-		{version: "1.2.899", want: true},
-		{version: "v1.3.0", want: true},
-		{version: "v1.2.898", want: false},
-		{version: "unknown", want: false},
+		{name: "missing", max: nil, want: false},
+		{name: "older", max: ptrInt64(1), want: false},
+		{name: "exact", max: ptrInt64(2), want: true},
+		{name: "newer", max: ptrInt64(3), want: true},
 	}
 
 	for _, tc := range testCases {
-		assert.Equal(t, tc.want, isHTTPArrowVersionSupported(tc.version), tc.version)
+		t.Run(tc.name, func(t *testing.T) {
+			client := &APIClient{}
+			client.setHTTPArrowCapability(tc.max)
+			assert.Equal(t, tc.want, client.httpArrowCapability())
+		})
 	}
 }
 
@@ -241,7 +245,7 @@ func TestQuerySyncUsesHTTPArrowAcrossPages(t *testing.T) {
 
 			w.Header().Set(contentType, jsonMediaType)
 			w.Header().Set(DatabendSessionIDHeader, "session-login")
-			require.NoError(t, json.NewEncoder(w).Encode(LoginResponse{Version: "Databend Query v1.2.899-nightly"}))
+			require.NoError(t, json.NewEncoder(w).Encode(LoginResponse{ServerMaxArrowResultVersion: ptrInt64(2)}))
 		case "/v1/query":
 			var req QueryRequest
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
@@ -325,7 +329,7 @@ func TestQuerySyncFallsBackToJSONWhenArrowRequested(t *testing.T) {
 			mu.Unlock()
 
 			w.Header().Set(contentType, jsonMediaType)
-			require.NoError(t, json.NewEncoder(w).Encode(LoginResponse{Version: "Databend Query v1.2.899-nightly"}))
+			require.NoError(t, json.NewEncoder(w).Encode(LoginResponse{ServerMaxArrowResultVersion: ptrInt64(2)}))
 		case "/v1/query":
 			var req QueryRequest
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
