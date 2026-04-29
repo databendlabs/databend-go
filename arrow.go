@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -22,8 +21,6 @@ import (
 )
 
 const httpArrowResultVersionMax int64 = 2
-
-var httpArrowVersionPattern = regexp.MustCompile(`(?i)v?(\d+)\.(\d+)\.(\d+)`)
 
 const (
 	arrowExtensionKey             = "Extension"
@@ -71,89 +68,11 @@ func isArrowResponse(headers http.Header) bool {
 	return strings.HasPrefix(headers.Get(contentType), arrowStreamContentType)
 }
 
-func minHTTPArrowVersion() []int {
-	return []int{1, 2, 899}
-}
-
-func parseServerVersion(version string) []int {
-	matches := httpArrowVersionPattern.FindStringSubmatch(version)
-	if len(matches) != 4 {
-		return nil
-	}
-
-	parts := make([]int, 0, 3)
-	for _, match := range matches[1:] {
-		part, err := strconv.Atoi(match)
-		if err != nil {
-			return nil
-		}
-		parts = append(parts, part)
-	}
-	return parts
-}
-
-func isHTTPArrowVersionSupported(version string) bool {
-	versionParts := parseServerVersion(version)
-	if len(versionParts) == 0 {
+func (c *APIClient) usesHTTPArrowTransport() bool {
+	if c.queryResultFormat != QueryResultFormatArrow {
 		return false
 	}
-	minParts := minHTTPArrowVersion()
-	for i := range minParts {
-		if versionParts[i] < minParts[i] {
-			return false
-		}
-		if versionParts[i] > minParts[i] {
-			return true
-		}
-	}
-	return true
-}
-
-func (c *APIClient) usesHTTPArrowTransport(ctx context.Context) (bool, error) {
-	if c.queryResultFormat != QueryResultFormatArrow {
-		return false, nil
-	}
-	return c.ensureHTTPArrowCapability(ctx)
-}
-
-func (c *APIClient) ensureHTTPArrowCapability(ctx context.Context) (bool, error) {
-	c.httpArrowCapabilityMu.Lock()
-	if c.httpArrowCapabilityChecked {
-		enabled := c.httpArrowEnabled
-		c.httpArrowCapabilityMu.Unlock()
-		return enabled, nil
-	}
-	c.httpArrowCapabilityMu.Unlock()
-
-	version, err := c.fetchServerVersion(contextWithoutQueryID{Context: ctx})
-	if err != nil {
-		return false, err
-	}
-	enabled := isHTTPArrowVersionSupported(version)
-
-	c.httpArrowCapabilityMu.Lock()
-	if !c.httpArrowCapabilityChecked {
-		c.serverVersion = version
-		c.httpArrowEnabled = enabled
-		c.httpArrowCapabilityChecked = true
-	}
-	enabled = c.httpArrowEnabled
-	c.httpArrowCapabilityMu.Unlock()
-	return enabled, nil
-}
-
-func (c *APIClient) fetchServerVersion(ctx context.Context) (string, error) {
-	restore := c.snapshotClientState()
-	defer restore()
-
-	resp, err := c.querySyncWithTransport(ctx, "SELECT version()", queryTransportJSON)
-	if err != nil {
-		return "", err
-	}
-	if len(resp.Data) == 0 || len(resp.Data[0]) == 0 || resp.Data[0][0] == nil {
-		return "", errors.New("server version response is empty")
-	}
-	return *resp.Data[0][0], nil
+	return c.httpArrowCapability()
 }
 
 func (c *APIClient) doRequestRaw(

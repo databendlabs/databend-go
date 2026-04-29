@@ -188,3 +188,25 @@ type VerifyResponse struct {
 	User   string   `json:"user"`
 	Roles  []string `json:"roles"`
 }
+
+type LoginRequest struct {
+	Database string            `json:"database,omitempty"`
+	Role     string            `json:"role,omitempty"`
+	Settings map[string]string `json:"settings,omitempty"`
+}
+
+func loginRequestFromSession(state *SessionState) *LoginRequest {
+	if state == nil {
+		return &LoginRequest{}
+	}
+	return &LoginRequest{
+		Database: state.Database,
+		Role:     state.Role,
+		Settings: state.Settings,
+	}
+}
+
+type LoginResponse struct {
+	Version                     string `json:"version"`
+	ServerMaxArrowResultVersion *int64 `json:"server_max_arrow_result_version,omitempty"`
+}
