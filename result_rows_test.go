@@ -100,3 +100,54 @@ func TestDecodeJSONResponseMaterializesGeoRows(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeJSONResponseMaterializesBinaryRows(t *testing.T) {
+	testCases := []struct {
+		name     string
+		settings *Settings
+		input    string
+		want     []byte
+	}{
+		{
+			name:     "driver-mode-hex",
+			settings: &Settings{BinaryOutputFormat: "BASE64", HTTPJSONResultMode: "driver"},
+			input:    "616263",
+			want:     []byte("abc"),
+		},
+		{
+			name:     "display-mode-base64",
+			settings: &Settings{BinaryOutputFormat: "BASE64", HTTPJSONResultMode: "display"},
+			input:    "YWJj",
+			want:     []byte("abc"),
+		},
+		{
+			name:     "display-mode-utf8",
+			settings: &Settings{BinaryOutputFormat: "UTF-8", HTTPJSONResultMode: "display"},
+			input:    "abc",
+			want:     []byte("abc"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := QueryResponse{
+				ID:       "json-binary-query",
+				Settings: tc.settings,
+				Schema:   &[]DataField{{Name: "b", Type: "Binary"}},
+				Data:     [][]*string{{strPtr(tc.input)}},
+			}
+
+			body, err := json.Marshal(resp)
+			require.NoError(t, err)
+
+			decoded, err := decodeQueryResponse(&rawHTTPResponse{
+				headers: http.Header{contentType: []string{jsonContentType}},
+				body:    body,
+			})
+			require.NoError(t, err)
+			require.Len(t, decoded.typedRows, 1)
+			require.Len(t, decoded.typedRows[0], 1)
+			assert.Equal(t, tc.want, decoded.typedRows[0][0])
+		})
+	}
+}

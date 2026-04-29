@@ -35,6 +35,8 @@ func TestColumnType(t *testing.T) {
 		{typeDesc: "Timestamp", input: "2025-01-16 02:01:26.739219", want: time.Date(2025, 1, 16, 2, 1, 26, 739219000, time.UTC)},
 		{typeDesc: "Date", input: "2025-01-16", want: time.Date(2025, 1, 16, 0, 0, 0, 0, time.UTC)},
 		{typeDesc: "Decimal(10, 2)", input: "123.45", want: "123.45"},
+		{typeDesc: "Binary", input: "616263", want: []byte("abc")},
+		{typeDesc: "Binary", input: "YWJj", want: []byte("abc"), settings: &Settings{BinaryOutputFormat: "BASE64", HTTPJSONResultMode: "display"}},
 		{typeDesc: "Geometry", input: "01010000000000000000004E400000000000804240", want: []byte{1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 78, 64, 0, 0, 0, 0, 0, 128, 66, 64}, settings: &Settings{GeometryOutputFormat: "WKB"}},
 		{typeDesc: "Geography", input: "POINT(60 37)", want: "POINT(60 37)", settings: &Settings{GeometryOutputFormat: "WKT"}},
 	}
@@ -88,6 +90,24 @@ func runScan(t *testing.T, desc string, input string, want any, settings *Settin
 	err = rows.Scan(a)
 	require.NoError(t, err)
 	require.Equal(t, want, reflect.ValueOf(a).Elem().Interface())
+}
+
+func TestBinaryScanIntoStringUsesDatabaseSQLDefaultConversion(t *testing.T) {
+	db := sql.OpenDB(&fakeConnector{
+		resp: &QueryResponse{
+			typedRows: [][]driver.Value{{[]byte("hello")}},
+			Schema:    &[]DataField{{Name: "x", Type: "Binary"}},
+		},
+	})
+
+	rows, err := db.Query("x")
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+
+	var out string
+	err = rows.Scan(&out)
+	require.NoError(t, err)
+	require.Equal(t, "hello", out)
 }
 
 type fakeConnector struct {

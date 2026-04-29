@@ -315,6 +315,8 @@ func materializeArrowDriverValue(desc *TypeDesc, column arrow.Array, rowIdx int,
 	switch desc.Name {
 	case "Null":
 		return nil, nil
+	case "Binary":
+		return materializeArrowBinaryDriverValue(column, rowIdx)
 	case "Date":
 		return materializeArrowDateDriverValue(column, rowIdx)
 	case "Timestamp":
@@ -325,6 +327,22 @@ func materializeArrowDriverValue(desc *TypeDesc, column arrow.Array, rowIdx int,
 		return materializeArrowGeoDriverValue(desc.Name, column, rowIdx, opts.geometryOutputFormat)
 	default:
 		return formatArrowColumnValue(desc, column, rowIdx, opts.timezone)
+	}
+}
+
+func materializeArrowBinaryDriverValue(column arrow.Array, rowIdx int) (driver.Value, error) {
+	marshaled, ok := column.(marshaledArrowArray)
+	if !ok {
+		return nil, fmt.Errorf("arrow column does not support row materialization: %T", column)
+	}
+
+	switch value := marshaled.GetOneForMarshal(rowIdx).(type) {
+	case []byte:
+		return materializeBinaryFromBinary(value), nil
+	case string:
+		return []byte(value), nil
+	default:
+		return nil, fmt.Errorf("unsupported arrow binary value type %T", value)
 	}
 }
 

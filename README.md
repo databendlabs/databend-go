@@ -220,6 +220,7 @@ The following table outlines the mapping between Databend types and Go types:
 | Float32            | float32   |
 | Float64            | float64   |
 | Bitmap             | string    |
+| Binary             | []byte    |
 | Decimal            | decimal.Decimal|
 | String             | string    |
 | Geometry           | string / []byte |
@@ -229,6 +230,8 @@ The following table outlines the mapping between Databend types and Go types:
 | Array(T)           | string    |
 | Tuple(T1, T2, ...) | string    |
 | Variant            | string    |
+
+`Binary` is returned as raw `[]byte`. If you scan it into `string`, `database/sql` applies its default `[]byte` to `string` conversion; this does not reformat the value using `binary_output_format`.
 
 `Geometry` and `Geography` follow the current `geometry_output_format` setting. `WKB` and `EWKB` return `[]byte`; `WKT`, `EWKT`, and `GEOJSON` return `string`.
 

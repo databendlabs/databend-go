@@ -261,6 +261,30 @@ func TestDecodeArrowResponseMaterializesGeo(t *testing.T) {
 	}
 }
 
+func TestDecodeArrowResponseMaterializesBinary(t *testing.T) {
+	input := []byte("hello")
+	resp := QueryResponse{
+		ID:       "query-binary",
+		Settings: &Settings{BinaryOutputFormat: "BASE64"},
+		Schema:   &[]DataField{{Name: "bin", Type: "Binary"}},
+	}
+
+	payload := buildArrowPayload(t, resp, []arrow.Field{
+		{Name: "bin", Type: arrow.BinaryTypes.Binary},
+	}, func(builder *arrowarray.RecordBuilder) {
+		builder.Field(0).(*arrowarray.BinaryBuilder).Append(input)
+	})
+
+	decoded, err := decodeQueryResponse(&rawHTTPResponse{
+		headers: http.Header{contentType: []string{arrowStreamContentType}},
+		body:    payload,
+	})
+	require.NoError(t, err)
+	require.Len(t, decoded.typedRows, 1)
+	require.Len(t, decoded.typedRows[0], 1)
+	assert.Equal(t, input, decoded.typedRows[0][0])
+}
+
 func TestQuerySyncUsesHTTPArrowAcrossPages(t *testing.T) {
 	type requestSnapshot struct {
 		SQL       string

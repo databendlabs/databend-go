@@ -138,6 +138,32 @@ func (c geoColumnType) Desc() *TypeDesc {
 	return &TypeDesc{Name: c.dbType, Nullable: bool(c.isNullable)}
 }
 
+type binaryColumnType struct {
+	format binaryOutputFormat
+	mode   httpJSONResultMode
+	columnTypeDefault
+	isNullable
+}
+
+func (c binaryColumnType) Parse(s string) (driver.Value, error) {
+	if c.checkNull(s) {
+		return nil, nil
+	}
+	return materializeBinaryFromString(s, c.format, c.mode)
+}
+
+func (binaryColumnType) ScanType() reflect.Type {
+	return reflect.TypeOf([]byte(nil))
+}
+
+func (c binaryColumnType) DatabaseTypeName() string {
+	return c.wrapName("Binary")
+}
+
+func (c binaryColumnType) Desc() *TypeDesc {
+	return &TypeDesc{Name: "Binary", Nullable: bool(c.isNullable)}
+}
+
 type timestampColumnType struct {
 	tz *time.Location
 	columnTypeDefault
@@ -281,6 +307,8 @@ func NewColumnType(dbType string, opts *ColumnTypeOptions) (ColumnType, error) {
 		return &timestampTzColumnType{isNullable: nullable}, nil
 	case "Date":
 		return &dateColumnType{isNullable: nullable}, nil
+	case "Binary":
+		return &binaryColumnType{format: opts.binaryOutputFormat, mode: opts.httpJSONResultMode, isNullable: nullable}, nil
 	case "Geometry", "Geography":
 		return &geoColumnType{dbType: desc.Name, format: opts.geometryOutputFormat, isNullable: nullable}, nil
 	case "Decimal":
@@ -302,6 +330,8 @@ type ColumnTypeOptions struct {
 	formatNullAsStr      bool
 	timezone             *time.Location
 	geometryOutputFormat geoOutputFormat
+	binaryOutputFormat   binaryOutputFormat
+	httpJSONResultMode   httpJSONResultMode
 }
 
 func defaultColumnTypeOptions() *ColumnTypeOptions {
@@ -309,6 +339,8 @@ func defaultColumnTypeOptions() *ColumnTypeOptions {
 		formatNullAsStr:      false,
 		timezone:             time.UTC,
 		geometryOutputFormat: geoOutputFormatGeoJSON,
+		binaryOutputFormat:   binaryOutputFormatHex,
+		httpJSONResultMode:   httpJSONResultModeDriver,
 	}
 }
 
@@ -322,4 +354,12 @@ func (opt *ColumnTypeOptions) SetTimezone(v *time.Location) {
 
 func (opt *ColumnTypeOptions) SetGeometryOutputFormat(v string) {
 	opt.geometryOutputFormat = parseGeoOutputFormat(v)
+}
+
+func (opt *ColumnTypeOptions) SetBinaryOutputFormat(v string) {
+	opt.binaryOutputFormat = parseBinaryOutputFormat(v)
+}
+
+func (opt *ColumnTypeOptions) SetHTTPJSONResultMode(v string) {
+	opt.httpJSONResultMode = parseHTTPJSONResultMode(v)
 }
