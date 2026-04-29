@@ -2,24 +2,33 @@ package tests
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestTnx(t *testing.T) {
-	selectT := "SELECT * FROM t ORDER BY c;"
+	tableName := fmt.Sprintf("txn_%d", time.Now().UnixNano())
+	selectT := fmt.Sprintf("SELECT * FROM %s ORDER BY c;", tableName)
 	db1, err := sql.Open("databend", dsn)
 	assert.NoError(t, err)
+	defer db1.Close()
 	db2, err := sql.Open("databend", dsn)
 	assert.NoError(t, err)
+	defer db2.Close()
+	defer func() {
+		_, cleanupErr := db1.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s;", tableName))
+		assert.NoError(t, cleanupErr)
+	}()
 
 	// test commit
-	_, err = db1.Exec("CREATE OR REPLACE TABLE t(c int);")
+	_, err = db1.Exec(fmt.Sprintf("CREATE OR REPLACE TABLE %s(c int);", tableName))
 	assert.NoError(t, err)
 	tx1, err := db1.Begin()
 	assert.NoError(t, err)
-	_, err = tx1.Exec("INSERT INTO t(c) VALUES(1);")
+	_, err = tx1.Exec(fmt.Sprintf("INSERT INTO %s(c) VALUES(1);", tableName))
 	assert.NoError(t, err)
 	rows, err := tx1.Query("select 1")
 	assert.NoError(t, err)
@@ -33,7 +42,7 @@ func TestTnx(t *testing.T) {
 	tx2, err := db2.Begin()
 	assert.NoError(t, err)
 
-	_, err = tx2.Exec("INSERT INTO t(c) VALUES(2);")
+	_, err = tx2.Exec(fmt.Sprintf("INSERT INTO %s(c) VALUES(2);", tableName))
 	assert.NoError(t, err)
 	rows2, err = tx2.Query(selectT)
 	assert.NoError(t, err)
@@ -63,13 +72,13 @@ func TestTnx(t *testing.T) {
 	}
 
 	// test rollback
-	_, err = db1.Exec("DROP table  t;")
+	_, err = db1.Exec(fmt.Sprintf("DROP TABLE %s;", tableName))
 	assert.NoError(t, err)
-	_, err = db1.Exec("CREATE OR REPLACE TABLE t(c int);")
+	_, err = db1.Exec(fmt.Sprintf("CREATE OR REPLACE TABLE %s(c int);", tableName))
 	assert.NoError(t, err)
 	tx1, err = db1.Begin()
 	assert.NoError(t, err)
-	_, err = tx1.Exec("INSERT INTO t(c) VALUES(1);")
+	_, err = tx1.Exec(fmt.Sprintf("INSERT INTO %s(c) VALUES(1);", tableName))
 	assert.NoError(t, err)
 	rows, err = tx1.Query(selectT)
 	assert.NoError(t, err)
