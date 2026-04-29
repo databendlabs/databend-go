@@ -14,6 +14,3 @@ vet: ## Run go vet against code.
 
 integration:
 	make -C tests integration TEST_DATABEND_DSN='$(TEST_DATABEND_DSN)' TEST_QUERY_RESULT_FORMAT='$(TEST_QUERY_RESULT_FORMAT)' TEST_SKIP_CASES='$(TEST_SKIP_CASES)'
-
-compat:
-	make -C tests compat
