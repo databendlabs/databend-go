@@ -6,7 +6,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"golang.org/x/mod/semver"
 	"os"
 	"strings"
 	"testing"
@@ -45,7 +44,6 @@ type Table1 struct {
 
 var (
 	dsn           = "http://root@localhost:8000?presigned_url_disabled=false"
-	driverVersion = ""
 	serverVersion = ""
 )
 
@@ -56,7 +54,6 @@ func init() {
 	}
 
 	serverVersion = getVersion("DATABEND_VERSION")
-	driverVersion = getVersion("DATABEND_GO_VERSION")
 
 	// databend default
 	// dsn = "http://root:@localhost:8000?presign=on"
@@ -225,10 +222,6 @@ func (s *DatabendTestSuite) TestSelectMultiPage() {
 }
 
 func (s *DatabendTestSuite) TestPrepare() {
-	if semver.Compare(driverVersion, "v0.9.0") <= 0 {
-		return
-	}
-
 	r := require.New(s.T())
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
@@ -254,40 +247,6 @@ func (s *DatabendTestSuite) TestPrepare() {
 	result, err := scanValues(rows)
 	r.NoError(err)
 	r.Equal([][]interface{}{{"2"}}, result)
-}
-
-func (s *DatabendTestSuite) TestBatchInsertOld() {
-	if semver.Compare(driverVersion, "v0.9.0") > 0 {
-		return
-	}
-
-	r := require.New(s.T())
-	db := sql.OpenDB(s.cfg)
-	defer db.Close()
-
-	txn, err := db.Begin()
-	r.NoError(err)
-
-	stmt, err := txn.Prepare(fmt.Sprintf("INSERT INTO %s VALUES", s.table))
-	r.NoError(err)
-
-	for i := 0; i < 10; i++ {
-		_, err = stmt.Exec(
-			"1234",
-			"2345",
-			"3.1415",
-			"test",
-			"test2",
-			"[4, 5, 6]",
-			"[1, 2, 3]",
-			"2021-01-01",
-			"2021-01-01 00:00:00",
-		)
-		r.NoError(err)
-	}
-
-	err = txn.Commit()
-	r.NoError(err)
 }
 
 func (s *DatabendTestSuite) TestDDL() {

@@ -11,7 +11,7 @@ import (
 )
 
 func (s *DatabendTestSuite) TestDate() {
-	if semver.Compare(driverVersion, "v0.9.0") <= 0 || semver.Compare(serverVersion, "1.2.836") < 0 {
+	if semver.Compare(serverVersion, "1.2.836") < 0 {
 		return
 	}
 
@@ -80,7 +80,7 @@ func (s *DatabendTestSuite) TestDate() {
 }
 
 func (s *DatabendTestSuite) TestTimestamp() {
-	if semver.Compare(driverVersion, "v0.9.0") <= 0 || semver.Compare(serverVersion, "1.2.836") < 0 {
+	if semver.Compare(serverVersion, "1.2.836") < 0 {
 		return
 	}
 
@@ -141,7 +141,7 @@ func (s *DatabendTestSuite) TestTimestamp() {
 }
 
 func (s *DatabendTestSuite) TestTimestampTz() {
-	if semver.Compare(driverVersion, "v0.9.0") <= 0 || semver.Compare(serverVersion, "1.2.844") < 0 {
+	if semver.Compare(serverVersion, "1.2.844") < 0 {
 		return
 	}
 
@@ -245,10 +245,6 @@ func (s *DatabendTestSuite) TestDecimal() {
 }
 
 func (s *DatabendTestSuite) TestGeo() {
-	if semver.Compare(driverVersion, "v0.9.0") <= 0 {
-		return
-	}
-
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
 
@@ -296,10 +292,6 @@ func (s *DatabendTestSuite) TestGeo() {
 }
 
 func (s *DatabendTestSuite) TestBinary() {
-	if semver.Compare(driverVersion, "v0.9.0") <= 0 {
-		return
-	}
-
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
 
