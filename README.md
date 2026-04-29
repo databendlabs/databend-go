@@ -222,11 +222,15 @@ The following table outlines the mapping between Databend types and Go types:
 | Bitmap             | string    |
 | Decimal            | decimal.Decimal|
 | String             | string    |
+| Geometry           | string / []byte |
+| Geography          | string / []byte |
 | Date               | time.Time |
 | DateTime           | time.Time |
 | Array(T)           | string    |
 | Tuple(T1, T2, ...) | string    |
 | Variant            | string    |
+
+`Geometry` and `Geography` follow the current `geometry_output_format` setting. `WKB` and `EWKB` return `[]byte`; `WKT`, `EWKT`, and `GEOJSON` return `string`.
 
 ## Compatibility
 

@@ -17,6 +17,7 @@ func TestColumnType(t *testing.T) {
 		typeDesc string
 		input    string
 		want     any
+		settings *Settings
 	}{
 		{typeDesc: "String", input: "123", want: "123"},
 		{typeDesc: "Nullable(String)", input: "123", want: "123"},
@@ -34,10 +35,15 @@ func TestColumnType(t *testing.T) {
 		{typeDesc: "Timestamp", input: "2025-01-16 02:01:26.739219", want: time.Date(2025, 1, 16, 2, 1, 26, 739219000, time.UTC)},
 		{typeDesc: "Date", input: "2025-01-16", want: time.Date(2025, 1, 16, 0, 0, 0, 0, time.UTC)},
 		{typeDesc: "Decimal(10, 2)", input: "123.45", want: "123.45"},
+		{typeDesc: "Geometry", input: "01010000000000000000004E400000000000804240", want: []byte{1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 78, 64, 0, 0, 0, 0, 0, 128, 66, 64}, settings: &Settings{GeometryOutputFormat: "WKB"}},
+		{typeDesc: "Geography", input: "POINT(60 37)", want: "POINT(60 37)", settings: &Settings{GeometryOutputFormat: "WKT"}},
 	}
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("%s::%s", tc.input, tc.typeDesc), func(t *testing.T) {
-			colType, err := NewColumnType(tc.typeDesc, nil)
+			opts, err := queryResponseColumnTypeOptions(tc.settings)
+			require.NoError(t, err)
+
+			colType, err := NewColumnType(tc.typeDesc, opts)
 			require.NoError(t, err)
 
 			v, err := colType.Parse(tc.input)
@@ -45,7 +51,7 @@ func TestColumnType(t *testing.T) {
 			require.True(t, driver.IsValue(v))
 
 			if tc.want != nil {
-				require.Equal(t, reflect.TypeOf(tc.want).Name(), colType.ScanType().Name())
+				require.Equal(t, reflect.TypeOf(tc.want), colType.ScanType())
 			}
 
 			desc, err := ParseTypeDesc(tc.typeDesc)
@@ -56,16 +62,17 @@ func TestColumnType(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, desc, desc2)
 
-			runScan(t, tc.typeDesc, tc.input, tc.want)
+			runScan(t, tc.typeDesc, tc.input, tc.want, tc.settings)
 		})
 	}
 }
 
-func runScan(t *testing.T, desc string, input string, want any) {
+func runScan(t *testing.T, desc string, input string, want any, settings *Settings) {
 	db := sql.OpenDB(&fakeConnector{
 		resp: &QueryResponse{
-			Schema: &[]DataField{{Name: "x", Type: desc}},
-			Data:   [][]*string{{&input}},
+			Settings: settings,
+			Schema:   &[]DataField{{Name: "x", Type: desc}},
+			Data:     [][]*string{{&input}},
 		},
 	})
 
@@ -130,14 +137,6 @@ func (s *fakeStmt) NumInput() int {
 }
 
 func (s *fakeStmt) Query(args []driver.Value) (driver.Rows, error) {
-	schema, err := parse_schema(s.resp.Schema, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return &nextRows{
-		dc:           &DatabendConn{},
-		respData:     s.resp,
-		resultSchema: *schema,
-	}, nil
+	dc := &DatabendConn{cfg: &Config{}}
+	return dc.newNextRows(context.Background(), s.resp)
 }

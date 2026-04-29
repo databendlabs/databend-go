@@ -253,13 +253,9 @@ func arrowRecordToRows(record arrow.Record, fields *[]DataField, settings *Setti
 		}
 	}
 
-	location := time.UTC
-	if settings != nil && settings.TimeZone != "" {
-		loc, err := time.LoadLocation(settings.TimeZone)
-		if err != nil {
-			return nil, err
-		}
-		location = loc
+	opts, err := queryResponseColumnTypeOptions(settings)
+	if err != nil {
+		return nil, err
 	}
 
 	descs := make([]*TypeDesc, len(*fields))
@@ -285,7 +281,7 @@ func arrowRecordToRows(record arrow.Record, fields *[]DataField, settings *Setti
 				continue
 			}
 
-			typedValue, err := materializeArrowDriverValue(descs[colIdx], column, rowIdx, location)
+			typedValue, err := materializeArrowDriverValue(descs[colIdx], column, rowIdx, opts)
 			if err != nil {
 				return nil, err
 			}
@@ -311,9 +307,9 @@ func formatArrowColumnValue(desc *TypeDesc, column arrow.Array, rowIdx int, loca
 	return formatArrowValue(desc, marshaled.GetOneForMarshal(rowIdx), location)
 }
 
-func materializeArrowDriverValue(desc *TypeDesc, column arrow.Array, rowIdx int, location *time.Location) (driver.Value, error) {
+func materializeArrowDriverValue(desc *TypeDesc, column arrow.Array, rowIdx int, opts *ColumnTypeOptions) (driver.Value, error) {
 	if desc == nil {
-		return formatArrowColumnValue(desc, column, rowIdx, location)
+		return formatArrowColumnValue(desc, column, rowIdx, opts.timezone)
 	}
 
 	switch desc.Name {
@@ -322,11 +318,29 @@ func materializeArrowDriverValue(desc *TypeDesc, column arrow.Array, rowIdx int,
 	case "Date":
 		return materializeArrowDateDriverValue(column, rowIdx)
 	case "Timestamp":
-		return materializeArrowTimestampDriverValue(column, rowIdx, location)
+		return materializeArrowTimestampDriverValue(column, rowIdx, opts.timezone)
 	case "Timestamp_Tz":
-		return materializeArrowTimestampTZDriverValue(column, rowIdx, location)
+		return materializeArrowTimestampTZDriverValue(column, rowIdx, opts.timezone)
+	case "Geometry", "Geography":
+		return materializeArrowGeoDriverValue(desc.Name, column, rowIdx, opts.geometryOutputFormat)
 	default:
-		return formatArrowColumnValue(desc, column, rowIdx, location)
+		return formatArrowColumnValue(desc, column, rowIdx, opts.timezone)
+	}
+}
+
+func materializeArrowGeoDriverValue(kind string, column arrow.Array, rowIdx int, format geoOutputFormat) (driver.Value, error) {
+	marshaled, ok := column.(marshaledArrowArray)
+	if !ok {
+		return nil, fmt.Errorf("arrow column does not support row materialization: %T", column)
+	}
+
+	switch value := marshaled.GetOneForMarshal(rowIdx).(type) {
+	case []byte:
+		return materializeGeoFromBinary(kind, value, format)
+	case string:
+		return materializeGeoFromString(kind, value, format)
+	default:
+		return nil, fmt.Errorf("unsupported arrow %s value type %T", strings.ToLower(kind), value)
 	}
 }
 

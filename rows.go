@@ -92,7 +92,7 @@ func (dc *DatabendConn) newNextRows(ctx context.Context, resp *QueryResponse) (r
 		}
 	}
 
-	schema, err := parse_schema(resp.Schema, dc.columnTypeOptions(location))
+	schema, err := parse_schema(resp.Schema, dc.columnTypeOptions(resp.Settings, location))
 	if err != nil {
 		return nil, err
 	}
