@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -12,20 +13,21 @@ import (
 )
 
 func TestAffectedRows(t *testing.T) {
+	tableName := fmt.Sprintf("books_%d", time.Now().UnixNano())
+	defer cleanupTable(dsn, tableName)
+
 	err := selectExec(dsn)
 	require.NoError(t, err, "select exec failed")
 
-	err = createAffectedTable(dsn)
+	err = createAffectedTable(dsn, tableName)
 	require.NoError(t, err, "create affected table failed")
-	affectedRows, err := updateTable(dsn)
+	affectedRows, err := updateTable(dsn, tableName)
 	require.NoError(t, err, "update table failed")
 	assert.Equal(t, int64(2), affectedRows)
 
-	affectedRowsDelete, err := deleteTable(dsn)
+	affectedRowsDelete, err := deleteTable(dsn, tableName)
 	require.NoError(t, err, "delete table failed")
 	assert.Equal(t, int64(2), affectedRowsDelete)
-
-	defer cleanupTable(dsn)
 }
 
 func selectExec(dsn string) error {
@@ -45,14 +47,14 @@ func selectExec(dsn string) error {
 	return nil
 }
 
-func createAffectedTable(dsn string) error {
+func createAffectedTable(dsn, tableName string) error {
 	db, err := sql.Open("databend", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to connect. %v, err: %v", dsn, err)
 	}
 	defer db.Close()
 
-	query := "CREATE TABLE IF NOT EXISTS books (id INT, title STRING, author STRING)"
+	query := fmt.Sprintf("CREATE TABLE %s (id INT, title STRING, author STRING)", tableName)
 	_, err = db.Exec(query)
 	if err != nil {
 		return fmt.Errorf("failed to create table. %v, err: %v", query, err)
@@ -61,12 +63,12 @@ func createAffectedTable(dsn string) error {
 	fmt.Println("Table created successfully.")
 
 	// Insert sample data
-	_, err = db.Exec("INSERT INTO books (id, title, author) VALUES (1, '1984', 'George Orwell')")
+	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s (id, title, author) VALUES (1, '1984', 'George Orwell')", tableName))
 	if err != nil {
 		return fmt.Errorf("failed to insert data. %v, err: %v", query, err)
 	}
 
-	_, err = db.Exec("INSERT INTO books (id, title, author) VALUES (1, 'To Kill a Mockingbird', 'Harper Lee')")
+	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s (id, title, author) VALUES (1, 'To Kill a Mockingbird', 'Harper Lee')", tableName))
 	if err != nil {
 		return fmt.Errorf("failed to insert data. %v, err: %v", query, err)
 	}
@@ -74,14 +76,14 @@ func createAffectedTable(dsn string) error {
 	return nil
 }
 
-func cleanupTable(dsn string) error {
+func cleanupTable(dsn, tableName string) error {
 	db, err := sql.Open("databend", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to connect. %v, err: %v", dsn, err)
 	}
 	defer db.Close()
 
-	query := "DROP TABLE IF EXISTS books"
+	query := fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName)
 	_, err = db.Exec(query)
 	if err != nil {
 		return fmt.Errorf("failed to drop table. %v, err: %v", query, err)
@@ -90,14 +92,14 @@ func cleanupTable(dsn string) error {
 	return nil
 }
 
-func updateTable(dsn string) (int64, error) {
+func updateTable(dsn, tableName string) (int64, error) {
 	db, err := sql.Open("databend", dsn)
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect. %v, err: %v", dsn, err)
 	}
 	defer db.Close()
 
-	query := "UPDATE books SET title = 'Nineteen Eighty-Four' WHERE id = 1"
+	query := fmt.Sprintf("UPDATE %s SET title = 'Nineteen Eighty-Four' WHERE id = 1", tableName)
 	result, err := db.Exec(query)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update table. %v, err: %v", query, err)
@@ -113,14 +115,14 @@ func updateTable(dsn string) (int64, error) {
 	return rowsAffected, nil
 }
 
-func deleteTable(dsn string) (int64, error) {
+func deleteTable(dsn, tableName string) (int64, error) {
 	db, err := sql.Open("databend", dsn)
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect. %v, err: %v", dsn, err)
 	}
 	defer db.Close()
 
-	query := "DELETE FROM books WHERE id = 1"
+	query := fmt.Sprintf("DELETE FROM %s WHERE id = 1", tableName)
 	result, err := db.Exec(query)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete table. %v, err: %v", query, err)

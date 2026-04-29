@@ -113,10 +113,11 @@ func (s *DatabendTestSuite) SetupTest() {
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
 	tName := strings.ReplaceAll(t.Name(), "/", "__")
+	uniqueSuffix := time.Now().UnixNano()
 
-	s.table = fmt.Sprintf("test_%s_%d", tName, time.Now().Unix())
+	s.table = fmt.Sprintf("test_%s_%d", strings.ToLower(tName), uniqueSuffix)
 	// t.Logf("setup test with table %s", s.table)
-	s.table2 = fmt.Sprintf("test_%s_%d", tName, time.Now().Unix()+1)
+	s.table2 = fmt.Sprintf("test_%s_%d", strings.ToLower(tName), uniqueSuffix+1)
 
 	_, err := db.Exec(fmt.Sprintf(createTable, s.table))
 	s.r.NoError(err)
@@ -131,9 +132,9 @@ func (s *DatabendTestSuite) TearDownTest() {
 	defer db.Close()
 
 	// t.Logf("teardown test with table %s", s.table)
-	_, err := db.Exec(fmt.Sprintf("DROP TABLE %s", s.table))
+	_, err := db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", s.table))
 	s.r.NoError(err)
-	_, err = db.Exec(fmt.Sprintf("DROP TABLE %s", s.table2))
+	_, err = db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", s.table2))
 	s.r.NoError(err)
 }
 

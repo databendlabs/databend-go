@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -35,15 +36,17 @@ func (s *DatabendTestSuite) TestChangeRole() {
 	var result string
 	db := sql.OpenDB(s.cfg)
 	defer db.Close()
+	roleName := strings.ToLower(fmt.Sprintf("test_role_%d", time.Now().UnixNano()))
+	defer func() {
+		_, err := db.Exec(fmt.Sprintf("drop role if exists %s", roleName))
+		r.NoError(err)
+	}()
 
 	err := db.QueryRow("select version()").Scan(&result)
 	r.NoError(err)
-	_, err = db.Exec("drop role if exists test_role")
+	_, err = db.Exec(fmt.Sprintf("drop role if exists %s", roleName))
 	r.NoError(err)
-	_, err = db.Exec("drop role if exists test_role_2")
-	r.NoError(err)
-	println(result)
-	_, err = db.Exec("create role if not exists test_role")
+	_, err = db.Exec(fmt.Sprintf("create role if not exists %s", roleName))
 	r.NoError(err)
 	s.NoError(err)
 
@@ -57,18 +60,23 @@ func (s *DatabendTestSuite) TestChangeRole() {
 	//_, err = db.Exec("grant role 'test_role' to " + user)
 	//r.NoError(err)
 
-	_, err = db.Exec("set role 'test_role'")
+	_, err = db.Exec(fmt.Sprintf("set role '%s'", roleName))
 	r.NoError(err)
 	err = db.QueryRow("select current_role()").Scan(&result)
 	r.NoError(err)
-	r.Equal("test_role", result)
+	r.Equal(roleName, result)
 
-	dsn_with_role := fmt.Sprintf("%s&role=test_role", dsn)
+	separator := "?"
+	if strings.Contains(dsn, "?") {
+		separator = "&"
+	}
+	dsn_with_role := fmt.Sprintf("%s%srole=%s", dsn, separator, roleName)
 	db2, err := sql.Open("databend", dsn_with_role)
 	r.NoError(err)
+	defer db2.Close()
 	err = db2.QueryRow("select current_role()").Scan(&result)
 	r.NoError(err)
-	r.Equal("test_role", result)
+	r.Equal(roleName, result)
 }
 
 func (s *DatabendTestSuite) TestSessionConfig() {
