@@ -19,3 +19,5 @@ ttc
 
 # vim
 *.swp
+
+.alma-snapshots/
