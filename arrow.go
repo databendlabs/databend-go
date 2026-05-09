@@ -92,11 +92,6 @@ func (c *APIClient) doRequestRaw(
 	}
 
 	url := c.makeURL(path)
-	httpReq, err := http.NewRequest(method, url, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create http request")
-	}
-	httpReq = httpReq.WithContext(ctx)
 
 	headers, err := c.makeHeaders(ctx)
 	if err != nil {
@@ -113,11 +108,6 @@ func (c *APIClient) doRequestRaw(
 		acceptType = jsonContentType
 	}
 	headers.Set(accept, acceptType)
-	httpReq.Header = headers
-
-	if len(c.host) > 0 {
-		httpReq.Host = c.host
-	}
 
 	authRetryLimit := 2
 	for i := 1; i <= authRetryLimit; i++ {
@@ -125,6 +115,16 @@ func (c *APIClient) doRequestRaw(
 		case <-ctx.Done():
 			return nil, errors.Wrap(ctx.Err(), "context done")
 		default:
+		}
+
+		httpReq, err := http.NewRequest(method, url, bytes.NewBuffer(reqBody))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create http request")
+		}
+		httpReq = httpReq.WithContext(ctx)
+		httpReq.Header = headers.Clone()
+		if len(c.host) > 0 {
+			httpReq.Host = c.host
 		}
 
 		httpResp, err := c.cli.Do(httpReq)
@@ -164,6 +164,7 @@ func (c *APIClient) doRequestRaw(
 		}, nil
 	}
 
+	// unreachable: loop always returns inside on the final iteration
 	return nil, errors.Errorf("failed to do request after %d retries", authRetryLimit)
 }
 
@@ -615,6 +616,9 @@ func formatArrowTimestampTZDecimalValue(value decimal128.Num) (string, error) {
 	return ts.In(zone).Format("2006-01-02 15:04:05.000000 -0700"), nil
 }
 
+// arrowTimestampTZDecimalToTime decodes a Timestamp_Tz value encoded as Decimal128.
+// The server encodes: LowBits = microseconds since Unix epoch (uint64 cast to int64),
+// HighBits = timezone offset in seconds from UTC (uint64 cast to int32).
 func arrowTimestampTZDecimalToTime(value decimal128.Num) time.Time {
 	ts := time.UnixMicro(clampArrowTimestampMicros(int64(value.LowBits())))
 	zone := time.FixedZone("", int(int32(value.HighBits())))
@@ -676,52 +680,6 @@ func clampArrowTimestampMicros(value int64) int64 {
 	default:
 		return value
 	}
-}
-
-func (c *APIClient) snapshotClientState() func() {
-	querySeq := c.QuerySeq
-	routeHint := c.routeHint
-	nodeID := c.nodeID
-	stateRestored := c.stateRestored
-	sessionStateRaw := cloneRawMessage(c.sessionStateRaw)
-	sessionState := cloneSessionState(c.sessionState)
-
-	return func() {
-		c.QuerySeq = querySeq
-		c.routeHint = routeHint
-		c.nodeID = nodeID
-		c.stateRestored = stateRestored
-		c.sessionStateRaw = sessionStateRaw
-		c.sessionState = sessionState
-	}
-}
-
-func cloneRawMessage(raw *json.RawMessage) *json.RawMessage {
-	if raw == nil {
-		return nil
-	}
-	cloned := json.RawMessage(append([]byte(nil), (*raw)...))
-	return &cloned
-}
-
-func cloneSessionState(state *SessionState) *SessionState {
-	if state == nil {
-		return nil
-	}
-
-	cloned := *state
-	if state.SecondaryRoles != nil {
-		roles := append([]string(nil), (*state.SecondaryRoles)...)
-		cloned.SecondaryRoles = &roles
-	}
-	if state.Settings != nil {
-		settings := make(map[string]string, len(state.Settings))
-		for key, value := range state.Settings {
-			settings[key] = value
-		}
-		cloned.Settings = settings
-	}
-	return &cloned
 }
 
 func formatArrowScalar(value interface{}) (string, error) {

@@ -442,9 +442,10 @@ func TestQuerySyncFallsBackToJSONWhenArrowRequested(t *testing.T) {
 
 	resp, err := client.QuerySync(context.Background(), "SELECT 1")
 	require.NoError(t, err)
-	require.Len(t, resp.Data, 1)
-	require.NotNil(t, resp.Data[0][0])
-	assert.Equal(t, "1", *resp.Data[0][0])
+	require.Equal(t, 1, resp.RowCount())
+	v, ok := resp.CellString(0, 0)
+	require.True(t, ok)
+	assert.Equal(t, "1", v)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -495,9 +496,10 @@ func TestQuerySyncUsesJSONForRestoredState(t *testing.T) {
 
 	resp, err := client.QuerySync(context.Background(), "SELECT 1")
 	require.NoError(t, err)
-	require.Len(t, resp.Data, 1)
-	require.NotNil(t, resp.Data[0][0])
-	assert.Equal(t, "1", *resp.Data[0][0])
+	require.Equal(t, 1, resp.RowCount())
+	v, ok := resp.CellString(0, 0)
+	require.True(t, ok)
+	assert.Equal(t, "1", v)
 
 	mu.Lock()
 	defer mu.Unlock()
