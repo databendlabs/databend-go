@@ -3,7 +3,9 @@ package godatabend
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -101,6 +103,33 @@ func TestDoQuery(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "mockid1", gotQueryID)
 	assert.Equal(t, resp.ID, queryId)
+}
+
+func TestMakeHeadersUserAgent(t *testing.T) {
+	pkgVersion := strings.TrimSpace(version)
+
+	// case 1: no userAgent set, default header
+	c := APIClient{
+		user:         "root",
+		password:     "root",
+		host:         "localhost:8000",
+		sessionState: &SessionState{},
+	}
+	headers, err := c.makeHeaders(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("databend-go/%s", pkgVersion), headers.Get("User-Agent"))
+
+	// case 2: userAgent set via config field
+	c.userAgent = "grafana-databend-datasource"
+	headers, err = c.makeHeaders(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("databend-go/%s (grafana-databend-datasource)", pkgVersion), headers.Get("User-Agent"))
+
+	// case 3: context overrides config field
+	ctx := context.WithValue(context.Background(), ContextUserAgentID, "bendsql")
+	headers, err = c.makeHeaders(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("databend-go/%s (bendsql)", pkgVersion), headers.Get("User-Agent"))
 }
 
 func TestClientStateRoundTripRestoresQuerySeq(t *testing.T) {

@@ -67,6 +67,10 @@ type Config struct {
 	QueryResultFormat   string
 	LoginEnabled        bool
 
+	// UserAgent is an optional string appended to the default user agent header.
+	// It is not parsed from DSN and should be set programmatically.
+	UserAgent string
+
 	loginConfigured bool
 }
 

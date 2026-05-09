@@ -124,6 +124,8 @@ type APIClient struct {
 	connectionInitMu          sync.Mutex
 	connectionInfoInitialized bool
 
+	userAgent string
+
 	// only used for testing mocks
 	doRequestFunc func(method, path string, req interface{}, resp interface{}) error
 }
@@ -219,6 +221,7 @@ func NewAPIClientFromConfig(cfg *Config) *APIClient {
 		EmptyFieldAs:         cfg.EmptyFieldAs,
 		queryResultFormat:    cfg.QueryResultFormat,
 		loginEnabled:         cfg.effectiveLoginEnabled(),
+		userAgent:            cfg.UserAgent,
 	}
 }
 
@@ -357,9 +360,14 @@ func (c *APIClient) makeHeaders(ctx context.Context) (http.Header, error) {
 	headers := http.Header{}
 	headers.Set(WarehouseRoute, "warehouse")
 	pkgVersion := strings.TrimSpace(version)
-	headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", pkgVersion))
-	if userAgent, ok := ctx.Value(ContextUserAgentID).(string); ok {
-		headers.Set(UserAgent, fmt.Sprintf("databend-go/%s/%s", pkgVersion, userAgent))
+	userAgent := c.userAgent
+	if ua, ok := ctx.Value(ContextUserAgentID).(string); ok {
+		userAgent = ua
+	}
+	if userAgent != "" {
+		headers.Set(UserAgent, fmt.Sprintf("databend-go/%s (%s)", pkgVersion, userAgent))
+	} else {
+		headers.Set(UserAgent, fmt.Sprintf("databend-go/%s", pkgVersion))
 	}
 	if c.tenant != "" {
 		headers.Set(DatabendTenantHeader, c.tenant)
