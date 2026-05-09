@@ -62,6 +62,10 @@ func (r *QueryResponse) ReadFinished() bool {
 	return r.NextURI == "" || strings.Contains(r.NextURI, "/final")
 }
 
+func (r *QueryResponse) RowCount() int {
+	return r.bufferedRowCount()
+}
+
 func (r *QueryResponse) bufferedRowCount() int {
 	if r == nil {
 		return 0
@@ -83,6 +87,10 @@ func (r *QueryResponse) cellValue(rowIdx, colIdx int) (driver.Value, bool) {
 		return *r.Data[rowIdx][colIdx], true
 	}
 	return nil, false
+}
+
+func (r *QueryResponse) CellString(rowIdx, colIdx int) (string, bool) {
+	return r.cellString(rowIdx, colIdx)
 }
 
 func (r *QueryResponse) cellString(rowIdx, colIdx int) (string, bool) {

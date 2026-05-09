@@ -251,30 +251,19 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 	}
 
 	url := c.makeURL(path)
-	httpReq, err := http.NewRequest(method, url, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return errors.Wrap(err, "failed to create http request")
-	}
-
-	httpReq = httpReq.WithContext(ctx)
 
 	headers, err := c.makeHeaders(ctx)
-	if needSticky && len(c.nodeID) != 0 {
-		headers.Set(DatabendQueryStickyNode, c.nodeID)
-	}
 	if err != nil {
 		return errors.Wrap(err, "failed to make request headers")
+	}
+	if needSticky && len(c.nodeID) != 0 {
+		headers.Set(DatabendQueryStickyNode, c.nodeID)
 	}
 	if method == "GET" && len(c.nodeID) != 0 {
 		headers.Set(DatabendQueryIDNode, c.nodeID)
 	}
 	headers.Set(contentType, jsonContentType)
 	headers.Set(accept, jsonContentType)
-	httpReq.Header = headers
-
-	if len(c.host) > 0 {
-		httpReq.Host = c.host
-	}
 
 	authRetryLimit := 2
 	for i := 1; i <= authRetryLimit; i++ {
@@ -282,6 +271,16 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 		case <-ctx.Done():
 			return errors.Wrap(ctx.Err(), "context done")
 		default:
+		}
+
+		httpReq, err := http.NewRequest(method, url, bytes.NewBuffer(reqBody))
+		if err != nil {
+			return errors.Wrap(err, "failed to create http request")
+		}
+		httpReq = httpReq.WithContext(ctx)
+		httpReq.Header = headers.Clone()
+		if len(c.host) > 0 {
+			httpReq.Host = c.host
 		}
 
 		httpResp, err := c.cli.Do(httpReq)

@@ -173,6 +173,9 @@ func (r *nextRows) Next(dest []driver.Value) error {
 		typedRow = r.respData.typedRows[0]
 		r.respData.typedRows = r.respData.typedRows[1:]
 	}
+	if len(typedRow) != 0 && len(lineData) != 0 {
+		return errors.New("query error: internal error, both typed and raw row data are set")
+	}
 	if len(typedRow) != 0 {
 		if len(typedRow) != len(r.columns) {
 			return errors.New("query error: internal error, typed data and schema not match")

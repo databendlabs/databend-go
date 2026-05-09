@@ -43,6 +43,7 @@ func (s *DatabendTestSuite) TestResumeQueryWithSessionState() {
 	finalResp, err := secondClient.PollUntilQueryEnd(ctx, resumeResp)
 	s.Require().NoError(err)
 	s.Require().NotNil(finalResp)
+	s.Greater(finalResp.RowCount(), 0)
 	s.NoError(secondClient.CloseQuery(ctx, finalResp))
 }
 
@@ -65,10 +66,10 @@ func (s *DatabendTestSuite) TestSessionSettingLoadWithState() {
 	client2.WithState(state)
 	resp, err := client2.QuerySync(ctx, fmt.Sprintf("SELECT value FROM system.settings WHERE name = '%s'", settingKey))
 	s.Require().NoError(err)
-	s.Require().Greater(len(resp.Data), 0)
-	s.Require().Greater(len(resp.Data[0]), 0)
-	s.Require().NotNil(resp.Data[0][0])
-	s.Equal(fmt.Sprintf("%d", settingValue), *resp.Data[0][0])
+	s.Require().Greater(resp.RowCount(), 0)
+	v, ok := resp.CellString(0, 0)
+	s.Require().True(ok)
+	s.Equal(fmt.Sprintf("%d", settingValue), v)
 
 	roundedState := client2.GetState()
 	s.Require().NotNil(roundedState)

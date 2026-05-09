@@ -5,6 +5,52 @@ import (
 	"net/http"
 )
 
+func (c *APIClient) snapshotClientState() func() {
+	querySeq := c.QuerySeq
+	routeHint := c.routeHint
+	nodeID := c.nodeID
+	stateRestored := c.stateRestored
+	sessionStateRaw := cloneRawMessage(c.sessionStateRaw)
+	sessionState := cloneSessionState(c.sessionState)
+
+	return func() {
+		c.QuerySeq = querySeq
+		c.routeHint = routeHint
+		c.nodeID = nodeID
+		c.stateRestored = stateRestored
+		c.sessionStateRaw = sessionStateRaw
+		c.sessionState = sessionState
+	}
+}
+
+func cloneRawMessage(raw *json.RawMessage) *json.RawMessage {
+	if raw == nil {
+		return nil
+	}
+	cloned := json.RawMessage(append([]byte(nil), (*raw)...))
+	return &cloned
+}
+
+func cloneSessionState(state *SessionState) *SessionState {
+	if state == nil {
+		return nil
+	}
+
+	cloned := *state
+	if state.SecondaryRoles != nil {
+		roles := append([]string(nil), (*state.SecondaryRoles)...)
+		cloned.SecondaryRoles = &roles
+	}
+	if state.Settings != nil {
+		settings := make(map[string]string, len(state.Settings))
+		for key, value := range state.Settings {
+			settings[key] = value
+		}
+		cloned.Settings = settings
+	}
+	return &cloned
+}
+
 type APIClientState struct {
 	SessionID    string
 	QuerySeq     int64
