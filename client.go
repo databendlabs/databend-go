@@ -845,7 +845,7 @@ func (c *APIClient) UploadToStageByPresignURL(ctx context.Context, stage *StageL
 		return errors.Wrap(err, "failed to get presigned url")
 	}
 
-	req, err := http.NewRequest("PUT", presigned.URL, input)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, presigned.URL, input)
 	if err != nil {
 		return err
 	}
@@ -853,9 +853,8 @@ func (c *APIClient) UploadToStageByPresignURL(ctx context.Context, stage *StageL
 		req.Header.Set(k, v)
 	}
 	req.ContentLength = size
-	// TODO: configurable timeout
 	httpClient := &http.Client{
-		Timeout: time.Second * 60,
+		Timeout: c.cli.Timeout,
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -893,7 +892,7 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 
 	path := "/v1/upload_to_stage"
 	url := c.makeURL(path)
-	req, err := http.NewRequest("PUT", url, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, body)
 	if err != nil {
 		return errors.Wrap(err, "failed to create http request")
 	}
@@ -908,11 +907,7 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 	req.Header.Set("stage_name", stage.Name)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	// TODO: configurable timeout
-	httpClient := &http.Client{
-		Timeout: time.Second * 60,
-	}
-	resp, err := httpClient.Do(req)
+	resp, err := c.cli.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "failed http do request")
 	}

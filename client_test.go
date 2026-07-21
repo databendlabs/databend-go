@@ -1,17 +1,48 @@
 package godatabend
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestUploadToStageByAPIHonorsContext(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(250 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := &APIClient{
+		cli:          server.Client(),
+		apiEndpoint:  server.URL,
+		host:         strings.TrimPrefix(server.URL, "http://"),
+		tenant:       "default",
+		user:         "root",
+		sessionState: &SessionState{},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	started := time.Now()
+	err := client.UploadToStageByAPI(
+		ctx,
+		&StageLocation{Name: "uploads", Path: "backfill/test.csv"},
+		bufio.NewReader(strings.NewReader("1,2,3\n")),
+	)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, time.Since(started), 200*time.Millisecond)
+}
 
 func TestMakeHeadersUserPassword(t *testing.T) {
 	c := APIClient{
