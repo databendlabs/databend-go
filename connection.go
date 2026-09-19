@@ -158,7 +158,14 @@ func (dc *DatabendConn) PrepareContext(ctx context.Context, query string) (drive
 
 func buildDatabendConn(ctx context.Context, config *Config) (*DatabendConn, error) {
 	dc := &DatabendConn{
-		ctx:  ctx,
+		// database/sql dials a pooled connection with the context of whichever
+		// request needed it, and the connection then outlives that request.
+		// dc.ctx is used later by calls that carry no context of their own:
+		// Commit, Rollback, Begin, Prepare, closing a result set and logout.
+		// Keeping the dial context's values (user agent) but not its
+		// cancellation or deadline stops a finished request from failing
+		// those calls with "context canceled" on a healthy connection.
+		ctx:  context.WithoutCancel(ctx),
 		cfg:  config,
 		rest: NewAPIClientFromConfig(config),
 	}
