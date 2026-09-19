@@ -116,7 +116,7 @@ func (dc *DatabendConn) BeginTx(
 	if _, err := dc.exec(ctx, "BEGIN", nil, nil); err != nil {
 		return nil, err
 	}
-	return &databendTx{dc}, nil
+	return &databendTx{dc: dc, ctx: txContext(ctx)}, nil
 }
 
 func (dc *DatabendConn) cleanup() {
@@ -160,18 +160,15 @@ func buildDatabendConn(ctx context.Context, config *Config) (*DatabendConn, erro
 	dc := &DatabendConn{
 		// database/sql dials a pooled connection with the context of whichever
 		// request needed it, and the connection then outlives that request.
-		// dc.ctx is used later by calls that carry no context of their own:
-		// Commit, Rollback, Begin, Prepare, closing a result set and logout.
-		// Keeping the dial context's values (user agent) but not its
-		// cancellation or deadline stops a finished request from failing
-		// those calls with "context canceled" on a healthy connection.
-		//
-		// The dialing request's query ID is dropped too. Databend treats a
-		// repeated query ID as a retry of that query and returns its first
-		// result, so a COMMIT reusing the ID of the BEGIN that dialed would
-		// report success without running. Without an ID in dc.ctx, each of
-		// those calls gets a fresh one from checkQueryID.
-		ctx:  contextWithoutQueryID{Context: context.WithoutCancel(ctx)},
+		// Nothing of that request may stick to the connection: its
+		// cancellation or deadline would fail later calls on a healthy
+		// connection, its query ID would make Databend treat a later statement
+		// as a retry of the dialing one, and its per-call values (such as the
+		// user agent override) would be attributed to unrelated requests.
+		// dc.ctx is only for calls that belong to no request (logout and the
+		// legacy context-free Begin/Prepare); the dial context is used for the
+		// dial itself below. Connection-level settings come from Config.
+		ctx:  context.Background(),
 		cfg:  config,
 		rest: NewAPIClientFromConfig(config),
 	}
