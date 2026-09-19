@@ -165,7 +165,13 @@ func buildDatabendConn(ctx context.Context, config *Config) (*DatabendConn, erro
 		// Keeping the dial context's values (user agent) but not its
 		// cancellation or deadline stops a finished request from failing
 		// those calls with "context canceled" on a healthy connection.
-		ctx:  context.WithoutCancel(ctx),
+		//
+		// The dialing request's query ID is dropped too. Databend treats a
+		// repeated query ID as a retry of that query and returns its first
+		// result, so a COMMIT reusing the ID of the BEGIN that dialed would
+		// report success without running. Without an ID in dc.ctx, each of
+		// those calls gets a fresh one from checkQueryID.
+		ctx:  contextWithoutQueryID{Context: context.WithoutCancel(ctx)},
 		cfg:  config,
 		rest: NewAPIClientFromConfig(config),
 	}

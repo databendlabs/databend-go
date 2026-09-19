@@ -18,10 +18,17 @@ import (
 // txnServer answers login and queries, tracking the transaction state the way
 // Databend reports it in the session, and records every statement it receives.
 func txnServer(t *testing.T) (*httptest.Server, func() []string) {
+	server, statements, _ := txnServerWithIDs(t)
+	return server, statements
+}
+
+// txnServerWithIDs also returns the query ID header of every statement.
+func txnServerWithIDs(t *testing.T) (*httptest.Server, func() []string, func() []string) {
 	t.Helper()
 	var (
 		mu  sync.Mutex
 		sql []string
+		ids []string
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -35,6 +42,7 @@ func txnServer(t *testing.T) (*httptest.Server, func() []string) {
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 			mu.Lock()
 			sql = append(sql, req.SQL)
+			ids = append(ids, r.Header.Get(DatabendQueryIDHeader))
 			mu.Unlock()
 
 			state := TxnStateAutoCommit
@@ -55,10 +63,14 @@ func txnServer(t *testing.T) (*httptest.Server, func() []string) {
 	}))
 	t.Cleanup(server.Close)
 	return server, func() []string {
-		mu.Lock()
-		defer mu.Unlock()
-		return append([]string(nil), sql...)
-	}
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]string(nil), sql...)
+		}, func() []string {
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]string(nil), ids...)
+		}
 }
 
 // database/sql dials a connection with the context of the request that needed
@@ -117,4 +129,27 @@ func TestConnectionKeepsTheDialContextValues(t *testing.T) {
 
 	assert.NoError(t, dc.ctx.Err())
 	assert.Equal(t, "my-app/1.0", dc.ctx.Value(ContextUserAgentID))
+}
+
+// A connection dialed by a request that set its own query ID must not reuse
+// that ID for later calls. Databend treats a repeated query ID as a retry and
+// returns the first query's result, so a COMMIT carrying the BEGIN's ID would
+// report success without committing.
+func TestConnectionDoesNotReuseTheDialQueryID(t *testing.T) {
+	server, statements, ids := txnServerWithIDs(t)
+	callerCtx := context.WithValue(context.Background(), ContextKeyQueryID, "caller-query-id")
+	dc, err := buildDatabendConn(callerCtx, testHTTPConfig(t, server.URL))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = dc.Close() })
+
+	tx, err := dc.BeginTx(callerCtx, driver.TxOptions{})
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	require.Equal(t, []string{"BEGIN", "COMMIT"}, statements())
+	got := ids()
+	assert.Equal(t, "caller-query-id", got[0], "BEGIN runs on the caller's context")
+	assert.NotEmpty(t, got[1])
+	assert.NotEqual(t, got[0], got[1], "COMMIT must carry its own query ID")
+	assert.Nil(t, dc.ctx.Value(ContextKeyQueryID))
 }
