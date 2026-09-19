@@ -125,7 +125,11 @@ func (r *nextRows) Close() error {
 func (r *nextRows) doClose() error {
 	if atomic.CompareAndSwapInt32(&r.isClosed, 0, 1) {
 		if r.respData != nil && len(r.respData.FinalURI) != 0 {
-			err := r.dc.rest.CloseQuery(r.dc.ctx, r.respData)
+			// Close runs when the query's context is canceled, so it must not
+			// inherit that cancellation, or the server-side query would never be
+			// finalized. It keeps the query's own metadata (query ID, user
+			// agent) rather than whatever request dialed the connection.
+			err := r.dc.rest.CloseQuery(context.WithoutCancel(r.ctx), r.respData)
 			if err != nil {
 				return err
 			}
