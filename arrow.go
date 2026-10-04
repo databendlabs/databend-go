@@ -654,6 +654,7 @@ func parseArrowTimestampString(value string, location *time.Location) (time.Time
 	}
 
 	localLayouts := []string{
+		"2006-01-02T15:04:05.999999999",
 		"2006-01-02 15:04:05.999999999",
 		"2006-01-02 15:04:05.999999",
 		"2006-01-02 15:04:05",
