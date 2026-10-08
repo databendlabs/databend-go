@@ -62,6 +62,9 @@ set `query_result_format=arrow` in the DSN or set `cfg.QueryResultFormat = godat
 When Arrow is enabled, the driver only uses it if the server version is `>= 1.2.899`.
 If the backend still returns JSON for a query, the driver transparently falls back to the existing row path.
 
+Timestamp strings without a timezone may use either a space or `T` between
+the date and time; the driver interprets them in the session timezone.
+
 ## Execution
 
 Once a connection has been obtained, users can issue sql statements for execution via the Exec method.

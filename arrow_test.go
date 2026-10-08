@@ -42,6 +42,48 @@ func TestHTTPArrowCapabilityFromLoginMaxVersion(t *testing.T) {
 	}
 }
 
+func TestParseArrowTimestampStringWithoutZone(t *testing.T) {
+	loc := time.FixedZone("UTC+08", 8*60*60)
+	for _, separator := range []string{" ", "T"} {
+		for _, fraction := range []string{"", ".305003", ".305003123"} {
+			value := "2025-04-23" + separator + "00:22:00" + fraction
+			t.Run(value, func(t *testing.T) {
+				want, err := time.ParseInLocation("2006-01-02"+separator+"15:04:05", value, loc)
+				require.NoError(t, err)
+				got, err := parseArrowTimestampString(value, loc)
+				require.NoError(t, err)
+				assert.Equal(t, want, got)
+			})
+		}
+	}
+}
+
+func TestDecodeArrowResponseTimestampStringWithoutZone(t *testing.T) {
+	resp := QueryResponse{
+		ID:       "query-timestamp-string",
+		Settings: &Settings{TimeZone: "Asia/Shanghai"},
+		Schema:   &[]DataField{{Name: "ts", Type: "Timestamp"}},
+	}
+	payload := buildArrowPayload(t, resp, []arrow.Field{
+		{Name: "ts", Type: arrow.BinaryTypes.String},
+	}, func(builder *arrowarray.RecordBuilder) {
+		builder.Field(0).(*arrowarray.StringBuilder).Append("2025-04-23T00:22:00.305003")
+	})
+	decoded, err := decodeQueryResponse(&rawHTTPResponse{
+		headers: http.Header{contentType: []string{arrowStreamContentType}},
+		body:    payload,
+	})
+	require.NoError(t, err)
+	dc := &DatabendConn{cfg: &Config{}}
+	rows, err := dc.newNextRows(context.Background(), decoded)
+	require.NoError(t, err)
+	dest := make([]driver.Value, 1)
+	require.NoError(t, rows.Next(dest))
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2025, 4, 23, 0, 22, 0, 305003000, loc), dest[0])
+}
+
 func TestDecodeArrowResponseMaterializesRows(t *testing.T) {
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	require.NoError(t, err)
