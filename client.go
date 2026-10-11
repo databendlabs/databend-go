@@ -932,7 +932,12 @@ func (c *APIClient) uploadToStageByAPI(ctx context.Context, stage *StageLocation
 	req.Header.Set("stage_name", stage.Name)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	resp, err := c.cli.Do(req)
+	// The streamed body cannot be replayed, so a redirect cannot be followed
+	// with it: Go would return a 307/308 as is, and turn a 301/302/303 into a
+	// body-less GET. Stop at the redirect and fail on it instead.
+	cli := *c.cli
+	cli.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := cli.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "failed http do request")
 	}
@@ -951,6 +956,10 @@ func (c *APIClient) uploadToStageByAPI(ctx context.Context, stage *StageLocation
 		return NewAPIError("please retry again later.", resp.StatusCode, respBody)
 	} else if resp.StatusCode >= 400 {
 		return NewAPIError("please check your arguments.", resp.StatusCode, respBody)
+	} else if resp.StatusCode >= 300 {
+		return NewAPIError(fmt.Sprintf("upload redirected to %q, which is not supported.", resp.Header.Get("Location")), resp.StatusCode, respBody)
+	} else if resp.StatusCode < 200 {
+		return NewAPIError("unexpected response status.", resp.StatusCode, respBody)
 	}
 
 	return nil

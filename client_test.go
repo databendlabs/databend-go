@@ -107,6 +107,33 @@ func TestUploadToStageByAPIRejectsWrongSize(t *testing.T) {
 	require.Error(t, err)
 }
 
+// A redirected upload never reaches its target: Go does not replay a streamed
+// body on 307/308 and turns a PUT into a body-less GET on 301/302/303. Either
+// way the upload must fail rather than report success.
+func TestUploadToStageByAPIRejectsRedirect(t *testing.T) {
+	for _, code := range []int{301, 302, 303, 307, 308} {
+		for _, size := range []int64{6, -1} {
+			t.Run(fmt.Sprintf("%d/size=%d", code, size), func(t *testing.T) {
+				mux := http.NewServeMux()
+				mux.HandleFunc("/v1/upload_to_stage", func(w http.ResponseWriter, r *http.Request) {
+					http.Redirect(w, r, "/elsewhere", code)
+				})
+				mux.HandleFunc("/elsewhere", func(w http.ResponseWriter, r *http.Request) {
+					_, _ = io.Copy(io.Discard, r.Body)
+					w.WriteHeader(http.StatusOK)
+				})
+				server := httptest.NewServer(mux)
+				defer server.Close()
+				client := newUploadTestClient(server)
+				err := client.uploadToStageByAPI(context.Background(),
+					&StageLocation{Name: "uploads", Path: "x.csv"},
+					strings.NewReader("1,2,3\n"), size)
+				require.Error(t, err)
+			})
+		}
+	}
+}
+
 // Memory does not grow with the upload: the body used to be assembled in a
 // bytes.Buffer, so a multi-GB file cost multi-GB of heap.
 func TestUploadToStageByAPIDoesNotBuffer(t *testing.T) {
