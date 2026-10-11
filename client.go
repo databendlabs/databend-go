@@ -802,7 +802,7 @@ func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *Stag
 
 func (c *APIClient) UploadToStage(ctx context.Context, stage *StageLocation, input *bufio.Reader, size int64) error {
 	if c.PresignedURLDisabled {
-		return c.UploadToStageByAPI(ctx, stage, input)
+		return c.uploadToStageByAPI(ctx, stage, input, size)
 	} else {
 		return c.UploadToStageByPresignURL(ctx, stage, input, size)
 	}
@@ -882,28 +882,44 @@ func (c *APIClient) uploadToPresignedURL(ctx context.Context, presigned *Presign
 	return nil
 }
 
+// UploadToStageByAPI uploads input to stage through the query server. The
+// body is streamed: memory use does not grow with the size of input.
 func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation, input *bufio.Reader) error {
-	body := new(bytes.Buffer)
-	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("upload", stage.Path)
-	if err != nil {
+	return c.uploadToStageByAPI(ctx, stage, input, -1)
+}
+
+// switchWriter lets the multipart writer's output go to one buffer for the
+// part header and another for the closing boundary.
+type switchWriter struct{ dst io.Writer }
+
+func (w *switchWriter) Write(p []byte) (int, error) { return w.dst.Write(p) }
+
+// uploadToStageByAPI streams a single-part multipart body: the part header,
+// then input, then the closing boundary. Only the header and the boundary are
+// buffered. With size >= 0 the request carries an exact Content-Length;
+// otherwise it is sent chunked.
+func (c *APIClient) uploadToStageByAPI(ctx context.Context, stage *StageLocation, input io.Reader, size int64) error {
+	var head, tail bytes.Buffer
+	out := &switchWriter{dst: &head}
+	writer := multipart.NewWriter(out)
+	if _, err := writer.CreateFormFile("upload", stage.Path); err != nil {
 		return errors.Wrap(err, "failed to create multipart writer form file")
 	}
-	// TODO: do async upload
-	_, err = io.Copy(part, input)
-	if err != nil {
-		return errors.Wrap(err, "failed to copy file to multipart writer form file")
-	}
-	err = writer.Close()
-	if err != nil {
+	out.dst = &tail
+	if err := writer.Close(); err != nil {
 		return errors.Wrap(err, "failed to close multipart writer")
 	}
+	body := io.MultiReader(bytes.NewReader(head.Bytes()), input, bytes.NewReader(tail.Bytes()))
 
 	path := "/v1/upload_to_stage"
 	url := c.makeURL(path)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, body)
 	if err != nil {
 		return errors.Wrap(err, "failed to create http request")
+	}
+	req.ContentLength = -1
+	if size >= 0 {
+		req.ContentLength = int64(head.Len()) + size + int64(tail.Len())
 	}
 
 	req.Header, err = c.makeHeaders(ctx)

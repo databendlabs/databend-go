@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +18,124 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func newUploadTestClient(server *httptest.Server) *APIClient {
+	return &APIClient{
+		cli:                  server.Client(),
+		apiEndpoint:          server.URL,
+		host:                 strings.TrimPrefix(server.URL, "http://"),
+		tenant:               "default",
+		user:                 "root",
+		sessionState:         &SessionState{},
+		PresignedURLDisabled: true,
+	}
+}
+
+// The streamed body is a well-formed single-part upload, with an exact
+// Content-Length when the size is known and chunked otherwise.
+func TestUploadToStageByAPIStreamsMultipart(t *testing.T) {
+	payload := strings.Repeat("1,2,3\n", 10000)
+	type seen struct {
+		contentLength int64
+		chunked       bool
+		filename      string
+		content       string
+		stage         string
+	}
+	got := make(chan seen, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var s seen
+		s.contentLength = r.ContentLength
+		s.chunked = len(r.TransferEncoding) > 0 && r.TransferEncoding[0] == "chunked"
+		s.stage = r.Header.Get("stage_name")
+		mr, err := r.MultipartReader()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		part, err := mr.NextPart()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_, params, _ := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
+		s.filename = params["filename"]
+		b, _ := io.ReadAll(part)
+		s.content = string(b)
+		if _, err := mr.NextPart(); err != io.EOF {
+			http.Error(w, "expected a single part", http.StatusBadRequest)
+			return
+		}
+		got <- s
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	client := newUploadTestClient(server)
+	stage := &StageLocation{Name: "uploads", Path: "backfill/test.csv"}
+
+	err := client.UploadToStage(context.Background(), stage,
+		bufio.NewReader(strings.NewReader(payload)), int64(len(payload)))
+	require.NoError(t, err)
+	s := <-got
+	assert.Equal(t, payload, s.content)
+	assert.Equal(t, "backfill/test.csv", s.filename)
+	assert.Equal(t, "uploads", s.stage)
+	assert.Greater(t, s.contentLength, int64(len(payload)))
+	assert.False(t, s.chunked)
+
+	err = client.UploadToStageByAPI(context.Background(), stage,
+		bufio.NewReader(strings.NewReader(payload)))
+	require.NoError(t, err)
+	s = <-got
+	assert.Equal(t, payload, s.content)
+	assert.Equal(t, int64(-1), s.contentLength)
+	assert.True(t, s.chunked)
+}
+
+// A size that does not match the input fails the upload instead of sending
+// a truncated or overlong body.
+func TestUploadToStageByAPIRejectsWrongSize(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	client := newUploadTestClient(server)
+	err := client.UploadToStage(context.Background(),
+		&StageLocation{Name: "uploads", Path: "x.csv"},
+		bufio.NewReader(strings.NewReader("1,2,3\n")), 100)
+	require.Error(t, err)
+}
+
+// Memory does not grow with the upload: the body used to be assembled in a
+// bytes.Buffer, so a multi-GB file cost multi-GB of heap.
+func TestUploadToStageByAPIDoesNotBuffer(t *testing.T) {
+	const size = 64 << 20
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	client := newUploadTestClient(server)
+	input := io.LimitReader(zeroReader{}, size)
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	err := client.UploadToStage(context.Background(),
+		&StageLocation{Name: "uploads", Path: "big.csv"},
+		bufio.NewReader(input), size)
+	require.NoError(t, err)
+	runtime.ReadMemStats(&after)
+	assert.Less(t, after.TotalAlloc-before.TotalAlloc, uint64(size/4))
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) {
+	clear(p)
+	return len(p), nil
+}
 
 func TestUploadToStageByAPIHonorsContext(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
