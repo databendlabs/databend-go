@@ -844,7 +844,10 @@ func (c *APIClient) UploadToStageByPresignURL(ctx context.Context, stage *StageL
 	if err != nil {
 		return errors.Wrap(err, "failed to get presigned url")
 	}
+	return c.uploadToPresignedURL(ctx, presigned, input, size)
+}
 
+func (c *APIClient) uploadToPresignedURL(ctx context.Context, presigned *PresignedResponse, input io.Reader, size int64) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, presigned.URL, input)
 	if err != nil {
 		return err
@@ -853,8 +856,14 @@ func (c *APIClient) UploadToStageByPresignURL(ctx context.Context, stage *StageL
 		req.Header.Set(k, v)
 	}
 	req.ContentLength = size
+	// The body is streamed and cannot be replayed, and a presigned URL is only
+	// valid for its own host: a redirect cannot be followed. Go would return a
+	// 307/308 (or a 301 without Location, as S3 sends for a wrong region) as
+	// is, and turn a 301/302/303 into a body-less GET. Stop at the redirect and
+	// fail on it instead.
 	httpClient := &http.Client{
-		Timeout: c.cli.Timeout,
+		Timeout:       c.cli.Timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -867,7 +876,7 @@ func (c *APIClient) UploadToStageByPresignURL(ctx context.Context, stage *StageL
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return errors.Errorf("failed to upload to stage by presigned url, status code: %d, body: %s", resp.StatusCode, string(respBody))
 	}
 	return nil
