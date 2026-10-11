@@ -108,21 +108,29 @@ you can use the next code to batch insert data:
 package main
 
 import (
+	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 
-	_ "github.com/datafuselabs/databend-go"
+	databend "github.com/datafuselabs/databend-go"
 )
 
 func main() {
-	conn, err := sql.Open("databend", "http://databend:databend@localhost:8000/default?sslmode=disable")
-	tx, err := conn.Begin()
+	ctx := context.Background()
+	db, err := sql.Open("databend", "http://databend:databend@localhost:8000/default?sslmode=disable")
 	if err != nil {
 		fmt.Println(err)
 	}
-	batch, err := tx.Prepare(fmt.Sprintf("INSERT INTO %s VALUES", "test"))
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer conn.Close()
+
+	rows := make([][]driver.Value, 0, 10)
 	for i := 0; i < 10; i++ {
-		_, err = batch.Exec(
+		rows = append(rows, []driver.Value{
 			"1234",
 			"2345",
 			"3.1415",
@@ -132,11 +140,23 @@ func main() {
 			"[1, 2, 3]",
 			"2021-01-01",
 			"2021-01-01 00:00:00",
-		)
+		})
 	}
-	err = tx.Commit()
+	stmt, err := databend.PrepareBatch("INSERT INTO test VALUES")
+	if err != nil {
+		fmt.Println(err)
+	}
+	if _, err := stmt.ExecBatch(ctx, conn, rows); err != nil {
+		fmt.Println(err)
+	}
 }
 ```
+
+`ExecBatch` writes the rows to a file, uploads it to a stage and inserts it with a single query.
+`REPLACE INTO ... ON (...) VALUES` is supported as well.
+
+A statement prepared with `Prepare`/`tx.Prepare` (e.g. `INSERT INTO test VALUES (?, ?)`) sends one query
+per `Exec` call, so it is not suitable for inserting many rows.
 
 ## Querying Row/s
 
