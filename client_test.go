@@ -23,7 +23,7 @@ func newUploadTestClient(server *httptest.Server) *APIClient {
 	return &APIClient{
 		cli:                  server.Client(),
 		apiEndpoint:          server.URL,
-		host:                 strings.TrimPrefix(server.URL, "http://"),
+		host:                 strings.TrimPrefix(strings.TrimPrefix(server.URL, "http://"), "https://"),
 		tenant:               "default",
 		user:                 "root",
 		sessionState:         &SessionState{},
@@ -93,18 +93,78 @@ func TestUploadToStageByAPIStreamsMultipart(t *testing.T) {
 }
 
 // A size that does not match the input fails the upload instead of sending
-// a truncated or overlong body.
+// a truncated or overlong body. The server only consumes the multipart part,
+// as Databend does, so it is the client that must refuse the mismatch: over
+// HTTP/2 Content-Length alone does not stop a well-formed body that is
+// shorter than announced.
 func TestUploadToStageByAPIRejectsWrongSize(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.Copy(io.Discard, r.Body)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mr, err := r.MultipartReader()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		part, err := mr.NextPart()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if _, err := io.Copy(io.Discard, part); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	const payload = "1,2,3\n"
+	for _, proto := range []string{"HTTP/1.1", "HTTP/2"} {
+		for _, size := range []int64{int64(len(payload)) + 94, int64(len(payload)) - 2} {
+			t.Run(fmt.Sprintf("%s/size=%d", proto, size), func(t *testing.T) {
+				server := httptest.NewUnstartedServer(handler)
+				if proto == "HTTP/2" {
+					server.EnableHTTP2 = true
+					server.StartTLS()
+				} else {
+					server.Start()
+				}
+				defer server.Close()
+				client := newUploadTestClient(server)
+				err := client.UploadToStage(context.Background(),
+					&StageLocation{Name: "uploads", Path: "x.csv"},
+					bufio.NewReader(strings.NewReader(payload)), size)
+				require.Error(t, err)
+			})
+		}
+	}
+}
+
+// An exact size uploads successfully over HTTP/2 too.
+func TestUploadToStageByAPIExactSizeHTTP2(t *testing.T) {
+	const payload = "1,2,3\n"
+	got := make(chan string, 1)
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mr, err := r.MultipartReader()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		part, err := mr.NextPart()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		b, _ := io.ReadAll(part)
+		got <- r.Proto + " " + string(b)
 		w.WriteHeader(http.StatusOK)
 	}))
+	server.EnableHTTP2 = true
+	server.StartTLS()
 	defer server.Close()
 	client := newUploadTestClient(server)
 	err := client.UploadToStage(context.Background(),
 		&StageLocation{Name: "uploads", Path: "x.csv"},
-		bufio.NewReader(strings.NewReader("1,2,3\n")), 100)
-	require.Error(t, err)
+		bufio.NewReader(strings.NewReader(payload)), int64(len(payload)))
+	require.NoError(t, err)
+	assert.Equal(t, "HTTP/2.0 "+payload, <-got)
 }
 
 // A redirected upload never reaches its target: Go does not replay a streamed

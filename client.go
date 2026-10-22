@@ -894,6 +894,39 @@ type switchWriter struct{ dst io.Writer }
 
 func (w *switchWriter) Write(p []byte) (int, error) { return w.dst.Write(p) }
 
+// exactSizeReader yields exactly remaining bytes of r and fails otherwise.
+// Content-Length alone does not catch a mismatch: over HTTP/2 a short input
+// followed by the multipart trailer is a well-formed body the server accepts.
+// Failing the read aborts the request before the trailer is sent.
+type exactSizeReader struct {
+	r         io.Reader
+	remaining int64
+}
+
+func (e *exactSizeReader) Read(p []byte) (int, error) {
+	if e.remaining == 0 {
+		var probe [1]byte
+		if n, err := io.ReadFull(e.r, probe[:]); n > 0 {
+			return 0, errors.New("input is longer than the declared size")
+		} else if err != io.EOF {
+			return 0, err
+		}
+		return 0, io.EOF
+	}
+	if int64(len(p)) > e.remaining {
+		p = p[:e.remaining]
+	}
+	n, err := e.r.Read(p)
+	e.remaining -= int64(n)
+	if err == io.EOF && e.remaining > 0 {
+		return n, errors.Errorf("input is %d bytes shorter than the declared size", e.remaining)
+	}
+	if err == io.EOF {
+		err = nil
+	}
+	return n, err
+}
+
 // uploadToStageByAPI streams a single-part multipart body: the part header,
 // then input, then the closing boundary. Only the header and the boundary are
 // buffered. With size >= 0 the request carries an exact Content-Length;
@@ -908,6 +941,9 @@ func (c *APIClient) uploadToStageByAPI(ctx context.Context, stage *StageLocation
 	out.dst = &tail
 	if err := writer.Close(); err != nil {
 		return errors.Wrap(err, "failed to close multipart writer")
+	}
+	if size >= 0 {
+		input = &exactSizeReader{r: input, remaining: size}
 	}
 	body := io.MultiReader(bytes.NewReader(head.Bytes()), input, bytes.NewReader(tail.Bytes()))
 
