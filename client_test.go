@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -189,4 +190,60 @@ func TestClientStateRoundTripRestoresQuerySeq(t *testing.T) {
 
 	restored.NextQuery()
 	assert.Equal(t, "session-1.8", restored.GetQueryID())
+}
+
+// A redirected presigned upload never reaches its target: Go does not replay a
+// streamed body on 307/308 and turns a PUT into a body-less GET on
+// 301/302/303. Either way the upload must fail rather than report success.
+func TestUploadToPresignedURLRejectsRedirect(t *testing.T) {
+	for _, code := range []int{301, 302, 303, 307, 308} {
+		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, "/elsewhere", code)
+			})
+			mux.HandleFunc("/elsewhere", func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.Copy(io.Discard, r.Body)
+				w.WriteHeader(http.StatusOK)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+			client := &APIClient{cli: server.Client()}
+			err := client.uploadToPresignedURL(context.Background(),
+				&PresignedResponse{Method: http.MethodPut, URL: server.URL + "/upload"},
+				bufio.NewReader(strings.NewReader("1,2,3\n")), 6)
+			require.Error(t, err)
+		})
+	}
+}
+
+// S3 answers a request to the wrong regional endpoint with a 301 that has no
+// Location header, which Go returns as the final response.
+func TestUploadToPresignedURLRejectsRedirectWithoutLocation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusMovedPermanently)
+	}))
+	defer server.Close()
+	client := &APIClient{cli: server.Client()}
+	err := client.uploadToPresignedURL(context.Background(),
+		&PresignedResponse{Method: http.MethodPut, URL: server.URL + "/upload"},
+		bufio.NewReader(strings.NewReader("1,2,3\n")), 6)
+	require.Error(t, err)
+}
+
+func TestUploadToPresignedURL(t *testing.T) {
+	var got string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got = r.Method + " " + r.Header.Get("X-Amz-Test") + " " + string(b)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	client := &APIClient{cli: server.Client()}
+	err := client.uploadToPresignedURL(context.Background(),
+		&PresignedResponse{Method: http.MethodPut, URL: server.URL + "/upload", Headers: map[string]string{"X-Amz-Test": "v"}},
+		bufio.NewReader(strings.NewReader("1,2,3\n")), 6)
+	require.NoError(t, err)
+	assert.Equal(t, "PUT v 1,2,3\n", got)
 }
