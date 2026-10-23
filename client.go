@@ -802,7 +802,7 @@ func (c *APIClient) InsertWithStage(ctx context.Context, sql string, stage *Stag
 
 func (c *APIClient) UploadToStage(ctx context.Context, stage *StageLocation, input *bufio.Reader, size int64) error {
 	if c.PresignedURLDisabled {
-		return c.UploadToStageByAPI(ctx, stage, input)
+		return c.uploadToStageByAPI(ctx, stage, input, size)
 	} else {
 		return c.UploadToStageByPresignURL(ctx, stage, input, size)
 	}
@@ -882,28 +882,80 @@ func (c *APIClient) uploadToPresignedURL(ctx context.Context, presigned *Presign
 	return nil
 }
 
+// UploadToStageByAPI uploads input to stage through the query server. The
+// body is streamed: memory use does not grow with the size of input.
 func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation, input *bufio.Reader) error {
-	body := new(bytes.Buffer)
-	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("upload", stage.Path)
-	if err != nil {
+	return c.uploadToStageByAPI(ctx, stage, input, -1)
+}
+
+// switchWriter lets the multipart writer's output go to one buffer for the
+// part header and another for the closing boundary.
+type switchWriter struct{ dst io.Writer }
+
+func (w *switchWriter) Write(p []byte) (int, error) { return w.dst.Write(p) }
+
+// exactSizeReader yields exactly remaining bytes of r and fails otherwise.
+// Content-Length alone does not catch a mismatch: over HTTP/2 a short input
+// followed by the multipart trailer is a well-formed body the server accepts.
+// Failing the read aborts the request before the trailer is sent.
+type exactSizeReader struct {
+	r         io.Reader
+	remaining int64
+}
+
+func (e *exactSizeReader) Read(p []byte) (int, error) {
+	if e.remaining == 0 {
+		var probe [1]byte
+		if n, err := io.ReadFull(e.r, probe[:]); n > 0 {
+			return 0, errors.New("input is longer than the declared size")
+		} else if err != io.EOF {
+			return 0, err
+		}
+		return 0, io.EOF
+	}
+	if int64(len(p)) > e.remaining {
+		p = p[:e.remaining]
+	}
+	n, err := e.r.Read(p)
+	e.remaining -= int64(n)
+	if err == io.EOF && e.remaining > 0 {
+		return n, errors.Errorf("input is %d bytes shorter than the declared size", e.remaining)
+	}
+	if err == io.EOF {
+		err = nil
+	}
+	return n, err
+}
+
+// uploadToStageByAPI streams a single-part multipart body: the part header,
+// then input, then the closing boundary. Only the header and the boundary are
+// buffered. With size >= 0 the request carries an exact Content-Length;
+// otherwise it is sent chunked.
+func (c *APIClient) uploadToStageByAPI(ctx context.Context, stage *StageLocation, input io.Reader, size int64) error {
+	var head, tail bytes.Buffer
+	out := &switchWriter{dst: &head}
+	writer := multipart.NewWriter(out)
+	if _, err := writer.CreateFormFile("upload", stage.Path); err != nil {
 		return errors.Wrap(err, "failed to create multipart writer form file")
 	}
-	// TODO: do async upload
-	_, err = io.Copy(part, input)
-	if err != nil {
-		return errors.Wrap(err, "failed to copy file to multipart writer form file")
-	}
-	err = writer.Close()
-	if err != nil {
+	out.dst = &tail
+	if err := writer.Close(); err != nil {
 		return errors.Wrap(err, "failed to close multipart writer")
 	}
+	if size >= 0 {
+		input = &exactSizeReader{r: input, remaining: size}
+	}
+	body := io.MultiReader(bytes.NewReader(head.Bytes()), input, bytes.NewReader(tail.Bytes()))
 
 	path := "/v1/upload_to_stage"
 	url := c.makeURL(path)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, body)
 	if err != nil {
 		return errors.Wrap(err, "failed to create http request")
+	}
+	req.ContentLength = -1
+	if size >= 0 {
+		req.ContentLength = int64(head.Len()) + size + int64(tail.Len())
 	}
 
 	req.Header, err = c.makeHeaders(ctx)
@@ -916,7 +968,12 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 	req.Header.Set("stage_name", stage.Name)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	resp, err := c.cli.Do(req)
+	// The streamed body cannot be replayed, so a redirect cannot be followed
+	// with it: Go would return a 307/308 as is, and turn a 301/302/303 into a
+	// body-less GET. Stop at the redirect and fail on it instead.
+	cli := *c.cli
+	cli.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := cli.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "failed http do request")
 	}
@@ -935,6 +992,10 @@ func (c *APIClient) UploadToStageByAPI(ctx context.Context, stage *StageLocation
 		return NewAPIError("please retry again later.", resp.StatusCode, respBody)
 	} else if resp.StatusCode >= 400 {
 		return NewAPIError("please check your arguments.", resp.StatusCode, respBody)
+	} else if resp.StatusCode >= 300 {
+		return NewAPIError(fmt.Sprintf("upload redirected to %q, which is not supported.", resp.Header.Get("Location")), resp.StatusCode, respBody)
+	} else if resp.StatusCode < 200 {
+		return NewAPIError("unexpected response status.", resp.StatusCode, respBody)
 	}
 
 	return nil
