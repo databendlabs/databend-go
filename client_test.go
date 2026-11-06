@@ -2,13 +2,16 @@ package godatabend
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -453,4 +456,324 @@ func TestUploadToPresignedURL(t *testing.T) {
 		bufio.NewReader(strings.NewReader("1,2,3\n")), 6)
 	require.NoError(t, err)
 	assert.Equal(t, "PUT v 1,2,3\n", got)
+}
+
+// After a Databend node is replaced, requests that still carry the old node id
+// in X-DATABEND-STICKY-NODE are rejected with 400 "Sticky session state lost".
+// The client must drop the stale node id and the session flags that forced
+// stickiness (need_sticky, internal.has_temp_table), stop sending the header,
+// and report the wrapping connection invalid so database/sql discards it.
+// Otherwise a pooled connection keeps failing on every statement forever.
+func TestStickyNodeLostResetsClientState(t *testing.T) {
+	var seenStickyNode []string
+	var seenSession []map[string]json.RawMessage
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/v1/query", r.URL.Path)
+		var req QueryRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		var session map[string]json.RawMessage
+		if req.Session != nil {
+			require.NoError(t, json.Unmarshal(*req.Session, &session))
+		}
+		seenSession = append(seenSession, session)
+
+		sticky := r.Header.Get(DatabendQueryStickyNode)
+		seenStickyNode = append(seenStickyNode, sticky)
+		w.Header().Set("Content-Type", "application/json")
+		if sticky != "" {
+			w.WriteHeader(http.StatusBadRequest)
+			// Real shape: json_response rewrites the middleware error as code=<http status>,
+			// message=<poem err.to_string()>, with get_request_info appended.
+			_, _ = fmt.Fprintf(w, `{"error":{"code":400,"message":"Some(400) BadArguments. Code: 1006, Text = Sticky session state lost: node '%s' not found in cluster, request=method=POST uri=/v1/query headers={\"authorization\": \"Basic SECRET\"}"}}`, sticky)
+			return
+		}
+		_, _ = io.WriteString(w, `{"id":"q2","node_id":"new-node","state":"Succeeded","schema":[],"data":[],"stats":{},"session":{"need_sticky":false}}`)
+	}))
+	defer server.Close()
+
+	var logBuf bytes.Buffer
+	logger.SetOutput(&logBuf)
+	defer logger.SetOutput(os.Stdout)
+
+	c := newUploadTestClient(server)
+	c.SessionID = "client-sess"
+	c.cli.Jar = NewIgnoreDomainCookieJar()
+	c.cli.Jar.SetCookies(nil, []*http.Cookie{{Name: "session_id", Value: "server-sess"}})
+	c.nodeID = "old-node"
+	c.sessionState = &SessionState{NeedSticky: true, NeedKeepAlive: true}
+	raw := json.RawMessage(`{"settings":{"max_threads":"4"},"need_sticky":true,"need_keep_alive":true,"internal":{"has_temp_table":true,"last_node_id":"old-node"}}`)
+	c.sessionStateRaw = &raw
+
+	_, err := c.startQuery(context.Background(), "select 1", queryTransportJSON)
+	require.Error(t, err)
+	assert.True(t, IsSessionInvalidated(err), "got: %v", err)
+	require.Len(t, seenStickyNode, 1)
+	assert.Equal(t, "old-node", seenStickyNode[0])
+
+	assertSessionReset(t, c)
+
+	// Further queries are refused locally; nothing else reaches the server.
+	// The refusal keeps the original cause and the ids for diagnosis.
+	_, err = c.startQuery(context.Background(), "select 1", queryTransportJSON)
+	assert.ErrorIs(t, err, ErrSessionInvalidated)
+	var inv *SessionInvalidatedError
+	require.ErrorAs(t, err, &inv)
+	assert.Equal(t, "old-node", inv.LostNodeID)
+	assert.Equal(t, "server-sess", inv.SessionID, "cookie wins over the client-generated id")
+	assert.Contains(t, err.Error(), "Sticky session state lost: node 'old-node' not found in cluster")
+	assert.NotContains(t, err.Error(), "request=", "header dump is dropped from the stored cause")
+	// The one log line carries the ids and the short cause, never the header dump.
+	assert.Contains(t, logBuf.String(), "session_id=server-sess lost_node_id=old-node")
+	assert.Contains(t, logBuf.String(), "not found in cluster")
+	assert.NotContains(t, logBuf.String(), "SECRET", "server header dump must not reach application logs")
+	assert.Contains(t, err.Error(), "lost_node_id=old-node")
+	assert.True(t, IsSessionInvalidated(err), "cause stays reachable through Unwrap")
+	_, err = c.pollQueryWithTransport(context.Background(), "/v1/query/q1/page/1", queryTransportJSON)
+	assert.ErrorIs(t, err, ErrSessionInvalidated)
+	assert.Len(t, seenStickyNode, 1)
+	assert.Len(t, seenSession, 1)
+}
+
+// The same session state goes stale without any node change: a MATERIALIZED
+// CTE creates server-side temp tables for the duration of one query, and an
+// intermediate page response reported them as session temp tables. Once the
+// query finished and dropped them, every following statement was rejected
+// with SessionTimeout (5110). Unlike the sticky case this comes back as
+// HTTP 200 with the error in the body, and the body echoes the stale session.
+func TestSessionTimeoutInBodyResetsClientState(t *testing.T) {
+	var seenSession []map[string]json.RawMessage
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req QueryRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		var session map[string]json.RawMessage
+		if req.Session != nil {
+			require.NoError(t, json.Unmarshal(*req.Session, &session))
+		}
+		seenSession = append(seenSession, session)
+		w.Header().Set("Content-Type", "application/json")
+		if _, stale := session["internal"]; stale {
+			// Mirrors fail_to_start_sql: 200, state Failed, session echoed back unchanged.
+			// (A real server would also drop the sticky header requirement here.)
+			_, _ = fmt.Fprintf(w, `{"id":"","state":"Failed","schema":[],"data":[],"stats":{},"error":{"code":5110,"message":"temporary tables in session s1 expired after idle for more than 14400 seconds, when starting query q1"},"session":%s}`, *req.Session)
+			return
+		}
+		_, _ = io.WriteString(w, `{"id":"q2","node_id":"n1","state":"Succeeded","schema":[],"data":[],"stats":{},"session":{}}`)
+	}))
+	defer server.Close()
+
+	c := newUploadTestClient(server)
+	c.nodeID = "n1"
+	c.sessionState = &SessionState{NeedSticky: true, NeedKeepAlive: true}
+	raw := json.RawMessage(`{"settings":{"max_threads":"4"},"need_sticky":true,"need_keep_alive":true,"internal":{"has_temp_table":true,"last_node_id":"n1"}}`)
+	c.sessionStateRaw = &raw
+
+	_, err := c.startQuery(context.Background(), "select 1", queryTransportJSON)
+	require.Error(t, err)
+	assert.True(t, IsSessionInvalidated(err), "got: %v", err)
+	assertSessionReset(t, c)
+
+	_, err = c.startQuery(context.Background(), "select 1", queryTransportJSON)
+	assert.ErrorIs(t, err, ErrSessionInvalidated)
+	assert.Len(t, seenSession, 1)
+}
+
+// A running query can fail with TransactionTimeout (4003) on a page response
+// because of a fuse snapshot timestamp conflict. That is an ordinary query
+// failure: the session, its temp tables and the connection are all fine.
+func TestPageErrorDoesNotInvalidateSession(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/page/1") {
+			_, _ = io.WriteString(w, `{"id":"q1","node_id":"n1","state":"Failed","schema":[],"data":[],"stats":{},"error":{"code":4003,"message":"Conflict window too narrow: ..."},"session":{"need_sticky":true,"need_keep_alive":true,"internal":{"has_temp_table":true,"last_node_id":"n1"}}}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"id":"q1","node_id":"n1","state":"Running","schema":[],"data":[],"stats":{},"next_uri":"/v1/query/q1/page/1","session":{"need_sticky":true,"need_keep_alive":true,"internal":{"has_temp_table":true,"last_node_id":"n1"}}}`)
+	}))
+	defer server.Close()
+
+	c := newUploadTestClient(server)
+	resp, err := c.startQuery(context.Background(), "insert into t values (1)", queryTransportJSON)
+	require.NoError(t, err)
+	_, err = c.pollQueryWithTransport(context.Background(), resp.NextURI, queryTransportJSON)
+	require.Error(t, err)
+	var qe *QueryError
+	require.ErrorAs(t, err, &qe)
+	assert.Equal(t, 4003, qe.Code)
+
+	assert.False(t, c.SessionInvalidated())
+	assert.Equal(t, "n1", c.nodeID)
+	assert.True(t, c.NeedSticky())
+	assert.Contains(t, string(*c.sessionStateRaw), `"has_temp_table":true`)
+	// The connection stays usable.
+	_, err = c.startQuery(context.Background(), "select 1", queryTransportJSON)
+	require.NoError(t, err)
+}
+
+func assertSessionReset(t *testing.T, c *APIClient) {
+	t.Helper()
+	assert.True(t, c.SessionInvalidated())
+	assert.Empty(t, c.nodeID)
+	assert.False(t, c.NeedSticky())
+	assert.False(t, c.NeedKeepAlive())
+	var got map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(*c.sessionStateRaw, &got))
+	assert.NotContains(t, got, "need_sticky")
+	assert.NotContains(t, got, "need_keep_alive")
+	assert.NotContains(t, got, "internal")
+	assert.JSONEq(t, `{"max_threads":"4"}`, string(got["settings"]), "unrelated session state must be preserved")
+
+	dc := &DatabendConn{rest: c, cfg: NewConfig()}
+	assert.False(t, dc.IsValid(), "pool must discard a connection whose session state is gone")
+}
+
+func TestClearStickySessionStateKeepsOtherInternalFields(t *testing.T) {
+	// An active transaction is marked Fail so the server keeps rejecting the
+	// remaining statements with 4002 even on a client restored via WithState.
+	c := &APIClient{sessionState: &SessionState{TxnState: TxnStateActive}}
+	raw := json.RawMessage(`{"role":"r","txn_state":"Active","internal":{"has_temp_table":true,"last_node_id":"n","variables":{"a":"1"}}}`)
+	c.sessionStateRaw = &raw
+	c.clearStickySessionState()
+	assert.Equal(t, TxnStateFail, c.sessionState.TxnState)
+	assert.JSONEq(t, `{"role":"r","txn_state":"Fail","internal":{"variables":{"a":"1"}}}`, string(*c.sessionStateRaw))
+
+	// Other txn states and a server-provided Fail are left alone.
+	for _, st := range []TxnState{TxnStateAutoCommit, TxnStateFail} {
+		c := &APIClient{sessionState: &SessionState{TxnState: st}}
+		raw := json.RawMessage(`{"txn_state":"` + string(st) + `","need_sticky":true}`)
+		c.sessionStateRaw = &raw
+		c.clearStickySessionState()
+		assert.Equal(t, st, c.sessionState.TxnState)
+		assert.JSONEq(t, `{"txn_state":"`+string(st)+`"}`, string(*c.sessionStateRaw))
+	}
+}
+
+func TestIsSessionInvalidated(t *testing.T) {
+	// Shape sent by current servers (json_response: code = HTTP status, message = poem error text).
+	sticky := []byte(`{"error":{"code":400,"message":"Some(400) BadArguments. Code: 1006, Text = Sticky session state lost: node 'n1' not found in cluster, request=method=POST uri=/v1/query headers={}"}}`)
+	assert.True(t, IsSessionInvalidated(NewAPIError("please check your arguments", 400, sticky)))
+	assert.True(t, IsSessionInvalidated(fmt.Errorf("wrapped: %w", NewAPIError("x", 400, sticky))))
+	assert.True(t, IsSessionInvalidated(&QueryError{Code: 1006, Message: "Sticky session state lost: node 'n1' not found in cluster"}))
+	assert.True(t, IsSessionInvalidated(&QueryError{Code: 400, Message: "Some(400) BadArguments. Code: 1006, Text = Sticky session state lost: node 'n1' not found in cluster"}))
+	// The message alone is not enough: error text can embed user SQL.
+	assert.False(t, IsSessionInvalidated(&QueryError{Code: 1065, Message: "error: select 'Sticky session state lost' from t"}))
+	// New servers report the sticky rejection with its own code, 400 body or query body.
+	assert.True(t, IsSessionInvalidated(NewAPIError("x", 400, []byte(`{"error":{"code":5113,"message":"node 'n1' not found in cluster"}}`))),
+		"5113 must be matched by code even if the text changes")
+	assert.True(t, IsSessionInvalidated(&QueryError{Code: 5113, Message: "whatever"}))
+	// 4003: an idle-expired transaction on a still-valid node (server returns
+	// txn_state=Fail, ROLLBACK recovers) or a fuse snapshot conflict. Neither
+	// means the session is lost.
+	assert.False(t, IsSessionInvalidated(&QueryError{Code: 4003, Message: "Transaction timeout: last_query_id q1 not found on this server"}))
+	assert.False(t, IsSessionInvalidated(&QueryError{Code: 4003, Message: "Conflict window too narrow: ..."}))
+	for _, code := range []int{5110, 5111, 5112, 5113} {
+		assert.True(t, IsSessionInvalidated(&QueryError{Code: code, Message: "x"}), "code %d", code)
+		assert.True(t, IsSessionInvalidated(fmt.Errorf("query error: %w", &QueryError{Code: code})), "wrapped code %d", code)
+	}
+
+	assert.False(t, IsSessionInvalidated(nil))
+	assert.False(t, IsSessionInvalidated(NewAPIError("x", 500, sticky)), "only a 4xx rejection means the node is gone")
+	assert.False(t, IsSessionInvalidated(NewAPIError("x", 400, []byte(`{"error":{"code":1006,"message":"other bad argument"}}`))))
+	assert.False(t, IsSessionInvalidated(NewAPIError("x", 400, []byte(`not json`))))
+	assert.False(t, IsSessionInvalidated(NewAPIError("x", 500, []byte(`{"error":{"code":5113,"message":"x"}}`))), "5xx is a server fault, not a stale session")
+	assert.False(t, IsSessionInvalidated(&QueryError{Code: 1006, Message: "other"}))
+	// Aborted transaction is recoverable with ROLLBACK; server sets txn_state=Fail for it.
+	assert.False(t, IsSessionInvalidated(&QueryError{Code: 4002, Message: "Current transaction is aborted"}))
+	assert.False(t, IsSessionInvalidated(&QueryError{Code: 1025, Message: "Unknown table"}))
+}
+
+// Inside a transaction the server-side state loss is fatal for the whole
+// transaction. After the failing statement, later statements are refused
+// locally with one clear error instead of a server-side 4002 round trip, and
+// Commit must fail: the server would answer COMMIT in Fail state with success
+// without committing anything.
+func TestTransactionAfterSessionLostIsRefused(t *testing.T) {
+	var sqls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req QueryRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		sqls = append(sqls, req.SQL)
+		w.Header().Set("Content-Type", "application/json")
+		switch req.SQL {
+		case "BEGIN":
+			_, _ = io.WriteString(w, `{"id":"q1","node_id":"n1","state":"Succeeded","schema":[],"data":[],"stats":{},"session":{"txn_state":"Active","need_sticky":true,"need_keep_alive":true,"internal":{"last_node_id":"n1"}}}`)
+		default:
+			// n1 restarted: check_sticky_for_txn -> SessionLost, session echoed back.
+			_, _ = fmt.Fprintf(w, `{"id":"","state":"Failed","schema":[],"data":[],"stats":{},"error":{"code":5111,"message":"Transaction aborted because server restart or route error: expecting server n1, current one is n2"},"session":%s}`, *req.Session)
+		}
+	}))
+	defer server.Close()
+
+	c := newUploadTestClient(server)
+	c.cli.Jar = NewIgnoreDomainCookieJar()
+	raw := json.RawMessage(`{}`)
+	c.sessionStateRaw = &raw
+	dc := &DatabendConn{ctx: context.Background(), cfg: NewConfig(), rest: c}
+
+	tx, err := dc.BeginTx(context.Background(), driver.TxOptions{})
+	require.NoError(t, err)
+	assert.True(t, c.inActiveTransaction())
+
+	_, err = dc.ExecContext(context.Background(), "INSERT INTO b VALUES (1)", nil)
+	require.Error(t, err)
+	assert.True(t, IsSessionInvalidated(err), "got: %v", err)
+
+	_, err = dc.ExecContext(context.Background(), "INSERT INTO c VALUES (1)", nil)
+	assert.ErrorIs(t, err, driver.ErrBadConn)
+	assert.ErrorIs(t, err, ErrSessionInvalidated, "mapped error keeps the cause")
+	assert.Contains(t, err.Error(), "expecting server n1")
+	_, err = dc.QueryContext(context.Background(), "SELECT 1", nil)
+	assert.ErrorIs(t, err, driver.ErrBadConn)
+	_, err = dc.ExecBatch(context.Background(), "INSERT INTO c VALUES (?)", [][]driver.Value{{1}})
+	assert.ErrorIs(t, err, driver.ErrBadConn)
+	// BEGIN and the failing INSERT were sent in this checkout: the caller
+	// evidently holds the connection.
+	assert.Contains(t, err.Error(), "stmts=2")
+	// /v1/verify alone would say the connection is fine.
+	assert.ErrorIs(t, dc.Ping(context.Background()), driver.ErrBadConn)
+	err = tx.Commit()
+	assert.ErrorIs(t, err, driver.ErrBadConn)
+	assert.ErrorIs(t, err, ErrSessionInvalidated)
+	assert.NoError(t, tx.Rollback())
+	assert.False(t, dc.IsValid())
+	assert.Equal(t, 0, c.checkoutStmts, "IsValid marks the end of a checkout")
+
+	assert.Equal(t, []string{"BEGIN", "INSERT INTO b VALUES (1)"}, sqls, "nothing after the failure may reach the server")
+
+	// The local flag does not survive GetState/WithState, but txn_state=Fail
+	// does, so the server still refuses the rest of the "transaction".
+	restored := NewAPIClientFromConfig(NewConfig()).WithState(c.GetState())
+	assert.False(t, restored.SessionInvalidated())
+	assert.Equal(t, TxnStateFail, restored.sessionState.TxnState)
+	assert.Empty(t, restored.nodeID)
+	assert.False(t, restored.NeedSticky())
+}
+
+// The Arrow transport goes through doRequestRaw, which has its own 4xx branch.
+func TestStickyNodeLostArrowTransport(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		require.Equal(t, arrowStreamContentType, r.Header.Get("Accept"))
+		require.Equal(t, "old-node", r.Header.Get(DatabendQueryStickyNode))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"error":{"code":400,"message":"Some(400) BadArguments. Code: 1006, Text = Sticky session state lost: node 'old-node' not found in cluster, request=method=POST uri=/v1/query headers={}"}}`)
+	}))
+	defer server.Close()
+
+	c := newUploadTestClient(server)
+	c.nodeID = "old-node"
+	c.sessionState = &SessionState{NeedSticky: true, NeedKeepAlive: true}
+	raw := json.RawMessage(`{"settings":{"max_threads":"4"},"need_sticky":true,"internal":{"has_temp_table":true,"last_node_id":"old-node"}}`)
+	c.sessionStateRaw = &raw
+
+	_, err := c.startQuery(context.Background(), "select 1", queryTransportArrow)
+	require.Error(t, err)
+	assert.True(t, IsSessionInvalidated(err), "got: %v", err)
+	assert.Equal(t, 1, requests, "doRetry must not retry a 400")
+	assertSessionReset(t, c)
+
+	_, err = c.startQuery(context.Background(), "select 1", queryTransportArrow)
+	assert.ErrorIs(t, err, ErrSessionInvalidated)
+	assert.Equal(t, 1, requests)
 }

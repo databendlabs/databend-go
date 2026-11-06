@@ -153,7 +153,9 @@ func (c *APIClient) doRequestRaw(
 		} else if httpResp.StatusCode == 500 {
 			return nil, NewAPIError("internal server error", httpResp.StatusCode, httpRespBody)
 		} else if httpResp.StatusCode >= 400 {
-			return nil, NewAPIError("please check your arguments", httpResp.StatusCode, httpRespBody)
+			apiErr := NewAPIError("please check your arguments", httpResp.StatusCode, httpRespBody)
+			c.handleRequestError(apiErr)
+			return nil, apiErr
 		} else if httpResp.StatusCode != http.StatusOK {
 			return nil, NewAPIError("unexpected HTTP StatusCode", httpResp.StatusCode, httpRespBody)
 		}

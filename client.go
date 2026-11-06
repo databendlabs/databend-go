@@ -103,6 +103,14 @@ type APIClient struct {
 	// some cases like query pagination & multi-statements transaction.
 	routeHint string
 	nodeID    string
+	// sessionInvalidated is set once the server reported that the session state
+	// this client echoes back (sticky node, temp tables, active transaction) no
+	// longer exists on the server. The owning connection must not be reused.
+	// It carries the cause and ids so later refusals stay diagnosable.
+	sessionInvalidated *SessionInvalidatedError
+	// checkoutStmts counts statements since the owning database/sql connection
+	// was last taken from the pool; see SessionInvalidatedError.Stmts.
+	checkoutStmts int
 
 	statsTracker      QueryStatsTracker
 	accessTokenLoader AccessTokenLoader
@@ -153,6 +161,126 @@ func (c *APIClient) NeedKeepAlive() bool {
 		return c.sessionState.NeedKeepAlive
 	}
 	return false
+}
+
+// SessionInvalidated reports whether the server told this client that the
+// session state it was echoing back (sticky node, temp tables, transaction) is
+// gone. Once set, new queries and pages are refused with
+// ErrSessionInvalidated and the database/sql connection wrapping the client
+// reports itself invalid so the pool discards it. Only cleanup calls
+// (CloseQuery, KillQuery, Logout) still go to the server.
+//
+// Refusing locally is not the only protection: an Active transaction is kept
+// as txn_state=Fail, so the server rejects further DML with
+// CurrentTransactionIsAborted (4002) until ROLLBACK (COMMIT in Fail state
+// currently returns success without committing, and DDL implicitly commits
+// first; both are server-side gaps). Refusing here gives the caller one
+// clear error for everything, including COMMIT, and saves the round trip.
+func (c *APIClient) SessionInvalidated() bool {
+	return c.sessionInvalidated != nil
+}
+
+func (c *APIClient) checkSessionValid() error {
+	if c.sessionInvalidated != nil {
+		return c.sessionInvalidated
+	}
+	return nil
+}
+
+// sessionIDForDiagnostics returns the session id the server knows this client
+// by. After login both the session_id cookie and c.SessionID hold the id the
+// server generated; without login (old servers) only the cookie does, so
+// prefer it and fall back to the client-generated c.SessionID.
+func (c *APIClient) sessionIDForDiagnostics() string {
+	if c.cli != nil && c.cli.Jar != nil {
+		for _, cookie := range c.cli.Jar.Cookies(nil) {
+			if cookie.Name == "session_id" && cookie.Value != "" {
+				return cookie.Value
+			}
+		}
+	}
+	return c.SessionID
+}
+
+// handleRequestError inspects a failed request. When the server reports the
+// session state as gone it drops the stale node id and the session fields that
+// referenced the lost state, so later requests on this client are not rejected
+// again with the same error.
+func (c *APIClient) handleRequestError(err error) {
+	if !IsSessionInvalidated(err) {
+		return
+	}
+	if c.sessionInvalidated == nil {
+		c.sessionInvalidated = &SessionInvalidatedError{
+			Cause:      compactSessionError(err),
+			SessionID:  c.sessionIDForDiagnostics(),
+			LostNodeID: c.nodeID,
+			Stmts:      c.checkoutStmts,
+		}
+		// database/sql reports later calls as the opaque driver.ErrBadConn,
+		// so this line is what ties a user report back to the server incident.
+		// The sticky rejection's ", request=method=... headers={...}" dump is not
+		// logged: current servers mask credentials in it, but the driver
+		// should not rely on that, and the ids below already identify the
+		// incident. Preformatted so it reads the same through any DBLogger.
+		logger.Error(fmt.Sprintf(
+			"databend: session state lost on server, connection will be discarded; session_id=%s lost_node_id=%s stmts=%d err=%v",
+			c.sessionInvalidated.SessionID, c.nodeID, c.checkoutStmts, c.sessionInvalidated.Cause))
+	}
+	c.nodeID = ""
+	c.clearStickySessionState()
+}
+
+// clearStickySessionState drops need_sticky / need_keep_alive and the
+// server-internal fields (has_temp_table, last_node_id) from both the typed and
+// raw session state. The raw state is what gets echoed back to the server, so
+// it must be rewritten too; unrelated fields (settings, role, ...) are kept.
+//
+// txn_state is kept, and an Active transaction is marked Fail, mirroring what
+// fail_to_start_sql returns: the server then rejects DML sent with this
+// session with CurrentTransactionIsAborted (4002) until ROLLBACK. This is the
+// protection that survives GetState()/WithState(), where the local
+// sessionInvalidated flag does not travel along. Dropping txn_state instead
+// would let the remaining statements run one by one in autocommit mode.
+func (c *APIClient) clearStickySessionState() {
+	if c.sessionState != nil {
+		c.sessionState.NeedSticky = false
+		c.sessionState.NeedKeepAlive = false
+		if strings.EqualFold(string(c.sessionState.TxnState), string(TxnStateActive)) {
+			c.sessionState.TxnState = TxnStateFail
+		}
+	}
+	if c.sessionStateRaw == nil || len(*c.sessionStateRaw) == 0 {
+		return
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(*c.sessionStateRaw, &raw); err != nil {
+		return
+	}
+	delete(raw, "need_sticky")
+	delete(raw, "need_keep_alive")
+	if txn, ok := raw["txn_state"]; ok {
+		var st string
+		if json.Unmarshal(txn, &st) == nil && strings.EqualFold(st, string(TxnStateActive)) {
+			raw["txn_state"] = json.RawMessage(`"` + string(TxnStateFail) + `"`)
+		}
+	}
+	if internalRaw, ok := raw["internal"]; ok {
+		var internal map[string]json.RawMessage
+		if err := json.Unmarshal(internalRaw, &internal); err == nil {
+			delete(internal, "has_temp_table")
+			delete(internal, "last_node_id")
+			if len(internal) == 0 {
+				delete(raw, "internal")
+			} else if b, err := json.Marshal(internal); err == nil {
+				raw["internal"] = b
+			}
+		}
+	}
+	if b, err := json.Marshal(raw); err == nil {
+		rawMsg := json.RawMessage(b)
+		c.sessionStateRaw = &rawMsg
+	}
 }
 
 func NewAPIHttpClientFromConfig(cfg *Config) *http.Client {
@@ -323,7 +451,9 @@ func (c *APIClient) doRequest(ctx context.Context, method, path string, req inte
 		} else if httpResp.StatusCode == 500 {
 			return NewAPIError("internal server error", httpResp.StatusCode, httpRespBody)
 		} else if httpResp.StatusCode >= 400 {
-			return NewAPIError("please check your arguments", httpResp.StatusCode, httpRespBody)
+			apiErr := NewAPIError("please check your arguments", httpResp.StatusCode, httpRespBody)
+			c.handleRequestError(apiErr)
+			return apiErr
 		} else if httpResp.StatusCode != 200 {
 			return NewAPIError("unexpected HTTP StatusCode", httpResp.StatusCode, httpRespBody)
 		}
@@ -610,6 +740,11 @@ func (c *APIClient) finalizeQueryResponse(resp *QueryResponse, respHeaders http.
 		c.routeHint = respHeaders.Get(DatabendRouteHintHeader)
 	}
 	if resp != nil && resp.Error != nil {
+		// fail_to_start_sql returns HTTP 200 with the error in the body, and
+		// echoes the session the client sent; apply it first (above), then
+		// strip the fields the server just said are invalid. Only the start
+		// response is inspected: these codes mean "lost session" here only.
+		c.handleRequestError(resp.Error)
 		return nil, errors.Wrap(resp.Error, "query error")
 	} else if err != nil {
 		return nil, errors.Wrap(err, "failed to do query request")
@@ -618,6 +753,9 @@ func (c *APIClient) finalizeQueryResponse(resp *QueryResponse, respHeaders http.
 }
 
 func (c *APIClient) startQueryRequestWithTransport(ctx context.Context, request *QueryRequest, transport queryTransport) (*QueryResponse, error) {
+	if err := c.checkSessionValid(); err != nil {
+		return nil, err
+	}
 	c.NextQuery()
 	// fmt.Printf("start query %v %v\n", c.GetQueryID(), request.SQL)
 	if !c.inActiveTransaction() {
@@ -691,6 +829,9 @@ func (c *APIClient) PollQuery(ctx context.Context, nextURI string) (*QueryRespon
 }
 
 func (c *APIClient) pollQueryWithTransport(ctx context.Context, nextURI string, transport queryTransport) (*QueryResponse, error) {
+	if err := c.checkSessionValid(); err != nil {
+		return nil, err
+	}
 	var (
 		result *QueryResponse
 		err    error
@@ -736,6 +877,9 @@ func (c *APIClient) pollQueryWithTransport(ctx context.Context, nextURI string, 
 	c.applySessionState(result)
 	c.trackStats(result)
 	if result != nil && result.Error != nil {
+		// Not handleRequestError: a page error belongs to a running query,
+		// never to lost session state (5110-5112 are only raised at start).
+		// Sticky node loss on a page request is a 400, caught in doRequest.
 		return nil, errors.Wrap(result.Error, "query error")
 	} else if err != nil {
 		return nil, errors.Wrap(err, "failed to query page")
