@@ -27,6 +27,12 @@ func (tx *databendTx) Commit() (err error) {
 	if tx.dc == nil || tx.dc.rest == nil {
 		return driver.ErrBadConn
 	}
+	// The transaction died with the server-side session state; nothing of it
+	// can be committed. The server would answer COMMIT in Fail state with
+	// success without committing anything, so fail here explicitly.
+	if err := tx.dc.rest.checkSessionValid(); err != nil {
+		return badConnIfInvalidated(err)
+	}
 	// compatible with old server version
 	if tx.dc.rest.sessionState.TxnState != "" {
 		_, err = tx.dc.exec(tx.ctx, "COMMIT", nil, nil)
@@ -40,6 +46,12 @@ func (tx *databendTx) Commit() (err error) {
 func (tx *databendTx) Rollback() (err error) {
 	if tx.dc == nil || tx.dc.rest == nil {
 		return driver.ErrBadConn
+	}
+	// Nothing left to roll back on the server; a ROLLBACK would only clear
+	// the Fail marker of a session that is discarded anyway. Let database/sql
+	// release the connection; IsValid then discards it.
+	if tx.dc.rest.SessionInvalidated() {
+		return nil
 	}
 	_, err = tx.dc.exec(tx.ctx, "ROLLBACK", nil, nil)
 	if err != nil {

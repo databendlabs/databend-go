@@ -150,6 +150,9 @@ type TxnState string
 const (
 	TxnStateActive     TxnState = "Active"
 	TxnStateAutoCommit TxnState = "AutoCommit"
+	// TxnStateFail: the server rejects every non-transaction statement with
+	// CurrentTransactionIsAborted (4002) until ROLLBACK.
+	TxnStateFail TxnState = "Fail"
 )
 
 type SessionState struct {

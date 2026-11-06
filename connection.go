@@ -22,6 +22,8 @@ const (
 	arrowStreamContentType = "application/vnd.apache.arrow.stream"
 )
 
+var _ driver.Validator = (*DatabendConn)(nil)
+
 type DatabendConn struct {
 	ctx    context.Context
 	cfg    *Config
@@ -57,7 +59,28 @@ func (dc *DatabendConn) columnTypeOptions(settings *Settings, location *time.Loc
 	return opts
 }
 
+// badConnIfInvalidated wraps ErrSessionInvalidated into driver.ErrBadConn.
+// Both stay in the chain: database/sql only ever tests
+// errors.Is(err, driver.ErrBadConn), and callers can still match
+// ErrSessionInvalidated or read the cause and ids from the message instead of
+// a bare "driver: bad connection".
+//
+// database/sql does not retry ErrBadConn on a connection the caller holds
+// (sql.Conn, sql.Tx); it marks it closed, which is what we want. For pooled
+// db.Exec/db.Query the connection is normally already gone via IsValid, and
+// a retry on a fresh connection is harmless because nothing was sent.
+func badConnIfInvalidated(err error) error {
+	if errors.Is(err, ErrSessionInvalidated) {
+		return fmt.Errorf("%w: %w", driver.ErrBadConn, err)
+	}
+	return err
+}
+
 func (dc *DatabendConn) exec(ctx context.Context, query string, placeholders *[]int, args []driver.Value) (driver.Result, error) {
+	if err := dc.rest.checkSessionValid(); err != nil {
+		return emptyResult, badConnIfInvalidated(err)
+	}
+	dc.rest.checkoutStmts++
 	ctx = checkQueryID(ctx)
 	query, err := buildQuery(query, args, placeholders)
 	if err != nil {
@@ -77,6 +100,10 @@ func (dc *DatabendConn) exec(ctx context.Context, query string, placeholders *[]
 }
 
 func (dc *DatabendConn) query(ctx context.Context, query string, placeholders *[]int, args []driver.Value) (rows driver.Rows, err error) {
+	if err := dc.rest.checkSessionValid(); err != nil {
+		return nil, badConnIfInvalidated(err)
+	}
+	dc.rest.checkoutStmts++
 	ctx = checkQueryID(ctx)
 	query, err = buildQuery(query, args, placeholders)
 	if err != nil {
@@ -126,6 +153,12 @@ func (dc *DatabendConn) cleanup() {
 }
 
 func (dc *DatabendConn) Ping(ctx context.Context) error {
+	// /v1/verify only checks authentication and would report a connection
+	// with lost session state as healthy. database/sql retries ErrBadConn
+	// from Ping on another connection.
+	if err := dc.rest.checkSessionValid(); err != nil {
+		return badConnIfInvalidated(err)
+	}
 	err := dc.rest.Verify(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ping failed")
@@ -205,6 +238,22 @@ func (dc *DatabendConn) Close() error {
 	return nil
 }
 
+// IsValid implements driver.Validator. database/sql calls it when a connection
+// is returned to the pool (putConn -> validateConnection) and closes the
+// connection instead of pooling it when this returns false. So the connection
+// that hit the error is dropped the moment the failing call releases it and
+// never reaches the free list. A connection whose server-side session state
+// (sticky node, temp tables, transaction) is gone must not be reused: without
+// this the pool would keep returning the same broken connection forever.
+func (dc *DatabendConn) IsValid() bool {
+	if atomic.LoadInt32(&dc.closed) != 0 || dc.rest == nil {
+		return false
+	}
+	// Called on every return to the pool, so it marks the end of a checkout.
+	dc.rest.checkoutStmts = 0
+	return !dc.rest.SessionInvalidated()
+}
+
 func (dc *DatabendConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	values := make([]driver.Value, len(args))
 	for i, arg := range args {
@@ -222,6 +271,10 @@ func (dc *DatabendConn) QueryContext(ctx context.Context, query string, args []d
 }
 
 func (dc *DatabendConn) ExecBatch(ctx context.Context, query string, rows [][]driver.Value) (driver.Result, error) {
+	if err := dc.rest.checkSessionValid(); err != nil {
+		return nil, badConnIfInvalidated(err)
+	}
+	dc.rest.checkoutStmts++
 	batch, err := dc.prepareBatch(ctx, query)
 	if err != nil {
 		return nil, err
