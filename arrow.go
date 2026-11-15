@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/bits"
 	"net/http"
 	"strconv"
 	"strings"
@@ -302,12 +303,83 @@ func formatArrowColumnValue(desc *TypeDesc, column arrow.Array, rowIdx int, loca
 		}
 	}
 
+	if desc == nil || desc.Name == "Decimal" {
+		if array, ok := column.(*arrowarray.Decimal128); ok && !array.IsNull(rowIdx) {
+			if s, ok := formatArrowDecimal128(array.Value(rowIdx), array.DataType().(*arrow.Decimal128Type).Scale); ok {
+				return s, nil
+			}
+		}
+	}
+
 	marshaled, ok := column.(marshaledArrowArray)
 	if !ok {
 		return "", fmt.Errorf("arrow column does not support row materialization: %T", column)
 	}
 
 	return formatArrowValue(desc, marshaled.GetOneForMarshal(rowIdx), location)
+}
+
+// pow10x19 is 10^19, the largest power of ten a uint64 holds.
+const pow10x19 = 10_000_000_000_000_000_000
+
+// formatArrowDecimal128 is the text of a Decimal128 value as arrow-go's
+// GetOneForMarshal gives it, the digits with the point at the scale and no
+// trailing zeros ("71894.3", "100", "0"), without going through big.Float, which
+// made formatting a column of decimals several times slower than the rest of the
+// decoding. big.Float writes a value below 1e-4 in exponent form ("1e-05"); ok is
+// false for those, and for a negative scale, so that the caller keeps the generic
+// path for them.
+func formatArrowDecimal128(n decimal128.Num, scale int32) (string, bool) {
+	if scale < 0 {
+		return "", false
+	}
+	neg := n.Sign() < 0
+	if neg {
+		n = n.Negate() // the lowest value is its own negation: the same bits as its magnitude
+	}
+	// The magnitude is below 2^127, so its high word is below 10^19 and Div64
+	// does not overflow: n = quo*10^19 + rem.
+	quo, rem := bits.Div64(uint64(n.HighBits()), n.LowBits(), pow10x19)
+	var buf [48]byte
+	digits := buf[:0]
+	if quo != 0 {
+		digits = strconv.AppendUint(digits, quo, 10)
+		var tail [19]byte
+		for i := len(tail) - 1; i >= 0; i-- {
+			tail[i] = byte('0' + rem%10)
+			rem /= 10
+		}
+		digits = append(digits, tail[:]...)
+	} else {
+		digits = strconv.AppendUint(digits, rem, 10)
+	}
+	// Left-pad so that there is an integer digit before the point.
+	if len(digits) <= int(scale) {
+		pad := int(scale) + 1 - len(digits)
+		digits = append(digits, make([]byte, pad)...)
+		copy(digits[pad:], digits[:len(digits)-pad])
+		for i := 0; i < pad; i++ {
+			digits[i] = '0'
+		}
+	}
+	point := len(digits) - int(scale)
+	frac := digits[point:]
+	for len(frac) > 0 && frac[len(frac)-1] == '0' {
+		frac = frac[:len(frac)-1]
+	}
+	if len(frac) > 0 && string(digits[:point]) == "0" && len(frac) >= 4 && string(frac[:4]) == "0000" {
+		return "", false
+	}
+	out := make([]byte, 0, len(digits)+2)
+	if neg {
+		out = append(out, '-')
+	}
+	out = append(out, digits[:point]...)
+	if len(frac) > 0 {
+		out = append(out, '.')
+		out = append(out, frac...)
+	}
+	return string(out), true
 }
 
 func materializeArrowDriverValue(desc *TypeDesc, column arrow.Array, rowIdx int, opts *ColumnTypeOptions) (driver.Value, error) {
